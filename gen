@@ -1,0 +1,42 @@
+#!/usr/bin/perl
+
+use integer;
+use feature qw(say);
+
+my $keyword_sym_def = <<'EOF';
+struct keyword_sym {
+	char *name;
+	int sym;
+};
+EOF
+
+open TOKENS, '< tokens.in';
+open KEYWORDS, '< keywords.in';
+
+open TOKENS_H, '> tokens.h';
+open KEYWORDS_GPERF, '> keywords.gperf';
+open KEYWORDS_GPERF_H, '> keywords.gperf.h';
+
+print KEYWORDS_GPERF_H $keyword_sym_def;
+my $i = 256;
+say TOKENS_H 'enum {';
+while (<TOKENS>) {
+	chomp;
+	say TOKENS_H "\t$_ = $i,";
+	$i++;
+}
+print KEYWORDS_GPERF <<'EOF';
+%{
+#include "tokens.h"
+%}
+EOF
+print KEYWORDS_GPERF $keyword_sym_def;
+say KEYWORDS_GPERF '%%';
+while (<KEYWORDS>) {
+	chomp;
+	my $c_id = 'KW_'.uc;
+	say TOKENS_H "\t$c_id = $i,";
+	say KEYWORDS_GPERF "$_, $c_id";
+	$i++;
+}
+say TOKENS_H '};';

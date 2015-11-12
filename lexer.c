@@ -1,6 +1,7 @@
 #include <assert.h>
 #include <ctype.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include "lexer.h"
 #include "keywords.gperf.h"
@@ -9,94 +10,152 @@
 
 #define MAX_TOKEN_LEN 0x100
 
-FILE *fp;
+static FILE *fp;
+static int eof;
+char *fpath;
 
-char buf[BUFFER_SIZE];
-int bufp = BUFFER_SIZE-1;
+static char buf[BUFFER_SIZE]; // buf[BUFFER_SIZE-1] is always 0
+static char *bufp = buf+(BUFFER_SIZE-1);
 
 char *token_start;
 int token_len;
 
 int sym;
 
-//int lineno;
+int lineno;
 
 static void fillbuf(void)
 {
+	assert(!eof);
 	// -1 for terminating NUL
-	int leftover = (BUFFER_SIZE-1)-bufp;
-	memmove(buf, buf+bufp, leftover);
-	bufp = leftover;
-	fread(buf, 1, (BUFFER_SIZE-1)-leftover, fp);
-	// TODO check EOF
+	int leftover = buf+(BUFFER_SIZE-1)-bufp;
+	memmove(buf, bufp, leftover);
+	bufp = buf;
+	int ntoread = (BUFFER_SIZE-1)-leftover;
+	int nread = fread(buf+leftover, 1, ntoread, fp);
+	if (nread < ntoread) {
+		eof = 1;
+		buf[leftover+nread] = 0;
+	}
 }
 
 struct keyword_sym *gperf_keyword_sym();
 
-static int keyword_sym(char *keyword, int len)
+/* skip to '\n' */
+static void skip_line(void)
 {
-	struct keyword_sym *ks = gperf_keyword_sym(keyword, len);
-	return ks ? ks->sym : IDENT;
+	for (;;) {
+		char *q = strchr(bufp, '\n');
+		if (q) {
+			bufp = q;
+			break;
+		}
+		bufp = buf+(BUFFER_SIZE-1);
+		if (!eof)
+			fillbuf();
+	}
+}
+
+static void error(char *msg)
+{
+	fprintf(stderr, "%s:%d: %s\n", fpath, lineno, msg);
 }
 
 void lex(void)
 {
 	char *p;
-	for (;;) {
-		p = buf+bufp;
-		// skip whitespace... including comments
-		for (;;) {
-			while (isspace(*p))
-				p++;
-			if (p[0] != '/' || p[1] != '/')
-				break;
-			p = strchr(p+2, '\n');
-			// TODO
-			assert(p);
+	char errflag = 0;
+	do {
+		if (errflag) {
+			skip_line();
+			errflag = 0;
 		}
-		if ((p-buf) + MAX_TOKEN_LEN < BUFFER_SIZE)
-			break;
-		fillbuf();
-	}
-	token_start = p;
-	if (isalpha(*p)) {
-		char *q = p+1;
-		while (isalnum(*q))
-			q++;
-		char saved = *q;
-		*q = 0;
-		sym = keyword_sym(p, q-p);
-		*q = saved;
-		p = q;
-	} else if (isdigit(*p)) {
-		char *q = p+1;
-		while (isdigit(*q))
-			q++;
-		sym = INT;
-		p = q;
-	} else {
-		sym = *(unsigned char *)p;
-		if (sym) {
-			switch (*p++) {
-			case ':':
-				if (*p == '=') {
+		for (;;) {
+			p = bufp;
+			// skip whitespace... including comments
+			for (;;) {
+				while (isspace(*p)) {
+					if (*p == '\n')
+						lineno++;
 					p++;
-					sym = BECOMES;
+				}
+				if (p[0] != '/' || p[1] != '/')
+					break;
+				bufp = p;
+				skip_line();
+				p = bufp;
+			}
+			bufp = p;
+			if ((p-buf) + MAX_TOKEN_LEN < BUFFER_SIZE || eof)
+				break;
+			fillbuf();
+		}
+		token_start = p;
+		if (isalpha(*p)) {
+			char *q = p+1;
+			while (isalnum(*q))
+				q++;
+			char saved = *q;
+			*q = 0;
+			struct keyword_sym *ks = gperf_keyword_sym(p, q-p);
+			sym = ks ? ks->sym : IDENT;
+			*q = saved;
+			p = q;
+		} else if (isdigit(*p)) {
+			char *q = p+1;
+			while (isdigit(*q))
+				q++;
+			sym = INT;
+			p = q;
+		} else {
+			sym = *(unsigned char *)p;
+			if (sym) {
+				switch (*p++) {
+					char *q;
+				case ':':
+					if (*p == '=') {
+						p++;
+						sym = BECOMES;
+					}
+					break;
+				case '\'':
+					q = strchr(p, '\'');
+					if (q) {
+						p = q+1;
+						sym = CHAR;
+					} else {
+						errflag = 1;
+						error("unmatched '");
+					}
+					break;
+				case '"':
+					q = strchr(p, '"');
+					if (q) {
+						p = q+1;
+						sym = STRING;
+					} else {
+						errflag = 1;
+						error("unmatched \"");
+					}
 				}
 			}
 		}
-	}
+	} while (errflag);
 	token_len = p-token_start;
-	bufp = p-buf;
+	bufp = p;
 }
 
 void lexer_open(char *path)
 {
+	assert(!fp);
 	fp = fopen(path, "r");
 	assert(fp);
+	lineno = 1;
+	fpath = strdup(path);
 }
 
 void lexer_close(void)
 {
 	fclose(fp);
+	free(fpath);
 }

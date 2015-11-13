@@ -1,9 +1,9 @@
 <program> ::= <block>.
-<block> ::= [<const_part>][<var_part>]{[<proc_def>]|[<func_def>]}<comp_stmt>
+<block> ::= [<const_part>][<var_part>]{<proc_def>|<func_def>}<comp_stmt>
 <const_part> ::= KW_CONST <const_def> {,<const_def>};
 <const_def> ::= IDENT = <constant>
 <constant> ::= [+|-]INT | CHAR
-<var_part> ::= KW_VAR <var_decl> ; {<var_decl>;}
+<var_part> ::= KW_VAR <var_decl> {; <var_decl>};
 <var_decl> ::= IDENT{,IDENT} : <type>
 <type> ::= <basic_type> | KW_ARRAY'['INT']' KW_OF <basic_type>
 <basic_type> ::= KW_INTEGER | KW_CHAR
@@ -23,7 +23,7 @@
 <mul_op> ::= *|/
 <cond> ::= <expr><rel_op><expr>
 <rel_op> ::= <|GE|>|LE|=|NE
-<cond_stmt> ::= KW_IF <cond> KW_THEN <stmt> | KW_IF <cond> KW_THEN <stmt> KW_ELSE <stmt>
+<cond_stmt> ::= KW_IF <cond> KW_THEN <stmt> [ KW_ELSE <stmt> ]
 <do_while_stmt> ::= KW_DO <stmt> KW_WHILE <cond>
 <for_stmt> ::= KW_FOR IDENT BECOMES <expr> (KW_DOWNTO|KW_TO) <expr> KW_DO <stmt>
 <call_stmt> ::= IDENT [<arg_list>]

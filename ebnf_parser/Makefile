@@ -3,3 +3,5 @@ ebnf: lexer.o ebnf.o
 
 clean:
 	rm -f ebnf *.o lexer.c
+
+.PHONY: clean

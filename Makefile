@@ -7,3 +7,5 @@ keywords.c: keywords.gperf
 clean:
 	make -C ebnf_parser clean
 	rm plx *.o keywords.{c,gperf{,.h}} tokens.h
+
+.PHONY: clean

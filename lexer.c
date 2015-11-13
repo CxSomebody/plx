@@ -118,6 +118,21 @@ void lex(void)
 						sym = BECOMES;
 					}
 					break;
+				case '<':
+					if (*p == '=') {
+						p++;
+						sym = LE;
+					} else if (*p == '>') {
+						p++;
+						sym = NE;
+					}
+					break;
+				case '>':
+					if (*p == '=') {
+						p++;
+						sym = GE;
+					}
+					break;
 				case '\'':
 					q = strchr(p, '\'');
 					if (q) {

@@ -3,12 +3,12 @@
 <const_part> ::= KW_CONST <const_def> {,<const_def>};
 <const_def> ::= IDENT = <constant>
 <constant> ::= [+|-]INT | CHAR
-<var_part> ::= KW_VAR <var_decl> {; <var_decl>};
+<var_part> ::= KW_VAR <var_decl>; {<var_decl>;}
 <var_decl> ::= IDENT{,IDENT} : <type>
 <type> ::= <basic_type> | KW_ARRAY'['INT']' KW_OF <basic_type>
 <basic_type> ::= KW_INTEGER | KW_CHAR
-<proc_def> ::= <proc_header><block>{; <proc_header><block>};
-<func_def> ::= <func_header><block>{; <func_header><block>};
+<proc_def> ::= <proc_header><block>; {<proc_header><block>;}
+<func_def> ::= <func_header><block>; {<func_header><block>;}
 <proc_header> ::= KW_PROCEDURE IDENT[<param_list>];
 <func_header> ::= KW_FUNCTION IDENT[<param_list>]: <basic_type>;
 <param_list> ::= '('<param_group>{; <param_group>}')'

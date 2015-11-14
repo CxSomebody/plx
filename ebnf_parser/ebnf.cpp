@@ -24,6 +24,7 @@ using namespace std;
 struct Symbol;
 
 map<string, Symbol*> term_dict, nterm_dict;
+Symbol *top;
 
 struct Symbol {
 	enum SymbolKind { TERM, NTERM } kind;
@@ -32,6 +33,7 @@ struct Symbol {
 	set<Symbol*> first, follow;
 	bool nullable = false;
 	bool defined = false;
+	bool predefined = false;
 	int opening_sym() {
 		char opening = name[0];
 		switch (opening) {
@@ -125,14 +127,71 @@ void print_production(Symbol *nterm, const vector<Symbol*> &body)
 	putchar('\n');
 }
 
+void detect_useless_rules()
+{
+	struct {
+		set<Symbol*> vis;
+		void visit(Symbol *nterm) {
+			assert(nterm->kind == Symbol::NTERM);
+			if (vis.count(nterm))
+				return;
+			vis.insert(nterm);
+			for (auto &choice: nterm->choices) {
+				for (Symbol *s: choice) {
+					if (s->kind == Symbol::NTERM)
+						visit(s);
+				}
+			}
+		}
+	} visitor;
+	visitor.visit(top);
+	for (auto &pair: nterm_dict) {
+		Symbol *nterm = pair.second;
+		if (!nterm->predefined && !visitor.vis.count(nterm))
+			fprintf(stderr, "warning: <%s> is useless\n", nterm->name.c_str());
+	}
+}
+
+// true if no left recursion
+bool check_left_recursion()
+{
+	struct {
+		set<Symbol*> vis;
+		bool ans = true;
+		void visit(Symbol *nterm) {
+			assert(nterm->kind == Symbol::NTERM);
+			if (vis.count(nterm)) {
+				fprintf(stderr, "error: <%s> is left-recursive\n", nterm->name.c_str());
+				ans = false;
+				return;
+			}
+			vis.insert(nterm);
+			for (auto &choice: nterm->choices) {
+				auto it = choice.begin();
+				while (it != choice.end()) {
+					Symbol *s = *it;
+					if (s->kind == Symbol::NTERM)
+						visit(s);
+					if (!s->nullable)
+						break;
+					it++;
+				}
+			}
+		}
+	} visitor;
+	visitor.visit(top);
+	return visitor.ans;
+}
+
 bool check_grammar()
 {
-	// TODO detect left recursion
-	// TODO detect useless rules
 	// FIRST(X->y) = if nullable(y) then FIRST(y) ∪ FOLLOW(X) else FIRST(y)
 	/* for each nonterminal X, for each pair of distinct productions
 	   X->y1 and X->y2, FIRST(X->y1) ∩ FIRST(X->y2) = ∅ */
 	bool ans = true;
+	detect_useless_rules();
+	if (!check_left_recursion())
+		ans = false;
 	for (auto &pair: nterm_dict) {
 		Symbol *nterm = pair.second;
 		map<Symbol*, vector<Symbol*>*> m;
@@ -170,9 +229,9 @@ void getsym()
 	sym = yylex();
 }
 
-void error()
+void syntax_error()
 {
-	fprintf(stderr, "%d: syntax error (sym=%d)\n", yylineno, sym);
+	fprintf(stderr, "%d: error: syntax error (sym=%d)\n", yylineno, sym);
 	exit(1);
 }
 
@@ -211,7 +270,7 @@ void parse_seq(vector<Symbol *> &choice)
 				getsym();
 				parse_body(nterm->choices);
 				if (sym == closing_sym(opening)) getsym();
-				else error();
+				else syntax_error();
 				switch (opening) {
 				case '{':
 					nterm->choices_core = new vector<vector<Symbol*>>(nterm->choices);
@@ -290,15 +349,15 @@ void parse_rule()
 		nterm_name = string(yytext+1, yytext+yyleng-1);
 		getsym();
 	} else {
-		error();
+		syntax_error();
 	}
 	if (sym == IS) getsym();
-	else error();
+	else syntax_error();
 
 	Symbol *nterm = nterm_dict[nterm_name];
 	if (nterm) {
 		if (nterm->defined) {
-			fprintf(stderr, "%d: redefinition of <%s>\n",
+			fprintf(stderr, "%d: error: redefinition of <%s>\n",
 				yylineno, nterm_name.c_str());
 			exit(1);
 		} else {
@@ -308,9 +367,11 @@ void parse_rule()
 		nterm = nterm_dict[nterm_name] = new Symbol(Symbol::NTERM, nterm_name);
 	}
 
+	if (!top) top = nterm;
+
 	parse_body(nterm->choices);
 	if (sym == '\n') getsym();
-	else error();
+	else syntax_error();
 }
 
 void parse()
@@ -327,17 +388,21 @@ void define_empty()
 	empty->choices.emplace_back();
 	empty->nullable = true;
 	empty->defined = true;
+	empty->predefined = true;
 }
 
 void check_undefined()
 {
+	bool err = false;
 	for (auto &pair: nterm_dict) {
 		Symbol *nterm = pair.second;
 		if (nterm->choices.empty()) {
-			fprintf(stderr, "<%s> is undefined\n", nterm->name.c_str());
-			exit(1);
+			fprintf(stderr, "error: <%s> is undefined\n", nterm->name.c_str());
+			err = true;
 		}
 	}
+	if (err)
+		exit(1);
 }
 
 void print_body(const vector<vector<Symbol*>> &choices);
@@ -400,7 +465,7 @@ void print_rules()
 {
 	for (auto &pair: nterm_dict) {
 		Symbol *nterm = pair.second;
-		if (!nterm->opening_sym()) /* not synthesized */ {
+		if (!nterm->predefined && !nterm->opening_sym()) {
 			printf("<%s> ::= ", nterm->name.c_str());
 			print_body(nterm->choices);
 			putchar('\n');
@@ -433,9 +498,12 @@ void list_symbols()
 	printf("terminals: %d\n", term_dict.size());
 	for (auto &pair: term_dict)
 		puts(pair.second->name.c_str());
-	printf("nonterminals: %d\n", nterm_dict.size());
-	for (auto &pair: nterm_dict)
-		puts(pair.second->name.c_str());
+	printf("nonterminals: %d\n", nterm_dict.size()-1); // -1 for <empty>
+	for (auto &pair: nterm_dict) {
+		Symbol *nterm = pair.second;
+		if (!nterm->predefined)
+			puts(nterm->name.c_str());
+	}
 }
 
 enum {
@@ -481,6 +549,10 @@ int main(int argc, char **argv)
 	}
 	define_empty();
 	parse();
+	if (!top) {
+		fputs("error: grammar is empty\n", stderr);
+		exit(1);
+	}
 	check_undefined();
 	switch (action) {
 	case PRINT_RULES:

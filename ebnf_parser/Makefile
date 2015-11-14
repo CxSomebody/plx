@@ -1,6 +1,6 @@
-CXXFLAGS += -std=c++14
+CXXFLAGS += -std=c++14 -Wall
 
-ebnf: lexer.o ebnf.o
+ebnf: algorithm.o ebnf.o gen.o lexer.o parse.o
 	c++ -o $@ $^
 
 clean:

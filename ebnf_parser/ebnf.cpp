@@ -2,6 +2,7 @@
 #include <cassert>
 #include <cstdlib>
 #include <map>
+#include <memory>
 #include <set>
 #include <string>
 #include <vector>
@@ -31,7 +32,8 @@ Symbol *empty;
 struct Symbol {
 	enum SymbolKind { TERM, NTERM } kind;
 	string name;
-	vector<vector<Symbol*>> choices, *choices_core = nullptr;
+	vector<vector<Symbol*>> choices;
+	unique_ptr<vector<vector<Symbol*>>> choices_core;
 	set<Symbol*> first, follow;
 	bool nullable = false;
 	bool defined = false;
@@ -45,10 +47,6 @@ struct Symbol {
 	}
 	Symbol(SymbolKind kind, const string &name):
 	       	kind(kind), name(name) {}
-	~Symbol() {
-		delete choices_core;
-	}
-	Symbol(const Symbol &) = delete;
 };
 
 // algorithm for computing FIRST and FOLLOW
@@ -266,7 +264,7 @@ void parse_seq(vector<Symbol *> &choice)
 				parse_body(nterm->choices);
 				if (sym == closing_sym(opening)) getsym();
 				else syntax_error();
-				nterm->choices_core = new vector<vector<Symbol*>>(nterm->choices);
+				nterm->choices_core = make_unique<vector<vector<Symbol*>>>(nterm->choices);
 				switch (opening) {
 				case '{':
 					for (auto &choice: nterm->choices)
@@ -419,6 +417,8 @@ void print_symbol(Symbol *s)
 			}
 		}
 		break;
+	default:
+		assert(0);
 	}
 }
 

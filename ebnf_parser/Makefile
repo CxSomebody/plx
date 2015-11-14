@@ -1,3 +1,5 @@
+CXXFLAGS += -std=c++14
+
 ebnf: lexer.o ebnf.o
 	c++ -o $@ $^
 

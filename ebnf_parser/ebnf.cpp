@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <cassert>
 #include <cstdlib>
 #include <map>
@@ -25,6 +26,7 @@ struct Symbol;
 
 map<string, Symbol*> term_dict, nterm_dict;
 Symbol *top;
+Symbol *empty;
 
 struct Symbol {
 	enum SymbolKind { TERM, NTERM } kind;
@@ -33,7 +35,6 @@ struct Symbol {
 	set<Symbol*> first, follow;
 	bool nullable = false;
 	bool defined = false;
-	bool predefined = false;
 	int opening_sym() {
 		char opening = name[0];
 		switch (opening) {
@@ -72,14 +73,7 @@ void compute_first_follow()
 			Symbol *nterm = pair.second;
 			for (auto &choice: nterm->choices) {
 				if (!nterm->nullable) {
-					bool opaque = false;
-					for (Symbol *s: choice) {
-						if (!s->nullable) {
-							opaque = true;
-							break;
-						}
-					}
-					if (!opaque) {
+					if (all_of(choice.begin(), choice.end(), [](Symbol *s){return s->nullable;})) {
 						nterm->nullable = true;
 						changed = true;
 					}
@@ -144,10 +138,11 @@ void detect_useless_rules()
 			}
 		}
 	} visitor;
+	visitor.vis.insert(empty);
 	visitor.visit(top);
 	for (auto &pair: nterm_dict) {
 		Symbol *nterm = pair.second;
-		if (!nterm->predefined && !visitor.vis.count(nterm))
+		if (!visitor.vis.count(nterm))
 			fprintf(stderr, "warning: <%s> is useless\n", nterm->name.c_str());
 	}
 }
@@ -271,15 +266,14 @@ void parse_seq(vector<Symbol *> &choice)
 				parse_body(nterm->choices);
 				if (sym == closing_sym(opening)) getsym();
 				else syntax_error();
+				nterm->choices_core = new vector<vector<Symbol*>>(nterm->choices);
 				switch (opening) {
 				case '{':
-					nterm->choices_core = new vector<vector<Symbol*>>(nterm->choices);
 					for (auto &choice: nterm->choices)
 						choice.emplace_back(nterm);
 				       	nterm->choices.emplace_back();
 					break;
 				case '[':
-					nterm->choices_core = new vector<vector<Symbol*>>(nterm->choices);
 				       	nterm->choices.emplace_back();
 					break;
 				case '(':
@@ -384,11 +378,10 @@ void parse()
 void define_empty()
 {
 	string name("empty");
-	Symbol *empty = nterm_dict[name] = new Symbol(Symbol::NTERM, name);
+	empty = nterm_dict[name] = new Symbol(Symbol::NTERM, name);
 	empty->choices.emplace_back();
 	empty->nullable = true;
 	empty->defined = true;
-	empty->predefined = true;
 }
 
 void check_undefined()
@@ -416,19 +409,7 @@ void print_symbol(Symbol *s)
 		break;
 	case Symbol::NTERM:
 		{
-			int opening = 0;
-			if (s->choices.size() > 1) {
-				if (s->choices.back().empty()) {
-					size_t n = s->choices.size()-1;
-					opening = '{';
-					for (size_t i=0; i<n; i++) {
-						if (s->choices[0].back() != s) {
-							opening = '[';
-							break;
-						}
-					}
-				}
-			}
+			int opening = s->opening_sym();
 			if (opening) {
 				printf("%c ", opening);
 				print_body(*s->choices_core);
@@ -465,7 +446,7 @@ void print_rules()
 {
 	for (auto &pair: nterm_dict) {
 		Symbol *nterm = pair.second;
-		if (!nterm->predefined && !nterm->opening_sym()) {
+		if (nterm != empty && !nterm->opening_sym()) {
 			printf("<%s> ::= ", nterm->name.c_str());
 			print_body(nterm->choices);
 			putchar('\n');
@@ -501,8 +482,10 @@ void list_symbols()
 	printf("nonterminals: %d\n", nterm_dict.size()-1); // -1 for <empty>
 	for (auto &pair: nterm_dict) {
 		Symbol *nterm = pair.second;
-		if (!nterm->predefined)
-			puts(nterm->name.c_str());
+		if (nterm != empty) {
+			print_symbol(nterm);
+			putchar('\n');
+		}
 	}
 }
 

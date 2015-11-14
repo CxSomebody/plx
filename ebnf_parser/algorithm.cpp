@@ -101,6 +101,22 @@ bool check_left_recursion()
 	return visitor.ans;
 }
 
+set<Symbol*> first_of_production(Symbol *nterm, const vector<Symbol*> &body)
+{
+	set<Symbol*> f;
+	auto it = body.begin();
+	while (it != body.end()) {
+		Symbol *s = *it;
+		f.insert(s->first.begin(), s->first.end());
+		if (!s->nullable)
+			break;
+		it++;
+	}
+	if (it == body.end())
+		f.insert(nterm->follow.begin(), nterm->follow.end());
+	return f;
+}
+
 bool check_grammar()
 {
 	// FIRST(X->y) = if nullable(y) then FIRST(y) ∪ FOLLOW(X) else FIRST(y)
@@ -113,17 +129,7 @@ bool check_grammar()
 	for_each_nterm([&](Symbol *nterm) {
 		map<Symbol*, vector<Symbol*>*> m;
 		for (auto &choice: nterm->choices) {
-			set<Symbol*> f;
-			auto it = choice.begin();
-			while (it != choice.end()) {
-				Symbol *s = *it;
-				f.insert(s->first.begin(), s->first.end());
-				if (!s->nullable)
-					break;
-				it++;
-			}
-			if (it == choice.end())
-				f.insert(nterm->follow.begin(), nterm->follow.end());
+			set<Symbol*> f = first_of_production(nterm, choice);
 			for (Symbol *s: f) {
 				if (m[s]) {
 					printf("conflict on %s:\n", s->name.c_str());

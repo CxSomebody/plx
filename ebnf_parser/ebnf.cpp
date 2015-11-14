@@ -62,6 +62,11 @@ void define_empty()
 	empty->defined = true;
 }
 
+void undef_empty()
+{
+	nterm_dict.erase("empty");
+}
+	
 void check_undefined()
 {
 	bool err = false;
@@ -134,7 +139,7 @@ void print_body(const vector<vector<Symbol*>> &choices)
 void print_rules()
 {
 	NTermVisitor([](Symbol *nterm) {
-		if (nterm != empty && !nterm->opening_sym()) {
+		if (!nterm->opening_sym()) {
 			printf("<%s> ::= ", nterm->name.c_str());
 			print_body(nterm->choices);
 			putchar('\n');
@@ -167,16 +172,19 @@ void list_symbols()
 	for_each_term([](Symbol *term) {
 		puts(term->name.c_str());
 	});
-	printf("nonterminals: %lu\n", nterm_dict.size()-1); // -1 for <empty>
+	printf("nonterminals: %lu\n", nterm_dict.size());
 	for_each_nterm([](Symbol *nterm) {
-		if (nterm != empty) {
-			print_symbol(nterm);
-			putchar('\n');
-		}
+		print_symbol(nterm);
+		putchar('\n');
 	});
 }
 
 void parse();
+
+void check_grammar();
+void compute_first_follow();
+
+void generate_parsing_routine(Symbol *nterm, const vector<vector<Symbol*>> &choices, int level, bool use_getsym);
 
 extern FILE *yyin;
 static enum {
@@ -184,6 +192,7 @@ static enum {
 	LIST_SYMBOLS,
 	CHECK_GRAMMAR,
 	PRINT_FIRST_FOLLOW,
+	GENERATE_PARSER,
 } action;
 
 void usage(const char *progname)
@@ -195,13 +204,16 @@ void usage(const char *progname)
 int main(int argc, char **argv)
 {
 	int opt;
-	while ((opt = getopt(argc, argv, "cflp")) != -1) {
+	while ((opt = getopt(argc, argv, "cfglp")) != -1) {
 		switch (opt) {
 		case 'c':
 			action = CHECK_GRAMMAR;
 			break;
 		case 'f':
 			action = PRINT_FIRST_FOLLOW;
+			break;
+		case 'g':
+			action = GENERATE_PARSER;
 			break;
 		case 'l':
 			action = LIST_SYMBOLS;
@@ -222,6 +234,7 @@ int main(int argc, char **argv)
 	}
 	define_empty();
 	parse();
+	undef_empty();
 	if (!top) {
 		fputs("error: grammar is empty\n", stderr);
 		exit(1);
@@ -241,6 +254,14 @@ int main(int argc, char **argv)
 	case PRINT_FIRST_FOLLOW:
 		compute_first_follow();
 		print_first_follow();
+		break;
+	case GENERATE_PARSER:
+		compute_first_follow();
+		check_grammar();
+		NTermVisitor([](Symbol *nterm) {
+			if (!nterm->opening_sym())
+				generate_parsing_routine(nterm, nterm->choices, 0, false);
+		}).visit(top);
 		break;
 	default:
 		assert(0);

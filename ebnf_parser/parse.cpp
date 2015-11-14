@@ -107,6 +107,8 @@ static void parse_seq(vector<Symbol *> &choice)
 			}
 			break;
 		default:
+			if (choice.size() == 1 && choice[0] == empty)
+				choice.clear();
 			return;
 		}
 	}

@@ -6,6 +6,11 @@ using namespace std;
 
 set<Symbol*> first_of_production(Symbol *nterm, const vector<Symbol*> &body);
 
+void emit_proc_header(const char *name)
+{
+	printf("void %s(std::set<int> &&follow)", name);
+}
+
 void generate_parsing_routine(Symbol *nterm, const vector<vector<Symbol*>> &choices, int level, bool use_getsym)
 {
 	auto indent = [&]() {
@@ -13,6 +18,7 @@ void generate_parsing_routine(Symbol *nterm, const vector<vector<Symbol*>> &choi
 			putchar('\t');
 	};
 	auto print_cond = [](const set<Symbol*> f) {
+		putchar(' ');
 		putchar('(');
 		auto it = f.begin();
 		while (it != f.end()) {
@@ -24,62 +30,74 @@ void generate_parsing_routine(Symbol *nterm, const vector<vector<Symbol*>> &choi
 		}
 		putchar(')');
 	};
+	auto print_set = [](const set<Symbol*> f) {
+		putchar('{');
+		auto it = f.begin();
+		while (it != f.end()) {
+			Symbol *term = *it;
+			printf("%s", term->name.c_str());
+			if (next(it) != f.end())
+				putchar(',');
+			it++;
+		}
+		putchar('}');
+	};
 	auto gen_choice = [&](Symbol *nterm, const vector<Symbol*> &choice, const char *ctl) {
 		set<Symbol*> f = first_of_production(nterm, choice);
 		if (ctl) {
 			indent();
+			printf("%s", ctl);
 			if (strcmp(ctl, "else")) {
-				printf("%s ", ctl);
 				print_cond(f);
-				printf(" {\n");
 				use_getsym = true;
-			} else {
-				printf("else {\n");
 			}
+			printf(" {\n");
 			level++;
 		}
-		for (Symbol *s: choice) {
+		for (auto it = choice.begin(); it != choice.end(); it++) {
+			Symbol *s = *it;
 			switch (s->kind) {
 				int opening;
 			case Symbol::TERM:
 				indent();
 				if (use_getsym) printf("getsym();\n");
-				else printf("expect(%s);\n", s->name.c_str());
+				else printf("if (!expect(%s, follow)) return;\n", s->name.c_str());
 				use_getsym = false;
 				break;
 			case Symbol::NTERM:
 				if ((opening = s->opening_sym())) {
+					const char *sctl;
 					switch (opening) {
-						const char *sctl;
-					case '(':
-						generate_parsing_routine(s, *s->choices_core, level, use_getsym);
-						use_getsym = false;
-						break;
-					case '[':
-					case '{':
-						switch (opening) {
-						case '[': sctl = "if"; break;
-						case '{': sctl = "while"; break;
-						default: assert(0);
-						}
+					case '(': sctl = nullptr; break;
+					case '[': sctl = "if"; break;
+					case '{': sctl = "while"; break;
+					default: assert(0);
+					}
+					if (sctl) {
 						indent();
 						printf("%s ", sctl);
 						print_cond(s->first);
 						printf(" {\n");
 						use_getsym = true;
 						level++;
-						generate_parsing_routine(s, *s->choices_core, level, use_getsym);
-						use_getsym = false;
+					}
+					generate_parsing_routine(s, *s->choices_core, level, use_getsym);
+					use_getsym = false;
+					if (sctl) {
 						level--;
 						indent();
 						printf("}\n");
-						break;
-					default:
-						assert(0);
 					}
+					break;
 				} else {
 					indent();
-					printf("%s();\n", s->name.c_str());
+					printf("%s(set_union(follow, std::set<int>", s->name.c_str());
+					if (next(it) == choice.end())
+						print_set(nterm->follow);
+					else
+						print_set((*next(it))->first);
+					printf("));\n");
+					//printf("%s();\n", s->name.c_str());
 					use_getsym = false;
 				}
 				break;
@@ -94,8 +112,10 @@ void generate_parsing_routine(Symbol *nterm, const vector<vector<Symbol*>> &choi
 		}
 	};
 	if (!nterm->opening_sym()) {
+		putchar('\n');
 		indent();
-		printf("void %s() {\n", nterm->name.c_str());
+		emit_proc_header(nterm->name.c_str());
+		printf(" {\n");
 		level++;
 	}
 	if (choices.size() == 1) {

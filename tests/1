@@ -1,3 +1,5 @@
+var
+  a, b: integer;
 procedure swap(var a, b: integer);
 var
   t: integer;
@@ -13,8 +15,6 @@ begin
   if a<b then swap(a, b);
   if b=0 then gcd := a else gcd := gcd(b, mod(a, b))
 end;
-var
-  a, b: integer;
 begin
   read(a, b);
   write(gcd(a, b));

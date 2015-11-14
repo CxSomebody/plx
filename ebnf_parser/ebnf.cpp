@@ -40,17 +40,17 @@ void NTermVisitor::visit(Symbol *nterm) {
 }
 NTermVisitor::NTermVisitor(function<void(Symbol*)> f): f(f) {}
 
-void print_symbol(Symbol *s);
+void print_symbol(Symbol *s, FILE *fp);
 
-void print_production(Symbol *nterm, const vector<Symbol*> &body)
+void print_production(Symbol *nterm, const vector<Symbol*> &body, FILE *fp)
 {
-	print_symbol(nterm);
-	fputs(" ->", stdout);
+	print_symbol(nterm, fp);
+	fputs(" ->", fp);
 	for (Symbol *s: body) {
-		putchar(' ');
-		print_symbol(s);
+		fputc(' ', fp);
+		print_symbol(s, fp);
 	}
-	putchar('\n');
+	fputc('\n', fp);
 }
 
 void define_empty()
@@ -80,8 +80,8 @@ void check_undefined()
 		exit(1);
 }
 
-void print_body(const vector<vector<Symbol*>> &choices);
-void print_choice(const vector<Symbol*> &choice);
+void print_body(const vector<vector<Symbol*>> &choices, FILE *fp);
+void print_choice(const vector<Symbol*> &choice, FILE *fp);
 
 int closing_sym(int opening)
 {
@@ -93,21 +93,21 @@ int closing_sym(int opening)
 	assert(0);
 }
 
-void print_symbol(Symbol *s)
+void print_symbol(Symbol *s, FILE *fp)
 {
 	switch (s->kind) {
 	case Symbol::TERM:
-		fputs(s->name.c_str(), stdout);
+		fputs(s->name.c_str(), fp);
 		break;
 	case Symbol::NTERM:
 		{
 			int opening = s->opening_sym();
 			if (opening) {
-				printf("%c ", opening);
-				print_body(*s->choices_core);
-				printf(" %c", closing_sym(opening));
+				fprintf(fp, "%c ", opening);
+				print_body(*s->choices_core, fp);
+				fprintf(fp, " %c", closing_sym(opening));
 			} else {
-				printf("<%s>", s->name.c_str());
+				fprintf(fp, "<%s>", s->name.c_str());
 			}
 		}
 		break;
@@ -116,32 +116,32 @@ void print_symbol(Symbol *s)
 	}
 }
 
-void print_choice(const vector<Symbol*> &choice)
+void print_choice(const vector<Symbol*> &choice, FILE *fp)
 {
 	size_t n = choice.size();
 	for (size_t i=0; i<n; i++) {
-		print_symbol(choice[i]);
+		print_symbol(choice[i], fp);
 		if (i < n-1)
-			putchar(' ');
+			fputc(' ', fp);
 	}
 }
 
-void print_body(const vector<vector<Symbol*>> &choices)
+void print_body(const vector<vector<Symbol*>> &choices, FILE *fp)
 {
 	size_t n = choices.size();
 	for (size_t i=0; i<n; i++) {
-		print_choice(choices[i]);
+		print_choice(choices[i], fp);
 		if (i < n-1)
-			fputs(" | ", stdout);
+			fputs(" | ", fp);
 	}
 }
 
-void print_rules()
+void print_rules(FILE *fp)
 {
-	NTermVisitor([](Symbol *nterm) {
+	NTermVisitor([=](Symbol *nterm) {
 		if (!nterm->opening_sym()) {
 			printf("<%s> ::= ", nterm->name.c_str());
-			print_body(nterm->choices);
+			print_body(nterm->choices, fp);
 			putchar('\n');
 		}
 	}).visit(top);
@@ -174,7 +174,7 @@ void list_symbols()
 	});
 	printf("nonterminals: %lu\n", nterm_dict.size());
 	for_each_nterm([](Symbol *nterm) {
-		print_symbol(nterm);
+		print_symbol(nterm, stdout);
 		putchar('\n');
 	});
 }
@@ -184,7 +184,10 @@ void parse();
 void check_grammar();
 void compute_first_follow();
 
+void emit_proc_header(const char *name);
 void generate_parsing_routine(Symbol *nterm, const vector<vector<Symbol*>> &choices, int level, bool use_getsym);
+
+#include "preamble.inc"
 
 extern FILE *yyin;
 static enum {
@@ -242,7 +245,7 @@ int main(int argc, char **argv)
 	check_undefined();
 	switch (action) {
 	case PRINT_RULES:
-		print_rules();
+		print_rules(stdout);
 		break;
 	case LIST_SYMBOLS:
 		list_symbols();
@@ -258,6 +261,21 @@ int main(int argc, char **argv)
 	case GENERATE_PARSER:
 		compute_first_follow();
 		check_grammar();
+		fputs(preamble, stdout);
+		putchar('\n');
+		NTermVisitor([](Symbol *nterm) {
+			if (!nterm->opening_sym()) {
+				emit_proc_header(nterm->name.c_str());
+				printf(";\n");
+			}
+		}).visit(top);
+		putchar('\n');
+		printf("void parse()\n"
+		       "{\n"
+		       "\tgetsym();\n"
+		       "\t%s(std::set<int>{0});\n"
+		       "}\n",
+		       top->name.c_str());
 		NTermVisitor([](Symbol *nterm) {
 			if (!nterm->opening_sym())
 				generate_parsing_routine(nterm, nterm->choices, 0, false);

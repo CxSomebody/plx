@@ -1,5 +1,5 @@
-plx: plx.o lexer.o keywords.o
-	cc -o $@ $^
+plx: plx.o lexer.o keywords.o parser.o
+	c++ -o $@ $^
 
 keywords.c: keywords.gperf
 	gperf -t -I -N gperf_keyword_sym $< > $@

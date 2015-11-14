@@ -23,6 +23,7 @@ int token_len;
 int sym;
 
 int lineno;
+int colno;
 
 static void fillbuf(void)
 {
@@ -58,11 +59,12 @@ static void skip_line(void)
 
 static void error(char *msg)
 {
-	fprintf(stderr, "%s:%d: %s\n", fpath, lineno, msg);
+	fprintf(stderr, "%s: %d:%d: %s\n", fpath, lineno, colno, msg);
 }
 
-void lex(void)
+void getsym(void)
 {
+	colno += token_len;
 	char *p;
 	char errflag = 0;
 	do {
@@ -75,9 +77,12 @@ void lex(void)
 			// skip whitespace... including comments
 			for (;;) {
 				while (isspace(*p)) {
-					if (*p == '\n')
+					if (*p == '\n') {
 						lineno++;
+						colno = 0;
+					}
 					p++;
+					colno++;
 				}
 				if (p[0] != '/' || p[1] != '/')
 					break;

@@ -120,8 +120,15 @@ void emit_proc(Symbol *nterm, const vector<vector<Symbol*>> &choices)
 	emit_proc_header(nterm);
 	printf(" {\n");
 	level++;
-	if (nterm->opening_sym() == '{')
-		printf("start:\n");
+	for (auto &choice: nterm->choices) {
+		for (Symbol *s: choice) {
+			if (s == nterm) {
+				printf("start:\n");
+				goto gen_body;
+			}
+		}
+	}
+gen_body:
 	for (auto it = choices.begin(); it != choices.end(); it++) {
 		if (next(it) == choices.end()) {
 			gen_choice(nterm, *it, nullptr);

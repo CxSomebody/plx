@@ -15,30 +15,40 @@ Symbol *top;
 Symbol *empty;
 
 int Symbol::opening_sym() {
-	char opening = name[0];
-	switch (opening) {
-	case '(': case '[': case '{':
-		return opening;
+	if (name[0] != '_')
+		return 0;
+	switch (name[1]) {
+	case 's': return '(';
+	case 'o': return '[';
+	case 'm': return '{';
 	}
-	return 0;
+	assert(0);
 }
 Symbol::Symbol(SymbolKind kind, const string &name):
 	kind(kind), name(name) {}
 
-void NTermVisitor::visit(Symbol *nterm) {
-	assert(nterm->kind == Symbol::NTERM);
-	if (vis.count(nterm))
-		return;
-	vis.insert(nterm);
-	f(nterm);
-	for (auto &choice: nterm->choices) {
-		for (Symbol *s: choice) {
-			if (s->kind == Symbol::NTERM)
-				visit(s);
+void for_each_reachable_nterm(std::function<void(Symbol*)> f)
+{
+	struct Visitor {
+		set<Symbol*> vis;
+		std::function<void(Symbol*)> f;
+		void visit(Symbol *nterm) {
+			assert(nterm->kind == Symbol::NTERM);
+			if (vis.count(nterm))
+				return;
+			vis.insert(nterm);
+			f(nterm);
+			for (auto &choice: nterm->choices) {
+				for (Symbol *s: choice) {
+					if (s->kind == Symbol::NTERM)
+						visit(s);
+				}
+			}
 		}
-	}
+		Visitor(std::function<void(Symbol*)> f): f(f) {}
+	} visitor(f);
+	visitor.visit(top);
 }
-NTermVisitor::NTermVisitor(function<void(Symbol*)> f): f(f) {}
 
 void print_symbol(Symbol *s, FILE *fp);
 
@@ -138,13 +148,13 @@ void print_body(const vector<vector<Symbol*>> &choices, FILE *fp)
 
 void print_rules(FILE *fp)
 {
-	NTermVisitor([=](Symbol *nterm) {
+	for_each_reachable_nterm([=](Symbol *nterm) {
 		if (!nterm->opening_sym()) {
 			printf("<%s> ::= ", nterm->name.c_str());
 			print_body(nterm->choices, fp);
 			putchar('\n');
 		}
-	}).visit(top);
+	});
 }
 
 void print_symbol_set(const char *set_name, const char *nterm_name, const set<Symbol*> &s)
@@ -172,7 +182,7 @@ void list_symbols()
 	for_each_term([](Symbol *term) {
 		puts(term->name.c_str());
 	});
-	printf("nonterminals: %lu\n", nterm_dict.size());
+	printf("nterminals: %lu\n", nterm_dict.size());
 	for_each_nterm([](Symbol *nterm) {
 		print_symbol(nterm, stdout);
 		putchar('\n');
@@ -184,8 +194,8 @@ void parse();
 void check_grammar();
 void compute_first_follow();
 
-void emit_proc_header(const char *name);
-void generate_parsing_routine(Symbol *nterm, const vector<vector<Symbol*>> &choices, int level, bool use_getsym);
+void emit_proc_header(Symbol *nterm);
+void emit_proc(Symbol *nterm, const vector<vector<Symbol*>> &choices);
 
 #include "preamble.inc"
 
@@ -263,23 +273,20 @@ int main(int argc, char **argv)
 		check_grammar();
 		fputs(preamble, stdout);
 		putchar('\n');
-		NTermVisitor([](Symbol *nterm) {
-			if (!nterm->opening_sym()) {
-				emit_proc_header(nterm->name.c_str());
-				printf(";\n");
-			}
-		}).visit(top);
+		for_each_reachable_nterm([](Symbol *nterm) {
+			emit_proc_header(nterm);
+			printf(";\n");
+		});
 		putchar('\n');
-		printf("void parse()\n"
+		printf("bool parse()\n"
 		       "{\n"
 		       "\tgetsym();\n"
-		       "\t%s(std::set<int>{0});\n"
+		       "\treturn %s(std::set<int>{0}, std::set<int>{});\n"
 		       "}\n",
 		       top->name.c_str());
-		NTermVisitor([](Symbol *nterm) {
-			if (!nterm->opening_sym())
-				generate_parsing_routine(nterm, nterm->choices, 0, false);
-		}).visit(top);
+		for_each_reachable_nterm([](Symbol *nterm) {
+			emit_proc(nterm, nterm->choices);
+		});
 		break;
 	default:
 		assert(0);

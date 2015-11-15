@@ -32,7 +32,14 @@ int closing_sym(int opening);
 static void synth_nterm_name(int kind, char *name)
 {
 	static int id;
-	sprintf(name, "%c%d%c", kind, id, closing_sym(kind));
+	char c;
+	switch (kind) {
+	case '(': c = 's'; break;
+	case '[': c = 'o'; break;
+	case '{': c = 'm'; break;
+	default: assert(0);
+	}
+	sprintf(name, "_%c%d", c, id);
 	id++;
 }
 
@@ -137,22 +144,34 @@ static void parse_rule()
 	if (sym == IS) getsym();
 	else syntax_error();
 
-	Symbol *nterm = nterm_dict[nterm_name];
-	if (nterm) {
-		if (nterm->defined) {
-			fprintf(stderr, "%d: error: redefinition of <%s>\n",
-				yylineno, nterm_name.c_str());
-			exit(1);
-		} else {
-			nterm->defined = true;
-		}
+#ifdef ENABLE_WEAK
+	if (nterm_name == "WEAK") {
+		vector<Symbol*> weak_symbols;
+		parse_seq(weak_symbols);
+		for (Symbol *s: weak_symbols)
+			s->weak = true;
 	} else {
-		nterm = nterm_dict[nterm_name] = new Symbol(Symbol::NTERM, nterm_name);
+#endif
+		Symbol *nterm = nterm_dict[nterm_name];
+		if (nterm) {
+			if (nterm->defined) {
+				fprintf(stderr, "%d: error: redefinition of <%s>\n",
+					yylineno, nterm_name.c_str());
+				exit(1);
+			} else {
+				nterm->defined = true;
+			}
+		} else {
+			nterm = nterm_dict[nterm_name] = new Symbol(Symbol::NTERM, nterm_name);
+		}
+
+		if (!top) top = nterm;
+
+		parse_body(nterm->choices);
+#ifdef ENABLE_WEAK
 	}
+#endif
 
-	if (!top) top = nterm;
-
-	parse_body(nterm->choices);
 	if (sym == '\n') getsym();
 	else syntax_error();
 }

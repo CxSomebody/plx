@@ -60,13 +60,11 @@ void compute_first_follow()
 	} while (changed);
 }
 
-void detect_useless_rules()
+static void number_nterms()
 {
-	NTermVisitor visitor([](Symbol *){});
-	visitor.visit(top);
-	for_each_nterm([&](Symbol *nterm) {
-		if (!visitor.vis.count(nterm))
-			fprintf(stderr, "warning: <%s> is useless\n", nterm->name.c_str());
+	int id = 0;
+	for_each_reachable_nterm([&](Symbol *nterm) {
+		nterm->id = id++;
 	});
 }
 
@@ -123,7 +121,12 @@ bool check_grammar()
 	/* for each nonterminal X, for each pair of distinct productions
 	   X->y1 and X->y2, FIRST(X->y1) ∩ FIRST(X->y2) = ∅ */
 	bool ans = true;
-	detect_useless_rules();
+	number_nterms();
+	// detect useless rules
+	for_each_nterm([](Symbol *nterm) {
+		if (nterm->id < 0)
+			fprintf(stderr, "warning: <%s> is useless\n", nterm->name.c_str());
+	});
 	if (!check_left_recursion())
 		ans = false;
 	for_each_nterm([&](Symbol *nterm) {

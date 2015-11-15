@@ -1,4 +1,4 @@
-<program> ::= <block>.
+<program> ::= <block>.	
 <block> ::= [<const_part>][<var_part>]{<proc_def>|<func_def>}<comp_stmt>
 <const_part> ::= KW_CONST <const_def> {,<const_def>};
 <const_def> ::= IDENT = <constant>

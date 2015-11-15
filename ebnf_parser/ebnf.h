@@ -10,8 +10,12 @@ struct Symbol {
 	std::vector<std::vector<Symbol*>> choices;
 	std::unique_ptr<std::vector<std::vector<Symbol*>>> choices_core;
 	std::set<Symbol*> first, follow;
+	int id = -1;
 	bool nullable = false;
 	bool defined = false;
+#ifdef ENABLE_WEAK
+	bool weak = false;
+#endif
 	int opening_sym();
 	Symbol(SymbolKind kind, const std::string &name);
 };
@@ -32,10 +36,4 @@ void for_each_nterm(F f) {
 		f(pair.second);
 }
 
-// reachable nonterminals only
-struct NTermVisitor {
-	std::set<Symbol*> vis; // set of visited nonterminals
-	std::function<void(Symbol*)> f;
-	void visit(Symbol *nterm);
-	NTermVisitor(std::function<void(Symbol*)> f);
-};
+void for_each_reachable_nterm(std::function<void(Symbol*)>);

@@ -6,13 +6,15 @@ using namespace std;
 
 set<Symbol*> first_of_production(Symbol *nterm, const vector<Symbol*> &body);
 
-void emit_proc_header(const char *name)
+void emit_proc_header(Symbol *nterm)
 {
-	printf("void %s(std::set<int> &&follow)", name);
+	printf("static bool %s(std::set<int> &&t, std::set<int> &&f)", nterm->name.c_str());
 }
 
-void generate_parsing_routine(Symbol *nterm, const vector<vector<Symbol*>> &choices, int level, bool use_getsym)
+void emit_proc(Symbol *nterm, const vector<vector<Symbol*>> &choices)
 {
+	int level = 0;
+	bool use_getsym = false;
 	auto indent = [&]() {
 		for (int i=0; i<level; i++)
 			putchar('\t');
@@ -47,63 +49,40 @@ void generate_parsing_routine(Symbol *nterm, const vector<vector<Symbol*>> &choi
 		if (ctl) {
 			indent();
 			printf("%s", ctl);
-			if (strcmp(ctl, "else")) {
-				print_cond(f);
-				use_getsym = true;
-			}
+			print_cond(f);
+			use_getsym = true;
 			printf(" {\n");
 			level++;
 		}
+		bool ret_true = true;
 		for (auto it = choice.begin(); it != choice.end(); it++) {
 			Symbol *s = *it;
-			switch (s->kind) {
-				int opening;
-			case Symbol::TERM:
-				indent();
-				if (use_getsym) printf("getsym();\n");
-				else printf("if (!expect(%s, follow)) return;\n", s->name.c_str());
-				use_getsym = false;
-				break;
-			case Symbol::NTERM:
-				if ((opening = s->opening_sym())) {
-					const char *sctl;
-					switch (opening) {
-					case '(': sctl = nullptr; break;
-					case '[': sctl = "if"; break;
-					case '{': sctl = "while"; break;
-					default: assert(0);
+			indent();
+			if (s->kind == Symbol::TERM && use_getsym) {
+				printf("getsym();\n");
+			} else {
+				if (next(it) == choice.end()) {
+					if (s->kind == Symbol::TERM) {
+						printf("return expect(%s, std::move(t), std::move(f));\n", s->name.c_str());
+					} else {
+						printf("return %s(std::move(t), std::move(f));\n", s->name.c_str());
 					}
-					if (sctl) {
-						indent();
-						printf("%s ", sctl);
-						print_cond(s->first);
-						printf(" {\n");
-						use_getsym = true;
-						level++;
-					}
-					generate_parsing_routine(s, *s->choices_core, level, use_getsym);
-					use_getsym = false;
-					if (sctl) {
-						level--;
-						indent();
-						printf("}\n");
-					}
-					break;
+					ret_true = false;
 				} else {
-					indent();
-					printf("%s(set_union(follow, std::set<int>", s->name.c_str());
-					if (next(it) == choice.end())
-						print_set(nterm->follow);
-					else
+					if (s->kind == Symbol::TERM) {
+						printf("if (!expect(%s, std::set<int>{}", s->name.c_str());
+					} else {
+						printf("if (!%s(std::set<int>", s->name.c_str());
 						print_set((*next(it))->first);
-					printf("));\n");
-					//printf("%s();\n", s->name.c_str());
-					use_getsym = false;
+					}
+					printf(", set_union(t, f))) return t.count(sym);\n");
 				}
-				break;
-			default:
-				assert(0);
 			}
+			use_getsym = false;
+		}
+		if (ret_true) {
+			indent();
+			printf("return true;\n");
 		}
 		if (ctl) {
 			level--;
@@ -111,31 +90,19 @@ void generate_parsing_routine(Symbol *nterm, const vector<vector<Symbol*>> &choi
 			printf("}\n");
 		}
 	};
-	if (!nterm->opening_sym()) {
-		putchar('\n');
-		indent();
-		emit_proc_header(nterm->name.c_str());
-		printf(" {\n");
-		level++;
-	}
-	if (choices.size() == 1) {
-		gen_choice(nterm, choices[0], nullptr);
-	} else if (choices.size()) /* more than one choice */ {
-		gen_choice(nterm, choices[0], "if");
-		auto it = next(choices.begin());
-		while (it != choices.end()) {
-			if (next(it) == choices.end()) {
-				if (!it->empty())
-					gen_choice(nterm, *it, "else");
-			} else {
-				gen_choice(nterm, *it, "else if");
-			}
-			it++;
+	putchar('\n');
+	indent();
+	emit_proc_header(nterm);
+	printf(" {\n");
+	level++;
+	for (auto it = choices.begin(); it != choices.end(); it++) {
+		if (next(it) == choices.end()) {
+			gen_choice(nterm, *it, nullptr);
+		} else {
+			gen_choice(nterm, *it, "if");
 		}
 	}
-	if (!nterm->opening_sym()) {
-		level--;
-		indent();
-		printf("}\n");
-	}
+	level--;
+	indent();
+	printf("}\n");
 }

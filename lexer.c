@@ -17,8 +17,8 @@ char *fpath;
 static char buf[BUFFER_SIZE]; // buf[BUFFER_SIZE-1] is always 0
 static char *bufp = buf+(BUFFER_SIZE-1);
 
-char *token_start;
-int token_len;
+char *tokstart;
+int toklen;
 
 int sym;
 
@@ -64,7 +64,7 @@ static void error(char *msg)
 
 void getsym(void)
 {
-	colno += token_len;
+	colno += toklen;
 	char *p;
 	char errflag = 0;
 	do {
@@ -95,7 +95,7 @@ void getsym(void)
 				break;
 			fillbuf();
 		}
-		token_start = p;
+		tokstart = p;
 		if (isalpha(*p)) {
 			char *q = p+1;
 			while (isalnum(*q))
@@ -161,7 +161,7 @@ void getsym(void)
 			}
 		}
 	} while (errflag);
-	token_len = p-token_start;
+	toklen = p-tokstart;
 	bufp = p;
 }
 

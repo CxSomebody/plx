@@ -1,3 +1,4 @@
+#include <cassert>
 #include <cstdio>
 #include <set>
 #include "tokens.h"
@@ -5,29 +6,31 @@
 extern int sym;
 extern int lineno, colno;
 
-extern char *token_start;
-extern int token_len;
+extern char *tokstart;
+extern int toklen;
 
 extern "C" void getsym();
 
-bool expect(int s, const std::set<int> &follow)
+static bool expect(int s, std::set<int> &&t, std::set<int> &&f)
 {
 	if (sym == s) {
 		getsym();
 		return true;
 	}
 	fprintf(stderr, "%d:%d: syntax error at ‘%.*s’\n",
-		lineno, colno, token_len, token_start);
-	while (!(sym == s || follow.count(sym))) {
-		fprintf(stderr, "[skipping ‘%.*s’]\n", token_len, token_start);
+		lineno, colno, toklen, tokstart);
+	for (;;) {
+		if (t.count(sym)) return true;
+		if (f.count(sym)) return false;
+		fprintf(stderr, "%d:%d: [skipping ‘%.*s’]\n",
+			lineno, colno, toklen, tokstart);
 		getsym();
 	}
-	return false;
 }
 
-std::set<int> set_union(const std::set<int> &a, std::set<int> &&b)
+static std::set<int> set_union(const std::set<int> &a, const std::set<int> &b)
 {
-	std::set<int> u(std::move(b));
+	std::set<int> u(b);
 	u.insert(a.begin(), a.end());
 	return u;
 }

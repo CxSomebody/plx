@@ -13,9 +13,7 @@ struct Symbol {
 	int id = -1;
 	bool nullable = false;
 	bool defined = false;
-#ifdef ENABLE_WEAK
 	bool weak = false;
-#endif
 	int opening_sym();
 	Symbol(SymbolKind kind, const std::string &name);
 };

@@ -8,7 +8,7 @@ set<Symbol*> first_of_production(Symbol *nterm, const vector<Symbol*> &body);
 
 void emit_proc_header(Symbol *nterm)
 {
-	printf("static bool %s(std::set<int> &&t, std::set<int> &&f)", nterm->name.c_str());
+	printf("static bool %s(set &&t, set &&f)", nterm->name.c_str());
 }
 
 void emit_proc(Symbol *nterm, const vector<vector<Symbol*>> &choices)
@@ -65,17 +65,42 @@ void emit_proc(Symbol *nterm, const vector<vector<Symbol*>> &choices)
 					if (s->kind == Symbol::TERM) {
 						printf("return expect(%s, std::move(t), std::move(f));\n", s->name.c_str());
 					} else {
-						printf("return %s(std::move(t), std::move(f));\n", s->name.c_str());
+						if (s == nterm)
+							printf("goto start;\n");
+						else
+							printf("return %s(std::move(t), std::move(f));\n", s->name.c_str());
 					}
 					ret_true = false;
 				} else {
 					if (s->kind == Symbol::TERM) {
-						printf("if (!expect(%s, std::set<int>{}", s->name.c_str());
+						printf("if (!expect(%s, ", s->name.c_str());
 					} else {
-						printf("if (!%s(std::set<int>", s->name.c_str());
-						print_set((*next(it))->first);
+						printf("if (!%s(", s->name.c_str());
 					}
-					printf(", set_union(t, f))) return t.count(sym);\n");
+					set<Symbol*> nt;
+					bool thru;
+					if (s->kind == Symbol::NTERM || s->weak) {
+						auto it2 = next(it);
+						while (it2 != choice.end()) {
+							Symbol *s2 = *it2;
+							nt.insert(s2->first.begin(), s2->first.end());
+							if (!s2->nullable)
+								break;
+							it2++;
+						}
+						thru = it2 == choice.end();
+					} else {
+						thru = false;
+					}
+					printf("set");
+					if (thru) {
+						print_set(nt);
+						printf("|t, std::move(f)");
+					} else {
+						print_set(nt);
+						printf(", t|f");
+					}
+					printf(")) return t.get(sym);\n");
 				}
 			}
 			use_getsym = false;
@@ -95,6 +120,8 @@ void emit_proc(Symbol *nterm, const vector<vector<Symbol*>> &choices)
 	emit_proc_header(nterm);
 	printf(" {\n");
 	level++;
+	if (nterm->opening_sym() == '{')
+		printf("start:\n");
 	for (auto it = choices.begin(); it != choices.end(); it++) {
 		if (next(it) == choices.end()) {
 			gen_choice(nterm, *it, nullptr);

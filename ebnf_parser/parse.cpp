@@ -144,14 +144,12 @@ static void parse_rule()
 	if (sym == IS) getsym();
 	else syntax_error();
 
-#ifdef ENABLE_WEAK
 	if (nterm_name == "WEAK") {
 		vector<Symbol*> weak_symbols;
 		parse_seq(weak_symbols);
 		for (Symbol *s: weak_symbols)
 			s->weak = true;
 	} else {
-#endif
 		Symbol *nterm = nterm_dict[nterm_name];
 		if (nterm) {
 			if (nterm->defined) {
@@ -168,9 +166,7 @@ static void parse_rule()
 		if (!top) top = nterm;
 
 		parse_body(nterm->choices);
-#ifdef ENABLE_WEAK
 	}
-#endif
 
 	if (sym == '\n') getsym();
 	else syntax_error();

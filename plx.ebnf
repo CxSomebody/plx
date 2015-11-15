@@ -30,3 +30,4 @@
 <comp_stmt> ::= KW_BEGIN <stmt> {; <stmt>} KW_END
 <read_stmt> ::= KW_READ '('IDENT{,IDENT}')'
 <write_stmt> ::= KW_WRITE '(' ( STRING [, <expr>] | <expr> ) ')'
+<WEAK> ::= ';'

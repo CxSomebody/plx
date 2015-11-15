@@ -2,13 +2,21 @@
 
 use integer;
 
-open IN, '< preamble';
-open OUT, '> preamble.inc';
-print OUT "const char preamble[] =\n";
-%s = ("\t" => '\t', '"' => '\"', '\\' => '\\\\');
-while (<IN>) {
-	chomp;
-	s/([\\\t"])/$s{$1}/ge;
-	print OUT "\"$_\\n\"\n";
+open OUT, '>', 'preamble.inc';
+
+sub process {
+	my $name = shift;
+	open IN, '<', $name;
+	print OUT "const char $name\[] =\n";
+	%s = ("\t" => '\t', '"' => '\"', '\\' => '\\\\');
+	while (<IN>) {
+		chomp;
+		s/([\\\t"])/$s{$1}/ge;
+		print OUT "\"$_\\n\"\n";
+	}
+	print OUT ";\n";
+	close IN;
 }
-print OUT ";\n";
+
+process('preamble1');
+process('preamble2');

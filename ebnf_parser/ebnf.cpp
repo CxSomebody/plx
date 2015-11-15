@@ -63,7 +63,7 @@ void print_production(Symbol *nterm, const vector<Symbol*> &body, FILE *fp)
 	fputc('\n', fp);
 }
 
-void define_empty()
+static void define_empty()
 {
 	string name("empty");
 	empty = nterm_dict[name] = new Symbol(Symbol::NTERM, name);
@@ -72,12 +72,12 @@ void define_empty()
 	empty->defined = true;
 }
 
-void undef_empty()
+static void undef_empty()
 {
 	nterm_dict.erase("empty");
 }
 	
-void check_undefined()
+static void check_undefined()
 {
 	bool err = false;
 	for_each_nterm([&](Symbol *nterm) {
@@ -176,7 +176,7 @@ void print_first_follow()
 	});
 }
 
-void list_symbols()
+static void list_symbols()
 {
 	printf("terminals: %lu\n", term_dict.size());
 	for_each_term([](Symbol *term) {
@@ -188,6 +188,16 @@ void list_symbols()
 		putchar('\n');
 	});
 }
+
+#if 0
+int term_id = 1; // 0 for EOF
+static void number_terms()
+{
+	for_each_term([&](Symbol *term) {
+		term->id = term_id++;
+	});
+}
+#endif
 
 void parse();
 
@@ -210,7 +220,7 @@ static enum {
 
 void usage(const char *progname)
 {
-	fprintf(stderr, "usage: %s {-c|-f|-l|-p} file\n", progname);
+	fprintf(stderr, "usage: %s (-c|-f|-g|-l|-p) <file>\n", progname);
 	exit(2);
 }
 
@@ -271,7 +281,18 @@ int main(int argc, char **argv)
 	case GENERATE_PARSER:
 		compute_first_follow();
 		check_grammar();
-		fputs(preamble, stdout);
+		//number_terms();
+		fputs(preamble1, stdout);
+		{
+			int n_named_terms = 0;
+			for_each_term([&](Symbol *term) {
+				if (term->name[0] != '\'')
+					n_named_terms++;
+			});
+			printf("typedef bitset<%d> set;\n", 256+n_named_terms);
+		}
+		putchar('\n');
+		fputs(preamble2, stdout);
 		putchar('\n');
 		for_each_reachable_nterm([](Symbol *nterm) {
 			emit_proc_header(nterm);
@@ -281,7 +302,7 @@ int main(int argc, char **argv)
 		printf("bool parse()\n"
 		       "{\n"
 		       "\tgetsym();\n"
-		       "\treturn %s(std::set<int>{0}, std::set<int>{});\n"
+		       "\treturn %s(set{0}, set{});\n"
 		       "}\n",
 		       top->name.c_str());
 		for_each_reachable_nterm([](Symbol *nterm) {

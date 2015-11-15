@@ -8,4 +8,7 @@ clean:
 	make -C ebnf_parser clean
 	rm plx *.o keywords.{c,gperf{,.h}} tokens.h
 
+parser.cpp: plx.ebnf
+	ebnf_parser/ebnf -g $< > $@
+
 .PHONY: clean

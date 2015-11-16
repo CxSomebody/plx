@@ -1,7 +1,7 @@
 #!/usr/bin/perl
 
+use v5.14;
 use integer;
-use feature qw(say);
 
 my $keyword_sym_def = <<'EOF';
 struct keyword_sym {
@@ -18,10 +18,12 @@ open KEYWORDS_GPERF, '> keywords.gperf';
 open KEYWORDS_GPERF_H, '> keywords.gperf.h';
 
 print KEYWORDS_GPERF_H $keyword_sym_def;
+my @tokens;
 my $i = 256;
 say TOKENS_H 'enum {';
 while (<TOKENS>) {
 	chomp;
+	push @tokens, $_;
 	say TOKENS_H "\t$_ = $i,";
 	$i++;
 }
@@ -34,9 +36,18 @@ print KEYWORDS_GPERF $keyword_sym_def;
 say KEYWORDS_GPERF '%%';
 while (<KEYWORDS>) {
 	chomp;
-	my $c_id = 'KW_'.uc;
+	my $c_id = 'T_'.uc;
+	push @tokens, $c_id;
 	say TOKENS_H "\t$c_id = $i,";
 	say KEYWORDS_GPERF "$_, $c_id";
 	$i++;
 }
 say TOKENS_H '};';
+my $n = @tokens;
+say TOKENS_H "extern const char *tokname[$n];";
+open TOKNAME_INC, '> tokname.inc';
+say TOKNAME_INC "const char *tokname[$n] = {";
+for (@tokens) {
+	say TOKNAME_INC qq{\t"$_",};
+}
+say TOKNAME_INC '};'

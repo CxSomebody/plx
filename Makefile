@@ -1,6 +1,9 @@
 plx: plx.o lexer.o keywords.o parser.o
 	c++ -o $@ $^
 
+lexer_test: keywords.o lexer.o lexer_test.o
+	cc -o $@ $^
+
 keywords.c: keywords.gperf
 	gperf -t -I -N gperf_keyword_sym $< > $@
 

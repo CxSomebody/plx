@@ -1,5 +1,6 @@
 #include <assert.h>
 #include <ctype.h>
+#include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -9,6 +10,8 @@
 #define BUFFER_SIZE 0x1000
 
 #define MAX_TOKEN_LEN 0x100
+
+#include "tokname.inc"
 
 static FILE *fp;
 static int eof;
@@ -23,7 +26,7 @@ int toklen;
 int sym;
 
 int lineno;
-int colno;
+int colno = 1;
 
 static void fillbuf(void)
 {
@@ -57,9 +60,14 @@ static void skip_line(void)
 	}
 }
 
-static void error(char *msg)
+static void error(char *fmt, ...)
 {
-	fprintf(stderr, "%s: %d:%d: %s\n", fpath, lineno, colno, msg);
+	va_list ap;
+	fprintf(stderr, "%s: %d:%d: ", fpath, lineno, colno);
+	va_start(ap, fmt);
+	vfprintf(stderr, fmt, ap);
+	va_end(ap);
+	fputc('\n', stderr);
 }
 
 void getsym(void)
@@ -96,9 +104,9 @@ void getsym(void)
 			fillbuf();
 		}
 		tokstart = p;
-		if (isalpha(*p)) {
+		if (isalpha(*p) || *p < 0) {
 			char *q = p+1;
-			while (isalnum(*q))
+			while (isalnum(*q) || *q < 0)
 				q++;
 			char saved = *q;
 			*q = 0;
@@ -139,23 +147,16 @@ void getsym(void)
 					}
 					break;
 				case '\'':
-					q = strchr(p, '\'');
-					if (q) {
-						p = q+1;
-						sym = CHAR;
-					} else {
-						errflag = 1;
-						error("unmatched '");
-					}
-					break;
 				case '"':
-					q = strchr(p, '"');
-					if (q) {
+					q = p;
+					while (*q >= ' ' && *q != *tokstart)
+						q++;
+					if (*q == *tokstart) {
 						p = q+1;
-						sym = STRING;
+						sym = *q == '"' ? STRING : CHAR;
 					} else {
 						errflag = 1;
-						error("unmatched \"");
+						error("unmatched %c", *tokstart);
 					}
 				}
 			}

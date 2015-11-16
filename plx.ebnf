@@ -1,18 +1,18 @@
 <program> ::= <block>.	
 <block> ::= [<const_part>][<var_part>]{<proc_def>|<func_def>}<comp_stmt>
-<const_part> ::= KW_CONST <const_def> {,<const_def>};
+<const_part> ::= T_CONST <const_def> {,<const_def>};
 <const_def> ::= IDENT = <constant>
 <constant> ::= [+|-]INT | CHAR
-<var_part> ::= KW_VAR <var_decl>; {<var_decl>;}
+<var_part> ::= T_VAR <var_decl>; {<var_decl>;}
 <var_decl> ::= IDENT{,IDENT} : <type>
-<type> ::= <basic_type> | KW_ARRAY'['INT']' KW_OF <basic_type>
-<basic_type> ::= KW_INTEGER | KW_CHAR
+<type> ::= <basic_type> | T_ARRAY'['INT']' T_OF <basic_type>
+<basic_type> ::= T_INTEGER | T_CHAR
 <proc_def> ::= <proc_header><block>; {<proc_header><block>;}
 <func_def> ::= <func_header><block>; {<func_header><block>;}
-<proc_header> ::= KW_PROCEDURE IDENT[<param_list>];
-<func_header> ::= KW_FUNCTION IDENT[<param_list>]: <basic_type>;
+<proc_header> ::= T_PROCEDURE IDENT[<param_list>];
+<func_header> ::= T_FUNCTION IDENT[<param_list>]: <basic_type>;
 <param_list> ::= '('<param_group>{; <param_group>}')'
-<param_group> ::= [KW_VAR] IDENT {, IDENT} : <basic_type> 
+<param_group> ::= [T_VAR] IDENT {, IDENT} : <basic_type> 
 <stmt> ::= <assign_stmt>|<cond_stmt>|<do_while_stmt>|<call_stmt>|<comp_stmt>|<read_stmt>|<write_stmt>|<for_stmt>|<empty>
 <assign_stmt> ::= IDENT['['<expr>']'] BECOMES <expr>
 <expr> ::= [+|-]<term>{<add_op><term>}
@@ -23,11 +23,11 @@
 <mul_op> ::= *|/
 <cond> ::= <expr><rel_op><expr>
 <rel_op> ::= <|GE|>|LE|=|NE
-<cond_stmt> ::= KW_IF <cond> KW_THEN <stmt> [ KW_ELSE <stmt> ]
-<do_while_stmt> ::= KW_DO <stmt> KW_WHILE <cond>
-<for_stmt> ::= KW_FOR IDENT BECOMES <expr> (KW_DOWNTO|KW_TO) <expr> KW_DO <stmt>
+<cond_stmt> ::= T_IF <cond> T_THEN <stmt> [ T_ELSE <stmt> ]
+<do_while_stmt> ::= T_DO <stmt> T_WHILE <cond>
+<for_stmt> ::= T_FOR IDENT BECOMES <expr> (T_DOWNTO|T_TO) <expr> T_DO <stmt>
 <call_stmt> ::= IDENT [<arg_list>]
-<comp_stmt> ::= KW_BEGIN <stmt> {; <stmt>} KW_END
-<read_stmt> ::= KW_READ '('IDENT{,IDENT}')'
-<write_stmt> ::= KW_WRITE '(' ( STRING [, <expr>] | <expr> ) ')'
+<comp_stmt> ::= T_BEGIN <stmt> {; <stmt>} T_END
+<read_stmt> ::= T_READ '('IDENT{,IDENT}')'
+<write_stmt> ::= T_WRITE '(' ( STRING [, <expr>] | <expr> ) ')'
 <WEAK> ::= ';'

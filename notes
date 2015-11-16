@@ -1,2 +1,37 @@
 lexer出错如何处理？如引号不匹配
 报错，跳至下一行
+
+weak terminal的处理
+
+对于{}型anon-nterm
+
+<empty> 对应的 return true 之前
+判断sym是否属于T集合
+
+if (sym == $weak0) {
+	getsym();
+recover0:
+	...
+}
+if (sym == $weak1) {
+	getsym();
+recover1:
+	...
+}
+if (!t.get(sym)) {
+	if (set{...}.get(sym)) {
+		error_missing($weak0);
+		goto recover0;
+	}
+	if (set{...}.get(sym)) {
+		error_missing($weak1);
+		goto recover1;
+	}
+}
+return true;
+
+nterm为{}型，且choice首符号为weak-term
+规则太复杂
+
+常见语法错误：
+行尾缺分号

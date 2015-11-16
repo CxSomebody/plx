@@ -166,11 +166,14 @@ void getsym(void)
 	bufp = p;
 }
 
-void lexer_open(char *path)
+void lexer_open(const char *path)
 {
 	assert(!fp);
 	fp = fopen(path, "r");
-	assert(fp);
+	if (!fp) {
+		perror(path);
+		exit(1);
+	}
 	lineno = 1;
 	fpath = strdup(path);
 }

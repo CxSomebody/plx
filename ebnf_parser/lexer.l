@@ -7,6 +7,7 @@ ID	[a-zA-Z_][a-zA-Z_0-9]*
 NTERM	\<{ID}\>
 %%
 ::=	return IS;
+::	return AS;
 '.'	{ tokval = ((unsigned char *)yytext)[1]; return CHAR; }
 {ID}	return IDENT;
 {NTERM}	return NTERM;

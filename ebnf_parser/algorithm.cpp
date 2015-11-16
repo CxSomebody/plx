@@ -122,7 +122,7 @@ bool check_grammar()
 	   X->y1 and X->y2, FIRST(X->y1) ∩ FIRST(X->y2) = ∅ */
 	bool ans = true;
 	number_nterms();
-	// detect useless rules
+	// detect unreachable nonterminals
 	for_each_nterm([](Symbol *nterm) {
 		if (nterm->id < 0)
 			fprintf(stderr, "warning: <%s> is useless\n", nterm->name.c_str());

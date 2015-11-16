@@ -35,3 +35,29 @@ nterm为{}型，且choice首符号为weak-term
 
 常见语法错误：
 行尾缺分号
+
+<assign_stmt>和<call_stmt>的冲突问题
+semantic predicates?
+弊病：不利于日后实现 procedures/functions as first-class values
+考虑到已经有 func := ... 这样的规则，不做也罢
+可以像MATLAB那样用'@'把function变成value
+想做LALR(1)
+弊病：不便于实现 mid-rule action
+
+RD可以处理产生式右部首符号为动作符号的情况
+
+<call_stmt> ::= IDENT [<arg_list>]
+带有 semantic predicate 的记法：
+<call_stmt> ::= IDENT::isproc [<arg_list>]
+表示isproc是个函数 svtype(IDENT) -> bool, conceptually...
+实现大略如下：
+bool isproc() {
+	return lookup(tokval.str)->type == PROCEDURE;
+}
+
+为了能继续欢快的使用vector<vector<Symbol*>>
+我们使用另一个变量存放 semantic predicates
+这样还有一个好处就是节省空间，因为需要 semantic predicates 的规则很少
+set(tuple(Symbol, choice#, position))
+(&choice, pos) -> SP
+发现冲突时检查是否有 semantic predicate

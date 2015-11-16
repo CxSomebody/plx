@@ -13,7 +13,7 @@
 <func_header> ::= T_FUNCTION IDENT[<param_list>]: <basic_type>;
 <param_list> ::= '('<param_group>{; <param_group>}')'
 <param_group> ::= [T_VAR] IDENT {, IDENT} : <basic_type> 
-<stmt> ::= <assign_stmt>|<cond_stmt>|<do_while_stmt>|<call_stmt>|<comp_stmt>|<read_stmt>|<write_stmt>|<for_stmt>|<empty>
+<stmt> ::= <call_stmt>|<assign_stmt>|<cond_stmt>|<do_while_stmt>|<comp_stmt>|<read_stmt>|<write_stmt>|<for_stmt>|<empty>
 <assign_stmt> ::= IDENT['['<expr>']'] BECOMES <expr>
 <expr> ::= [+|-]<term>{<add_op><term>}
 <term> ::= <factor>{<mul_op><factor>}
@@ -26,7 +26,7 @@
 <cond_stmt> ::= T_IF <cond> T_THEN <stmt> [ T_ELSE <stmt> ]
 <do_while_stmt> ::= T_DO <stmt> T_WHILE <cond>
 <for_stmt> ::= T_FOR IDENT BECOMES <expr> (T_DOWNTO|T_TO) <expr> T_DO <stmt>
-<call_stmt> ::= IDENT [<arg_list>]
+<call_stmt> ::= IDENT::is_proc [<arg_list>]
 <comp_stmt> ::= T_BEGIN <stmt> {; <stmt>} T_END
 <read_stmt> ::= T_READ '('IDENT{,IDENT}')'
 <write_stmt> ::= T_WRITE '(' ( STRING [, <expr>] | <expr> ) ')'

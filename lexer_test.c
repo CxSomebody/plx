@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include "lexer.h"
+#include "tokens.h"
 
 void usage(char *progname)
 {
@@ -20,7 +21,7 @@ int main(int argc, char **argv)
 		if (sym < 256)
 			printf("%c\n", sym);
 		else
-			printf("%s [%.*s]\n", tokname[sym-256],
+			printf("%s ‘%.*s’\n", tokname[sym-256],
 			       toklen, tokstart);
 	}
 	lexer_close();

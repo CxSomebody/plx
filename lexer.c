@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "lexer.h"
+#include "tokens.h"
 #include "keywords.gperf.h"
 
 #define BUFFER_SIZE 0x1000

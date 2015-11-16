@@ -25,9 +25,10 @@ static void syntax_error()
 	exit(1);
 }
 
-static void parse_body(vector<vector<Symbol*>> &body);
-
 int closing_sym(int opening);
+void add_semantic_predicate(Symbol *nterm, int choice_id, int pos, const string &name);
+
+static void parse_body(Symbol *lhs);
 
 static void synth_nterm_name(int kind, char *name)
 {
@@ -43,7 +44,7 @@ static void synth_nterm_name(int kind, char *name)
 	id++;
 }
 
-static void parse_seq(vector<Symbol *> &choice)
+static void parse_seq(vector<Symbol *> &choice, Symbol *lhs, int choice_id)
 {
 	for (;;) {
 		switch (sym) {
@@ -57,7 +58,7 @@ static void parse_seq(vector<Symbol *> &choice)
 				string nterm_name(synth_name);
 				Symbol *nterm = nterm_dict[nterm_name] = new Symbol(Symbol::NTERM, nterm_name);
 				getsym();
-				parse_body(nterm->choices);
+				parse_body(nterm);
 				if (sym == closing_sym(opening)) getsym();
 				else syntax_error();
 				nterm->choices_core = make_unique<vector<vector<Symbol*>>>(nterm->choices);
@@ -109,8 +110,19 @@ static void parse_seq(vector<Symbol *> &choice)
 				if (!term) {
 					term = term_dict[term_name] = new Symbol(Symbol::TERM, term_name);
 				}
-				choice.emplace_back(term);
 				getsym();
+				if (lhs && sym == AS) {
+					getsym();
+					// expect IDENT: name of semantic predicate function
+					if (sym == IDENT) {
+						add_semantic_predicate(lhs, choice_id, choice.size(), string(yytext));
+						getsym();
+					} else {
+						syntax_error();
+					}
+				}
+				choice.emplace_back(term);
+
 			}
 			break;
 		default:
@@ -121,11 +133,13 @@ static void parse_seq(vector<Symbol *> &choice)
 	}
 }
 
-static void parse_body(vector<vector<Symbol*>> &body)
+static void parse_body(Symbol *lhs)
 {
+	vector<vector<Symbol*>> &body = lhs->choices;
 	for (;;) {
+		int choice_id = body.size();
 		body.emplace_back();
-		parse_seq(body.back());
+		parse_seq(body.back(), lhs, choice_id);
 		if (sym != '|')
 			break;
 		getsym();
@@ -146,7 +160,7 @@ static void parse_rule()
 
 	if (nterm_name == "WEAK") {
 		vector<Symbol*> weak_symbols;
-		parse_seq(weak_symbols);
+		parse_seq(weak_symbols, nullptr, 0);
 		for (Symbol *s: weak_symbols)
 			s->weak = true;
 	} else {
@@ -165,7 +179,7 @@ static void parse_rule()
 
 		if (!top) top = nterm;
 
-		parse_body(nterm->choices);
+		parse_body(nterm);
 	}
 
 	if (sym == '\n') getsym();

@@ -2,6 +2,7 @@
 #include <cstdlib>
 extern "C" {
 #include "lexer.h"
+#include "tokens.h"
 }
 
 void usage()

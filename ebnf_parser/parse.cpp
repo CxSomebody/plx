@@ -115,8 +115,12 @@ static void parse_seq(vector<Symbol *> &choice, Symbol *lhs, int choice_id)
 					getsym();
 					// expect IDENT: name of semantic predicate function
 					if (sym == IDENT) {
-						Symbol *guarded_term = term_dict[term_name + "::" + yytext] =
-							new Symbol(Symbol::TERM, term_name);
+						string guarded_term_name(term_name + "::" + yytext);
+						Symbol *guarded_term = term_dict[guarded_term_name];
+						if (!guarded_term) {
+							guarded_term = term_dict[guarded_term_name] =
+								new Symbol(Symbol::TERM, term_name);
+						}
 						guarded_term->sp = strdup(yytext);
 						term = guarded_term;
 						getsym();

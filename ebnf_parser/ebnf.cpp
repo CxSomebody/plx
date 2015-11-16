@@ -27,6 +27,7 @@ int Symbol::opening_sym() {
 }
 Symbol::Symbol(SymbolKind kind, const string &name):
 	kind(kind), name(name) {}
+Symbol::~Symbol() { delete sp; }
 
 void for_each_reachable_nterm(std::function<void(Symbol*)> f)
 {

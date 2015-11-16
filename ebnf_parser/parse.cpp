@@ -1,5 +1,6 @@
 #include <cassert>
 #include <cstdio>
+#include <cstring>
 #include "ebnf.h"
 #include "tokens.h"
 
@@ -115,7 +116,10 @@ static void parse_seq(vector<Symbol *> &choice, Symbol *lhs, int choice_id)
 					getsym();
 					// expect IDENT: name of semantic predicate function
 					if (sym == IDENT) {
-						add_semantic_predicate(lhs, choice_id, choice.size(), string(yytext));
+						Symbol *guarded_term = term_dict[term_name + "::" + yytext] =
+							new Symbol(Symbol::TERM, term_name);
+						guarded_term->sp = strdup(yytext);
+						term = guarded_term;
 						getsym();
 					} else {
 						syntax_error();

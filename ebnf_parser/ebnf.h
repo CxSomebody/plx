@@ -10,12 +10,14 @@ struct Symbol {
 	std::vector<std::vector<Symbol*>> choices;
 	std::unique_ptr<std::vector<std::vector<Symbol*>>> choices_core;
 	std::set<Symbol*> first, follow;
+	const char *sp = nullptr; // semantic predicate
 	int id = -1;
 	bool nullable = false;
 	bool defined = false;
 	bool weak = false;
 	int opening_sym();
 	Symbol(SymbolKind kind, const std::string &name);
+	~Symbol();
 };
 
 extern std::map<std::string, Symbol*> term_dict, nterm_dict;

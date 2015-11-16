@@ -52,22 +52,6 @@ void for_each_reachable_nterm(std::function<void(Symbol*)> f)
 	visitor.visit(top);
 }
 
-static map<tuple<Symbol*, int, int>, string> sempred;
-
-void add_semantic_predicate(Symbol *nterm, int choice_id, int pos, const string &name)
-{
-	fprintf(stderr, "add SP(%s, %d, %d, %s)\n", nterm->name.c_str(), choice_id, pos, name.c_str());
-	sempred[tuple<Symbol*, int, int>(nterm, choice_id, pos)] = name;
-}
-
-const char *get_semantic_predicate(Symbol *nterm, int choice_id, int pos)
-{
-	auto &&key = tuple<Symbol*, int, int>(nterm, choice_id, pos);
-	const char *ret = sempred.count(key) ? sempred[key].c_str() : nullptr;
-	fprintf(stderr, "get SP(%s, %d, %d) -> %s\n", nterm->name.c_str(), choice_id, pos, ret);
-	return ret;
-}
-
 void print_symbol(Symbol *s, FILE *fp);
 
 void print_production(Symbol *nterm, const vector<Symbol*> &body, FILE *fp)

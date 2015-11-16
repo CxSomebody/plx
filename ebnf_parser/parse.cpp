@@ -27,7 +27,6 @@ static void syntax_error()
 }
 
 int closing_sym(int opening);
-void add_semantic_predicate(Symbol *nterm, int choice_id, int pos, const string &name);
 
 static void parse_body(Symbol *lhs);
 

@@ -54,10 +54,3 @@ RD可以处理产生式右部首符号为动作符号的情况
 bool isproc() {
 	return lookup(tokval.str)->type == PROCEDURE;
 }
-
-为了能继续欢快的使用vector<vector<Symbol*>>
-我们使用另一个变量存放 semantic predicates
-这样还有一个好处就是节省空间，因为需要 semantic predicates 的规则很少
-set(tuple(Symbol, choice#, position))
-(&choice, pos) -> SP
-发现冲突时检查是否有 semantic predicate

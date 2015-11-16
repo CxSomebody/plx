@@ -1,5 +1,8 @@
 #!/usr/bin/perl
 
+# Input:  tokens.in keywords.in
+# Output: tokens.h keywords.gperf keywords.gperf.h tokname.inc
+
 use v5.14;
 use integer;
 
@@ -10,8 +13,8 @@ struct keyword_sym {
 };
 EOF
 
-open TOKENS, '< tokens';
-open KEYWORDS, '< keywords';
+open TOKENS, '< tokens.in';
+open KEYWORDS, '< keywords.in';
 
 open TOKENS_H, '> tokens.h';
 open KEYWORDS_GPERF, '> keywords.gperf';

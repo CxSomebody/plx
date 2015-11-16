@@ -14,4 +14,10 @@ clean:
 parser.cpp: plx.ebnf
 	ebnf_parser/ebnf -g $< > $@
 
+tokens.h keywords.gperf keywords.gperf.h tokname.inc: tokens.in keywords.in
+	./gen
+
+lexer.o: lexer.c keywords.gperf.h tokname.inc
+plx.o: plx.cpp lexer.h
+
 .PHONY: clean

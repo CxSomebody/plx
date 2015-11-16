@@ -3,6 +3,8 @@ const
 var
   str: array[80] of char;
   sp: integer;
+  a, b: integer;
+  ans: integer;
 procedure swap(var a, b: integer);
 var
   t: integer;
@@ -28,7 +30,7 @@ begin
     rem := mod(x, 10);
     x := x/10;
     str[sp] := zero + rem
-  while x <> 0;
+  end while x <> 0;
   if neg <> 0 then begin
     sp := sp-1;
     str[sp] := minus
@@ -45,9 +47,6 @@ begin
   if a<b then swap(a, b);
   if b=0 then gcd := a else gcd := gcd(b, mod(a, b))
 end;
-var
-  a, b: integer;
-  ans: integer;
 begin
   str[79] := 10;
   write("Please input a, b");

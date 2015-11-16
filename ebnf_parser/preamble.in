@@ -1,3 +1,4 @@
+=1
 #include <cassert>
 #include <cstdio>
 #include <initializer_list>
@@ -46,3 +47,28 @@ public:
 		return result;
 	}
 };
+=2
+extern int sym;
+extern int lineno, colno;
+
+extern char *tokstart;
+extern int toklen;
+
+extern "C" void getsym();
+
+static bool expect(int s, set &&t, set &&f)
+{
+	if (sym == s) {
+		getsym();
+		return true;
+	}
+	fprintf(stderr, "%d:%d: syntax error at ‘%.*s’\n",
+		lineno, colno, toklen, tokstart);
+	for (;;) {
+		if (t.get(sym)) return true;
+		if (f.get(sym)) return false;
+		fprintf(stderr, "%d:%d: [skipping ‘%.*s’]\n",
+			lineno, colno, toklen, tokstart);
+		getsym();
+	}
+}

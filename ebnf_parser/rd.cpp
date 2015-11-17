@@ -56,6 +56,8 @@ void emit_proc(Symbol *nterm, const vector<vector<Symbol*>> &choices)
 			indent();
 			if (s->kind == Symbol::TERM && use_getsym) {
 				printf("getsym();\n");
+			} else if (s->kind == Symbol::ACTION) {
+				printf("%s();\n", s->name.c_str());
 			} else {
 				if (next(it) == choice.end()) {
 					if (s->kind == Symbol::TERM) {
@@ -67,7 +69,7 @@ void emit_proc(Symbol *nterm, const vector<vector<Symbol*>> &choices)
 							printf("return %s(std::move(t), std::move(f));\n", s->name.c_str());
 					}
 					ret_true = false;
-				} else {
+				} else /* next(it) != choice.end() */ {
 					if (s->kind == Symbol::TERM) {
 						printf("if (!expect(%s, ", s->name.c_str());
 					} else {

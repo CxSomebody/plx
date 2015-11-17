@@ -132,7 +132,19 @@ static void parse_seq(vector<Symbol *> &choice, Symbol *lhs, int choice_id)
 
 			}
 			break;
+		case ACTION:
+			{
+				string term_name(yytext+1);
+				Symbol *term = term_dict[term_name];
+				if (!term) {
+					term = term_dict[term_name] = new Symbol(Symbol::ACTION, term_name);
+				}
+				getsym();
+				choice.emplace_back(term);
+			}
+			break;
 		default:
+			// S ::= ... | <empty> | ...
 			if (choice.size() == 1 && choice[0] == empty)
 				choice.clear();
 			return;

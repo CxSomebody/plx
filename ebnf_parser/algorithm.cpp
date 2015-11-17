@@ -38,7 +38,7 @@ void compute_first_follow()
 				}
 				for (auto it1 = choice.begin(); it1 != choice.end(); it1++) {
 					Symbol *s1 = *it1, *s2;
-					if (s1->kind == Symbol::TERM)
+					if (s1->kind != Symbol::NTERM)
 						continue;
 					auto it2 = next(it1);
 					while (it2 != choice.end()) {

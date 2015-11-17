@@ -3,5 +3,6 @@ enum {
 	AS,
 	CHAR,
 	NTERM,
+	ACTION,
 	IDENT,
 };

@@ -110,6 +110,8 @@ void print_symbol(Symbol *s, FILE *fp)
 	switch (s->kind) {
 	case Symbol::TERM:
 		fputs(s->name.c_str(), fp);
+		if (s->sp)
+			fprintf(fp, "::%s", s->sp);
 		break;
 	case Symbol::NTERM:
 		{
@@ -122,6 +124,9 @@ void print_symbol(Symbol *s, FILE *fp)
 				fprintf(fp, "<%s>", s->name.c_str());
 			}
 		}
+		break;
+	case Symbol::ACTION:
+		fprintf(fp, "@%s", s->name.c_str());
 		break;
 	default:
 		assert(0);

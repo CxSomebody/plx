@@ -11,6 +11,7 @@ NTERM	\<{ID}\>
 '.'	{ tokval = ((unsigned char *)yytext)[1]; return CHAR; }
 {ID}	return IDENT;
 {NTERM}	return NTERM;
+@{ID}	return ACTION;
 [ \t]+
 "//".*
 \n	return '\n';

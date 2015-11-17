@@ -5,7 +5,7 @@
 #include <vector>
 
 struct Symbol {
-	enum SymbolKind { TERM, NTERM } kind;
+	enum SymbolKind { TERM, NTERM, ACTION } kind;
 	std::string name;
 	std::vector<std::vector<Symbol*>> choices;
 	std::unique_ptr<std::vector<std::vector<Symbol*>>> choices_core;

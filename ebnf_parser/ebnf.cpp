@@ -11,7 +11,7 @@ using namespace std;
 
 struct Symbol;
 
-map<string, Symbol*> term_dict, nterm_dict;
+map<string, Symbol*> term_dict, nterm_dict, action_dict;
 Symbol *top;
 Symbol *empty;
 
@@ -29,6 +29,13 @@ Symbol::Symbol(SymbolKind kind, const string &name):
 	kind(kind), name(name) {}
 Symbol::~Symbol() { delete sp; }
 
+Instance::Instance(Symbol *sym, const ArgList &args):
+	sym(sym), args(make_unique<ArgList>(args)) {}
+Instance::Instance(Symbol *sym): sym(sym) {}
+
+Param::Param(const std::string &type, const std::string &name):
+	type(type), name(name) {}
+
 void for_each_reachable_nterm(std::function<void(Symbol*)> f)
 {
 	struct Visitor {
@@ -41,7 +48,8 @@ void for_each_reachable_nterm(std::function<void(Symbol*)> f)
 			vis.insert(nterm);
 			f(nterm);
 			for (auto &choice: nterm->choices) {
-				for (Symbol *s: choice) {
+				for (Instance *inst: choice) {
+					Symbol *s = inst->sym;
 					if (s->kind == Symbol::NTERM)
 						visit(s);
 				}
@@ -54,11 +62,12 @@ void for_each_reachable_nterm(std::function<void(Symbol*)> f)
 
 void print_symbol(Symbol *s, FILE *fp);
 
-void print_production(Symbol *nterm, const vector<Symbol*> &body, FILE *fp)
+void print_production(Symbol *nterm, const Choice &body, FILE *fp)
 {
 	print_symbol(nterm, fp);
 	fputs(" ->", fp);
-	for (Symbol *s: body) {
+	for (Instance *inst: body) {
+		Symbol *s = inst->sym;
 		fputc(' ', fp);
 		print_symbol(s, fp);
 	}
@@ -92,8 +101,8 @@ static void check_undefined()
 		exit(1);
 }
 
-void print_body(const vector<vector<Symbol*>> &choices, FILE *fp);
-void print_choice(const vector<Symbol*> &choice, FILE *fp);
+void print_body(const vector<Choice> &choices, FILE *fp);
+void print_choice(const Choice &choice, FILE *fp);
 
 int closing_sym(int opening)
 {
@@ -111,7 +120,7 @@ void print_symbol(Symbol *s, FILE *fp)
 	case Symbol::TERM:
 		fputs(s->name.c_str(), fp);
 		if (s->sp)
-			fprintf(fp, "::%s", s->sp);
+			fprintf(fp, "?%s", s->sp);
 		break;
 	case Symbol::NTERM:
 		{
@@ -126,24 +135,42 @@ void print_symbol(Symbol *s, FILE *fp)
 		}
 		break;
 	case Symbol::ACTION:
-		fprintf(fp, "@%s", s->name.c_str());
+		if (s->action)
+			fprintf(fp, "@{%s}", s->action);
+		else
+			fprintf(fp, "@%s", s->name.c_str());
 		break;
 	default:
 		assert(0);
 	}
 }
 
-void print_choice(const vector<Symbol*> &choice, FILE *fp)
+void print_choice(const Choice &choice, FILE *fp)
 {
+	auto print_arg_list = [=](const vector<string> &list) {
+		fputc('(', fp);
+		size_t n = list.size();
+		for (size_t i=0; i<n; i++) {
+			fputs(list[i].c_str(), fp);
+			if (i<n-1) fprintf(fp, ", ");
+		}
+		fputc(')', fp);
+	};
 	size_t n = choice.size();
 	for (size_t i=0; i<n; i++) {
-		print_symbol(choice[i], fp);
+		Instance *inst = choice[i];
+		print_symbol(inst->sym, fp);
+		if (inst->args) {
+			fputs("::", fp);
+			print_arg_list(inst->args->out);
+			print_arg_list(inst->args->in);
+		}
 		if (i < n-1)
 			fputc(' ', fp);
 	}
 }
 
-void print_body(const vector<vector<Symbol*>> &choices, FILE *fp)
+void print_body(const vector<Choice> &choices, FILE *fp)
 {
 	size_t n = choices.size();
 	for (size_t i=0; i<n; i++) {
@@ -155,11 +182,27 @@ void print_body(const vector<vector<Symbol*>> &choices, FILE *fp)
 
 void print_rules(FILE *fp)
 {
+	auto print_param_list = [=](const std::vector<Param> &list) {
+		fputc('(', fp);
+		size_t n = list.size();
+		for (size_t i=0; i<n; i++) {
+			const Param &p = list[i];
+			fprintf(fp, "<%s> %s", p.type.c_str(), p.name.c_str());
+			if (i<n-1) fprintf(fp, ", ");
+		}
+		fputc(')', fp);
+	};
 	for_each_reachable_nterm([=](Symbol *nterm) {
 		if (!nterm->opening_sym()) {
-			printf("<%s> ::= ", nterm->name.c_str());
+			fprintf(fp, "<%s>", nterm->name.c_str());
+			if (!(nterm->params.out.empty() && nterm->params.in.empty())) {
+				fprintf(fp, " :: ");
+				print_param_list(nterm->params.out);
+				print_param_list(nterm->params.in);
+			}
+			fprintf(fp, " ::= ");
 			print_body(nterm->choices, fp);
-			putchar('\n');
+			fputc('\n', fp);
 		}
 	});
 }
@@ -211,10 +254,7 @@ void parse();
 void check_grammar();
 void compute_first_follow();
 
-void emit_proc_header(Symbol *nterm);
-void emit_proc(Symbol *nterm, const vector<vector<Symbol*>> &choices);
-
-#include "preamble.inc"
+void generate_rd();
 
 extern FILE *yyin;
 static enum {
@@ -289,32 +329,7 @@ int main(int argc, char **argv)
 		compute_first_follow();
 		check_grammar();
 		//number_terms();
-		fputs(preamble1, stdout);
-		{
-			int n_named_terms = 0;
-			for_each_term([&](Symbol *term) {
-				if (term->name[0] != '\'')
-					n_named_terms++;
-			});
-			printf("typedef bitset<%d> set;\n", 256+n_named_terms);
-		}
-		putchar('\n');
-		fputs(preamble2, stdout);
-		putchar('\n');
-		for_each_reachable_nterm([](Symbol *nterm) {
-			emit_proc_header(nterm);
-			printf(";\n");
-		});
-		putchar('\n');
-		printf("bool parse()\n"
-		       "{\n"
-		       "\tgetsym();\n"
-		       "\treturn %s(set{0}, set{});\n"
-		       "}\n",
-		       top->name.c_str());
-		for_each_reachable_nterm([](Symbol *nterm) {
-			emit_proc(nterm, nterm->choices);
-		});
+		generate_rd();
 		break;
 	default:
 		assert(0);

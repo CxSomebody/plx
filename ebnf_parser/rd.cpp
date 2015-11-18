@@ -4,14 +4,42 @@
 
 using namespace std;
 
-set<Symbol*> first_of_production(Symbol *nterm, const vector<Symbol*> &body);
+set<Symbol*> first_of_production(Symbol *nterm, const Choice &body);
 
-void emit_proc_header(Symbol *nterm)
+#include "preamble.inc"
+
+static void print_param_list(const vector<Param> &list)
 {
-	printf("static bool %s(set &&t, set &&f)", nterm->name.c_str());
+	for (const Param &p: list)
+		printf("%s &%s, ", p.type.c_str(), p.name.c_str());
 }
 
-void emit_proc(Symbol *nterm, const vector<vector<Symbol*>> &choices)
+static void print_params(Symbol *nterm)
+{
+	print_param_list(nterm->params.out);
+	print_param_list(nterm->params.in);
+}
+
+static void print_arg_list(const vector<string> &list)
+{
+	for (const string &arg: list)
+		printf("%s, ", arg.c_str());
+}
+
+static void print_args(const ArgList &args)
+{
+	print_arg_list(args.out);
+	print_arg_list(args.in);
+}
+
+static void emit_proc_header(Symbol *nterm)
+{
+	printf("static bool %s(", nterm->name.c_str());
+	print_params(nterm);
+	printf("set &&t, set &&f)");
+}
+
+static void emit_proc(Symbol *nterm, const vector<Choice> &choices)
 {
 	int level = 0;
 	bool use_getsym = false;
@@ -31,7 +59,7 @@ void emit_proc(Symbol *nterm, const vector<vector<Symbol*>> &choices)
 		}
 		putchar('}');
 	};
-	auto gen_choice = [&](Symbol *nterm, const vector<Symbol*> &choice, const char *ctl) {
+	auto gen_choice = [&](Symbol *nterm, const Choice &choice, const char *ctl) {
 		set<Symbol*> f = first_of_production(nterm, choice);
 		if (ctl) {
 			indent();
@@ -52,21 +80,48 @@ void emit_proc(Symbol *nterm, const vector<vector<Symbol*>> &choices)
 		}
 		bool ret_true = true;
 		for (auto it = choice.begin(); it != choice.end(); it++) {
-			Symbol *s = *it;
+			Instance *inst = *it;
+			Symbol *s = inst->sym;
 			indent();
 			if (s->kind == Symbol::TERM && use_getsym) {
 				printf("getsym();\n");
 			} else if (s->kind == Symbol::ACTION) {
-				printf("%s();\n", s->name.c_str());
+				if (s->action) {
+					printf("{%s}\n", s->action);
+				} else {
+					const vector<string> &out_args = inst->args->out;
+					size_t n_out = out_args.size();
+					if (n_out) {
+						if (n_out > 1) {
+							fprintf(stderr, "error: @%s more than one output argument", s->name.c_str());
+						}
+						printf("%s = ", out_args[0].c_str());
+					}
+					printf("%s(", s->name.c_str());
+					if (inst->args) {
+						const vector<string> &in_args = inst->args->in;
+						size_t n = in_args.size();
+						for (size_t i=0; i<n; i++) {
+							printf("%s", in_args[i].c_str());
+							if (i < n-1)
+								printf(", ");
+						}
+					}
+					printf(");\n");
+				}
 			} else {
 				if (next(it) == choice.end()) {
 					if (s->kind == Symbol::TERM) {
 						printf("return expect(%s, std::move(t), std::move(f));\n", s->name.c_str());
 					} else {
-						if (s == nterm)
+						if (s == nterm) {
 							printf("goto start;\n");
-						else
-							printf("return %s(std::move(t), std::move(f));\n", s->name.c_str());
+						} else {
+							printf("return %s(", s->name.c_str());
+							if (inst->args)
+								print_args(*inst->args);
+							printf("std::move(t), std::move(f));\n");
+						}
 					}
 					ret_true = false;
 				} else /* next(it) != choice.end() */ {
@@ -74,13 +129,15 @@ void emit_proc(Symbol *nterm, const vector<vector<Symbol*>> &choices)
 						printf("if (!expect(%s, ", s->name.c_str());
 					} else {
 						printf("if (!%s(", s->name.c_str());
+						if (inst->args)
+							print_args(*inst->args);
 					}
 					set<Symbol*> nt;
 					bool thru;
 					if (s->kind == Symbol::NTERM || s->weak) {
 						auto it2 = next(it);
 						while (it2 != choice.end()) {
-							Symbol *s2 = *it2;
+							Symbol *s2 = (*it2)->sym;
 							nt.insert(s2->first.begin(), s2->first.end());
 							if (!s2->nullable)
 								break;
@@ -118,7 +175,8 @@ void emit_proc(Symbol *nterm, const vector<vector<Symbol*>> &choices)
 	printf(" {\n");
 	level++;
 	for (auto &choice: nterm->choices) {
-		for (Symbol *s: choice) {
+		for (Instance *inst: choice) {
+			Symbol *s = inst->sym;
 			if (s == nterm) {
 				printf("start:\n");
 				goto gen_body;
@@ -131,4 +189,68 @@ gen_body:
 	level--;
 	indent();
 	printf("}\n");
+}
+
+void generate_rd()
+{
+	fputs(preamble1, stdout);
+	{
+		int n_named_terms = 0;
+		for_each_term([&](Symbol *term) {
+			if (term->name[0] != '\'')
+			n_named_terms++;
+		});
+		printf("typedef bitset<%d> set;\n", 256+n_named_terms);
+	}
+	putchar('\n');
+	fputs(preamble2, stdout);
+	putchar('\n');
+	// forward declarations of parsing routines
+	for_each_reachable_nterm([](Symbol *nterm) {
+		emit_proc_header(nterm);
+		printf(";\n");
+	});
+	// compute locals
+	for_each_reachable_nterm([](Symbol *nterm) {
+		for (const Choice &choice: nterm->choices) {
+			map<string, string> attrtype;
+			for (const Param &p: nterm->params.out)
+				attrtype[p.name] = p.type;
+			for (const Param &p: nterm->params.in)
+				attrtype[p.name] = p.type;
+			for (Instance *inst: choice) {
+				if (!inst->args)
+					continue;
+				size_t n = inst->args->out.size();
+				for (size_t i=0; i<n; i++) {
+					const string &arg = inst->args->out[i];
+					if (attrtype.count(arg))
+						continue;
+					const string &type = inst->sym->params.out[i].type;
+					nterm->locals.emplace_back(type, arg);
+					attrtype[arg] = type;
+				}
+			}
+		}
+	});
+	for_each_term([](Symbol *term) {
+		if (term->kind == Symbol::ACTION && !term->action) {
+			size_t n = term->params.in.size();
+			for (size_t i=0; i<n; i++) {
+				const Param &p = term->params.in[i];
+				printf("%s &%s", p.type.c_str(), p.name.c_str());
+				if (i<n-1) printf(", ");
+			}
+		}
+	});
+	putchar('\n');
+	printf("bool parse()\n"
+	       "{\n"
+	       "\tgetsym();\n"
+	       "\treturn %s(set{0}, set{});\n"
+	       "}\n",
+	       top->name.c_str());
+	for_each_reachable_nterm([](Symbol *nterm) {
+		emit_proc(nterm, nterm->choices);
+	});
 }

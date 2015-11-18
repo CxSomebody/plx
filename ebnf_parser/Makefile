@@ -1,4 +1,4 @@
-CXXFLAGS += -std=c++14 -Wall
+CXXFLAGS += -std=c++14 -Wall -g
 
 ebnf: algorithm.o ebnf.o rd.o lexer.o parse.o
 	c++ -o $@ $^

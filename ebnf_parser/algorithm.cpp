@@ -5,7 +5,7 @@
 
 using namespace std;
 
-void print_production(Symbol *nterm, const vector<Symbol*> &body, FILE *fp);
+void print_production(Symbol *nterm, const Choice &body, FILE *fp);
 
 static bool insert_all(set<Symbol*> &a, const set<Symbol*> &b)
 {
@@ -25,24 +25,25 @@ void compute_first_follow()
 		for_each_nterm([&](Symbol *nterm) {
 			for (auto &choice: nterm->choices) {
 				if (!nterm->nullable) {
-					if (all_of(choice.begin(), choice.end(), [](Symbol *s){return s->nullable;})) {
+					if (all_of(choice.begin(), choice.end(), [](Instance *inst){return inst->sym->nullable;})) {
 						nterm->nullable = true;
 						changed = true;
 					}
 				}
-				for (Symbol *s: choice) {
+				for (Instance *inst: choice) {
+					Symbol *s = inst->sym;
 					if (insert_all(nterm->first, s->first))
 						changed = true;
 					if (!s->nullable)
 						break;
 				}
 				for (auto it1 = choice.begin(); it1 != choice.end(); it1++) {
-					Symbol *s1 = *it1, *s2;
+					Symbol *s1 = (*it1)->sym, *s2;
 					if (s1->kind != Symbol::NTERM)
 						continue;
 					auto it2 = next(it1);
 					while (it2 != choice.end()) {
-						s2 = *it2;
+						s2 = (*it2)->sym;
 						if (!s2->nullable)
 							break;
 						it2++;
@@ -85,7 +86,7 @@ bool check_left_recursion()
 			for (auto &choice: nterm->choices) {
 				auto it = choice.begin();
 				while (it != choice.end()) {
-					Symbol *s = *it;
+					Symbol *s = (*it)->sym;
 					if (s->kind == Symbol::NTERM)
 						visit(s);
 					if (!s->nullable)
@@ -99,12 +100,12 @@ bool check_left_recursion()
 	return visitor.ans;
 }
 
-set<Symbol*> first_of_production(Symbol *nterm, const vector<Symbol*> &body)
+set<Symbol*> first_of_production(Symbol *nterm, const Choice &body)
 {
 	set<Symbol*> f;
 	auto it = body.begin();
 	while (it != body.end()) {
-		Symbol *s = *it;
+		Symbol *s = (*it)->sym;
 		f.insert(s->first.begin(), s->first.end());
 		if (!s->nullable)
 			break;
@@ -130,7 +131,7 @@ bool check_grammar()
 	if (!check_left_recursion())
 		ans = false;
 	for_each_nterm([&](Symbol *nterm) {
-		map<Symbol*, vector<Symbol*>*> m;
+		map<Symbol*, Choice*> m;
 		for (auto &choice: nterm->choices) {
 			set<Symbol*> f = first_of_production(nterm, choice);
 			for (Symbol *s: f) {

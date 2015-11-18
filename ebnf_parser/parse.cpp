@@ -9,7 +9,10 @@ using namespace std;
 extern char *yytext;
 extern int yyleng;
 extern int yylineno;
-extern char tokval;
+extern int tokval;
+extern int lexenv;
+extern char qtext[];
+extern int qlen;
 
 extern "C" int yylex();
 
@@ -44,9 +47,108 @@ static void synth_nterm_name(int kind, char *name)
 	id++;
 }
 
-static void parse_seq(vector<Symbol *> &choice, Symbol *lhs, int choice_id)
+// (a, b, c, ...)
+static vector<string> parse_arg_list(void)
+{
+	lexenv = 1;
+	vector<string> list;
+	if (sym == '(') getsym();
+	else syntax_error();
+	if (sym == ')') {
+		getsym();
+		goto finish;
+	}
+	for (;;) {
+		if (sym != IDENT) syntax_error();
+		list.emplace_back(yytext);
+		getsym();
+		if (sym == ')') {
+			getsym();
+			goto finish;
+		}
+		if (sym == ',') getsym();
+		else syntax_error();
+	}
+finish:
+	lexenv = 0;
+	return list;
+}
+
+static Param parse_param()
+{
+	if (sym != QUOTE) syntax_error();
+	string type(qtext, qlen);
+	getsym();
+	string name;
+	if (sym == IDENT) {
+		name = yytext;
+		getsym();
+	}
+	return Param(type, name);
+}
+
+// (<A> a, <B> b, <C> c, ...)
+static vector<Param> parse_param_list()
+{
+	lexenv = 1;
+	vector<Param> list;
+	if (sym == '(') getsym();
+	else syntax_error();
+	if (sym == ')') {
+		getsym();
+		goto finish;
+	}
+	for (;;) {
+		list.emplace_back(parse_param());
+		if (sym == ')') {
+			getsym();
+			goto finish;
+		}
+		if (sym == ',') getsym();
+		else syntax_error();
+	}
+finish:
+	lexenv = 0;
+	return list;
+}
+
+static ArgList parse_args()
+{
+	ArgList args;
+	if (sym == '(') {
+		args.out = parse_arg_list();
+	} else if (sym == IDENT) {
+		args.out.emplace_back(yytext);
+		getsym();
+	} else {
+		syntax_error();
+	}
+	if (sym == '(') {
+		args.in = parse_arg_list();
+	}
+	return args;
+}
+
+static ParamList parse_params()
+{
+	ParamList params;
+	if (sym == '(') {
+		params.out = parse_param_list();
+	} else if (sym == QUOTE) {
+		params.out.emplace_back(parse_param());
+	} else {
+		syntax_error();
+	}
+	if (sym == '(') {
+		params.in = parse_param_list();
+	}
+	return params;
+}
+
+static void parse_choice(Choice &choice, Symbol *lhs, int choice_id)
 {
 	for (;;) {
+		Symbol *newsym;
 		switch (sym) {
 		case '(':
 		case '[':
@@ -56,27 +158,26 @@ static void parse_seq(vector<Symbol *> &choice, Symbol *lhs, int choice_id)
 				int opening = sym;
 				synth_nterm_name(sym, synth_name);
 				string nterm_name(synth_name);
-				Symbol *nterm = nterm_dict[nterm_name] = new Symbol(Symbol::NTERM, nterm_name);
+				newsym = nterm_dict[nterm_name] = new Symbol(Symbol::NTERM, nterm_name);
 				getsym();
-				parse_body(nterm);
+				parse_body(newsym);
 				if (sym == closing_sym(opening)) getsym();
 				else syntax_error();
-				nterm->choices_core = make_unique<vector<vector<Symbol*>>>(nterm->choices);
+				newsym->choices_core = make_unique<vector<Choice>>(newsym->choices);
 				switch (opening) {
 				case '{':
-					for (auto &choice: nterm->choices)
-						choice.emplace_back(nterm);
-				       	nterm->choices.emplace_back();
+					for (auto &c: newsym->choices)
+						c.emplace_back(new Instance(newsym));
+				       	newsym->choices.emplace_back();
 					break;
 				case '[':
-				       	nterm->choices.emplace_back();
+				       	newsym->choices.emplace_back();
 					break;
 				case '(':
 					break;
 				default:
 					assert(0);
 				}
-				choice.emplace_back(nterm);
 			}
 			break;
 		case CHAR:
@@ -84,34 +185,33 @@ static void parse_seq(vector<Symbol *> &choice, Symbol *lhs, int choice_id)
 				char synth_name[4];
 				sprintf(synth_name, "'%c'", tokval);
 				string term_name(synth_name);
-				Symbol *term = term_dict[term_name];
-				if (!term) {
-					term = term_dict[term_name] = new Symbol(Symbol::TERM, term_name);
+				newsym = term_dict[term_name];
+				if (!newsym) {
+					newsym = term_dict[term_name] = new Symbol(Symbol::TERM, term_name);
 				}
-				choice.emplace_back(term);
 				getsym();
 			}
 			break;
-		case NTERM:
+		case QUOTE:
 			{
-				string nterm_name(yytext+1, yytext+yyleng-1);
+				string nterm_name(qtext, qlen);
 				Symbol *nterm = nterm_dict[nterm_name];
 				if (!nterm) {
 					nterm = nterm_dict[nterm_name] = new Symbol(Symbol::NTERM, nterm_name);
 				}
-				choice.emplace_back(nterm);
+				newsym = nterm;
 				getsym();
 			}
 			break;
 		case IDENT:
 			{
 				string term_name(yytext);
-				Symbol *term = term_dict[term_name];
-				if (!term) {
-					term = term_dict[term_name] = new Symbol(Symbol::TERM, term_name);
+				newsym = term_dict[term_name];
+				if (!newsym) {
+					newsym = term_dict[term_name] = new Symbol(Symbol::TERM, term_name);
 				}
 				getsym();
-				if (lhs && sym == AS) {
+				if (lhs && sym == '?') {
 					getsym();
 					// expect IDENT: name of semantic predicate function
 					if (sym == IDENT) {
@@ -122,43 +222,58 @@ static void parse_seq(vector<Symbol *> &choice, Symbol *lhs, int choice_id)
 								new Symbol(Symbol::TERM, term_name);
 						}
 						guarded_term->sp = strdup(yytext);
-						term = guarded_term;
+						newsym = guarded_term;
 						getsym();
 					} else {
 						syntax_error();
 					}
 				}
-				choice.emplace_back(term);
-
 			}
 			break;
-		case ACTION:
+		case ACTION_NAMED:
 			{
-				string term_name(yytext+1);
-				Symbol *term = term_dict[term_name];
-				if (!term) {
-					term = term_dict[term_name] = new Symbol(Symbol::ACTION, term_name);
-				}
+				string name(yytext+1); // +1 for leading '@'
 				getsym();
-				choice.emplace_back(term);
+				newsym = action_dict[name];
+				if (!newsym)
+					newsym = action_dict[name] = new Symbol(Symbol::ACTION, name);
+				newsym->nullable = true;
+			}
+			break;
+		case ACTION_INLINE:
+			{
+				newsym = new Symbol(Symbol::ACTION, "");
+				newsym->action = strdup(qtext);
+				getsym();
+				newsym->nullable = true;
 			}
 			break;
 		default:
 			// S ::= ... | <empty> | ...
-			if (choice.size() == 1 && choice[0] == empty)
+			if (choice.size() == 1 && choice[0]->sym == empty)
 				choice.clear();
 			return;
 		}
+		// ::out
+		// ::(out...)
+		Instance *newinst;
+		if (sym == AS) {
+			getsym();
+			newinst = new Instance(newsym, parse_args());
+		} else {
+			newinst = new Instance(newsym);
+		}
+		choice.emplace_back(newinst);
 	}
 }
 
 static void parse_body(Symbol *lhs)
 {
-	vector<vector<Symbol*>> &body = lhs->choices;
+	vector<Choice> &body = lhs->choices;
 	for (;;) {
 		int choice_id = body.size();
 		body.emplace_back();
-		parse_seq(body.back(), lhs, choice_id);
+		parse_choice(body.back(), lhs, choice_id);
 		if (sym != '|')
 			break;
 		getsym();
@@ -168,21 +283,19 @@ static void parse_body(Symbol *lhs)
 static void parse_rule()
 {
 	string nterm_name;
-	if (sym == NTERM) {
-		nterm_name = string(yytext+1, yytext+yyleng-1);
-		getsym();
-	} else {
-		syntax_error();
-	}
-	if (sym == IS) getsym();
-	else syntax_error();
+	if (sym != QUOTE) syntax_error();
+	nterm_name = string(qtext, qlen);
+	getsym();
 
+#ifdef ENABLE_WEAK
+	// TODO fix broken code
 	if (nterm_name == "WEAK") {
-		vector<Symbol*> weak_symbols;
-		parse_seq(weak_symbols, nullptr, 0);
+		Choice weak_symbols;
+		parse_choice(weak_symbols, nullptr, 0);
 		for (Symbol *s: weak_symbols)
 			s->weak = true;
 	} else {
+#endif
 		Symbol *nterm = nterm_dict[nterm_name];
 		if (nterm) {
 			if (nterm->defined) {
@@ -197,17 +310,55 @@ static void parse_rule()
 		}
 
 		if (!top) top = nterm;
+#ifdef ENABLE_WEAK
+	}
+#endif
 
-		parse_body(nterm);
+	if (sym == AS) {
+		fprintf(stderr, "nterm with params: %s\n", nterm->name.c_str());
+		getsym();
+		nterm->params = parse_params();
 	}
 
-	if (sym == '\n') getsym();
-	else syntax_error();
+	if (sym != IS) syntax_error();
+	getsym();
+
+	parse_body(nterm);
+
+	if (sym != '\n') syntax_error();
+	getsym();
+}
+
+static void parse_decl()
+{
+	Symbol *s;
+	if (sym == IDENT) {
+		string name(yytext);
+		getsym();
+		s = term_dict[name];
+		if (!s)
+			s = term_dict[name] = new Symbol(Symbol::TERM, name);
+	} else if (sym == ACTION_NAMED) {
+		string name(yytext+1);
+		getsym();
+		s = action_dict[name];
+		if (!s)
+			s = action_dict[name] = new Symbol(Symbol::ACTION, name);
+	} else {
+		syntax_error();
+	}
+	if (sym != AS) syntax_error();
+	getsym();
+	s->params = parse_params();
+	if (sym != '\n') syntax_error();
+	getsym();
 }
 
 void parse()
 {
 	getsym();
-	while (sym)
-		parse_rule();
+	while (sym) {
+		if (sym == QUOTE) parse_rule();
+		else parse_decl();
+	}
 }

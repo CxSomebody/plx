@@ -2,7 +2,8 @@ enum {
 	IS = 256,
 	AS,
 	CHAR,
-	NTERM,
-	ACTION,
+	QUOTE,
+	ACTION_NAMED,
+	ACTION_INLINE,
 	IDENT,
 };

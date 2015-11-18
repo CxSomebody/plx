@@ -315,7 +315,6 @@ static void parse_rule()
 #endif
 
 	if (sym == AS) {
-		fprintf(stderr, "nterm with params: %s\n", nterm->name.c_str());
 		getsym();
 		nterm->params = parse_params();
 	}

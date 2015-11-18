@@ -32,16 +32,21 @@ static void print_args(const ArgList &args)
 	print_arg_list(args.in);
 }
 
-static void emit_proc_header(Symbol *nterm)
+static void emit_proc_param_list(Symbol *nterm)
 {
-	printf("static bool %s(", nterm->name.c_str());
+	putchar('(');
 	print_params(nterm);
 	printf("set &&t, set &&f)");
 }
 
-static void emit_proc(Symbol *nterm, const vector<Choice> &choices)
+static void emit_proc_header(Symbol *nterm)
 {
-	int level = 0;
+	printf("static bool %s", nterm->name.c_str());
+	emit_proc_param_list(nterm);
+}
+
+static void emit_proc(Symbol *nterm, int level)
+{
 	bool use_getsym = false;
 	auto indent = [&]() {
 		for (int i=0; i<level; i++)
@@ -93,7 +98,7 @@ static void emit_proc(Symbol *nterm, const vector<Choice> &choices)
 					size_t n_out = out_args.size();
 					if (n_out) {
 						if (n_out > 1) {
-							fprintf(stderr, "error: @%s more than one output argument", s->name.c_str());
+							fprintf(stderr, "error: more than one output argument passed to @%s", s->name.c_str());
 						}
 						printf("%s = ", out_args[0].c_str());
 					}
@@ -113,11 +118,16 @@ static void emit_proc(Symbol *nterm, const vector<Choice> &choices)
 				if (next(it) == choice.end()) {
 					if (s->kind == Symbol::TERM) {
 						printf("return expect(%s, std::move(t), std::move(f));\n", s->name.c_str());
-					} else {
+					} else /* NTERM */ {
 						if (s == nterm) {
 							printf("goto start;\n");
 						} else {
-							printf("return %s(", s->name.c_str());
+							printf("return ");
+							if (s->opening_sym())
+								emit_proc(s, level);
+							else
+								printf("%s", s->name.c_str());
+							putchar('(');
 							if (inst->args)
 								print_args(*inst->args);
 							printf("std::move(t), std::move(f));\n");
@@ -127,8 +137,13 @@ static void emit_proc(Symbol *nterm, const vector<Choice> &choices)
 				} else /* next(it) != choice.end() */ {
 					if (s->kind == Symbol::TERM) {
 						printf("if (!expect(%s, ", s->name.c_str());
-					} else {
-						printf("if (!%s(", s->name.c_str());
+					} else /* NTERM */ {
+						printf("if (!");
+						if (s->opening_sym())
+							emit_proc(s, level);
+						else
+							printf("%s", s->name.c_str());
+						putchar('(');
 						if (inst->args)
 							print_args(*inst->args);
 					}
@@ -155,6 +170,17 @@ static void emit_proc(Symbol *nterm, const vector<Choice> &choices)
 						printf(", t|f");
 					}
 					printf(")) return t.get(sym);\n");
+					// save token value
+					if (s->kind == Symbol::TERM && inst->args) {
+						size_t n_out = inst->args->out.size();
+						if (n_out) {
+							if (n_out > 1) {
+								fprintf(stderr, "error: more than one output argument passed to %s", s->name.c_str());
+							}
+							indent();
+							printf("%s = tokval.%s;\n", inst->args->out[0].c_str(), s->params.out[0].name.c_str());
+						}
+					}
 				}
 			}
 			use_getsym = false;
@@ -169,11 +195,21 @@ static void emit_proc(Symbol *nterm, const vector<Choice> &choices)
 			printf("}\n");
 		}
 	};
-	putchar('\n');
-	indent();
-	emit_proc_header(nterm);
+	if (level) {
+		printf("[&]");
+		emit_proc_param_list(nterm);
+	} else {
+		putchar('\n');
+		indent();
+		emit_proc_header(nterm);
+	}
 	printf(" {\n");
 	level++;
+	// declare locals
+	for (const Param &p: nterm->locals) {
+		indent();
+		printf("%s %s;\n", p.type.c_str(), p.name.c_str());
+	}
 	for (auto &choice: nterm->choices) {
 		for (Instance *inst: choice) {
 			Symbol *s = inst->sym;
@@ -184,11 +220,12 @@ static void emit_proc(Symbol *nterm, const vector<Choice> &choices)
 		}
 	}
 gen_body:
-	for (auto it = choices.begin(); it != choices.end(); it++)
-		gen_choice(nterm, *it, next(it) == choices.end() ? nullptr : "if");
+	for (auto it = nterm->choices.begin(); it != nterm->choices.end(); it++)
+		gen_choice(nterm, *it, next(it) == nterm->choices.end() ? nullptr : "if");
 	level--;
 	indent();
-	printf("}\n");
+	putchar('}');
+	putchar(level ? ' ' : '\n');
 }
 
 void generate_rd()
@@ -207,8 +244,10 @@ void generate_rd()
 	putchar('\n');
 	// forward declarations of parsing routines
 	for_each_reachable_nterm([](Symbol *nterm) {
-		emit_proc_header(nterm);
-		printf(";\n");
+		if (!nterm->opening_sym()) {
+			emit_proc_header(nterm);
+			printf(";\n");
+		}
 	});
 	// compute locals
 	for_each_reachable_nterm([](Symbol *nterm) {
@@ -244,13 +283,16 @@ void generate_rd()
 		}
 	});
 	putchar('\n');
+#if 0
 	printf("bool parse()\n"
 	       "{\n"
 	       "\tgetsym();\n"
-	       "\treturn %s(set{0}, set{});\n"
+	       "\treturn %s(");printf("set{0}, set{});\n"
 	       "}\n",
 	       top->name.c_str());
+#endif
 	for_each_reachable_nterm([](Symbol *nterm) {
-		emit_proc(nterm, nterm->choices);
+		if (!nterm->opening_sym())
+			emit_proc(nterm, 0);
 	});
 }

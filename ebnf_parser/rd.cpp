@@ -5,7 +5,7 @@
 using namespace std;
 
 set<Symbol*> first_of_production(Symbol *nterm, const Choice &body);
-void print_symbol(Symbol *s, FILE *fp);
+void print_symbol(bool rich, Symbol *s, FILE *fp);
 
 #include "preamble.inc"
 
@@ -279,7 +279,7 @@ void generate_rd()
 					}
 				} else {
 					fprintf(stderr, "error: ");
-					print_symbol(s, stderr);
+					print_symbol(false, s, stderr);
 					fprintf(stderr, " expects %lu output arguments, got %lu\n",
 						n, s->params.out.size());
 				}

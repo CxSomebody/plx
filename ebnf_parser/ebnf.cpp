@@ -59,16 +59,16 @@ void for_each_reachable_nterm(std::function<void(Symbol*)> f)
 	visitor.visit(top);
 }
 
-void print_symbol(Symbol *s, FILE *fp);
+void print_symbol(bool rich, Symbol *s, FILE *fp);
 
-void print_production(Symbol *nterm, const Choice &body, FILE *fp)
+void print_production(bool rich, Symbol *nterm, const Choice &body, FILE *fp)
 {
-	print_symbol(nterm, fp);
+	print_symbol(rich, nterm, fp);
 	fputs(" ->", fp);
 	for (Instance *inst: body) {
 		Symbol *s = inst->sym;
 		fputc(' ', fp);
-		print_symbol(s, fp);
+		print_symbol(rich, s, fp);
 	}
 	fputc('\n', fp);
 }
@@ -100,8 +100,8 @@ static void check_undefined()
 		exit(1);
 }
 
-void print_body(const vector<Choice> &choices, FILE *fp);
-void print_choice(const Choice &choice, FILE *fp);
+void print_body(bool rich, const vector<Choice> &choices, FILE *fp);
+void print_choice(bool rich, const Choice &choice, FILE *fp);
 
 int closing_sym(int opening)
 {
@@ -113,7 +113,7 @@ int closing_sym(int opening)
 	assert(0);
 }
 
-void print_symbol(Symbol *s, FILE *fp)
+void print_symbol(bool rich, Symbol *s, FILE *fp)
 {
 	switch (s->kind) {
 	case Symbol::TERM:
@@ -126,7 +126,7 @@ void print_symbol(Symbol *s, FILE *fp)
 			int opening = s->opening_sym();
 			if (opening) {
 				fprintf(fp, "%c ", opening);
-				print_body(*s->choices_core, fp);
+				print_body(rich, *s->choices_core, fp);
 				fprintf(fp, " %c", closing_sym(opening));
 			} else {
 				fprintf(fp, "<%s>", s->name.c_str());
@@ -134,17 +134,18 @@ void print_symbol(Symbol *s, FILE *fp)
 		}
 		break;
 	case Symbol::ACTION:
-		if (s->action)
+		if (s->action) {
 			fprintf(fp, "@{%s}", s->action);
-		else
+		} else {
 			fprintf(fp, "@%s", s->name.c_str());
+		}
 		break;
 	default:
 		assert(0);
 	}
 }
 
-void print_choice(const Choice &choice, FILE *fp)
+void print_choice(bool rich, const Choice &choice, FILE *fp)
 {
 	auto print_arg_list = [=](const vector<string> &list) {
 		fputc('(', fp);
@@ -155,31 +156,33 @@ void print_choice(const Choice &choice, FILE *fp)
 		}
 		fputc(')', fp);
 	};
-	size_t n = choice.size();
-	for (size_t i=0; i<n; i++) {
-		Instance *inst = choice[i];
-		print_symbol(inst->sym, fp);
-		if (inst->args) {
+	bool sep = false;
+	for (Instance *inst: choice) {
+		if (!rich && inst->sym->kind == Symbol::ACTION)
+			continue;
+		if (sep)
+			fputc(' ', fp);
+		sep = true;
+		print_symbol(rich, inst->sym, fp);
+		if (rich && inst->args) {
 			fputs("::", fp);
 			print_arg_list(inst->args->out);
 			print_arg_list(inst->args->in);
 		}
-		if (i < n-1)
-			fputc(' ', fp);
 	}
 }
 
-void print_body(const vector<Choice> &choices, FILE *fp)
+void print_body(bool rich, const vector<Choice> &choices, FILE *fp)
 {
 	size_t n = choices.size();
 	for (size_t i=0; i<n; i++) {
-		print_choice(choices[i], fp);
+		print_choice(rich, choices[i], fp);
 		if (i < n-1)
 			fputs(" | ", fp);
 	}
 }
 
-void print_rules(FILE *fp)
+void print_rules(bool rich, FILE *fp)
 {
 	auto print_param_list = [=](const std::vector<Param> &list) {
 		fputc('(', fp);
@@ -194,13 +197,13 @@ void print_rules(FILE *fp)
 	for_each_reachable_nterm([=](Symbol *nterm) {
 		if (!nterm->opening_sym()) {
 			fprintf(fp, "<%s>", nterm->name.c_str());
-			if (!(nterm->params.out.empty() && nterm->params.in.empty())) {
+			if (rich && !(nterm->params.out.empty() && nterm->params.in.empty())) {
 				fprintf(fp, " :: ");
 				print_param_list(nterm->params.out);
 				print_param_list(nterm->params.in);
 			}
 			fprintf(fp, " ::= ");
-			print_body(nterm->choices, fp);
+			print_body(rich, nterm->choices, fp);
 			fputc('\n', fp);
 		}
 	});
@@ -217,7 +220,7 @@ void print_term_set(const set<Symbol*> &s)
 void print_first_follow()
 {
 	for_each_nterm([](Symbol *nterm) {
-		print_symbol(nterm, stdout);
+		print_symbol(false, nterm, stdout);
 		putchar('\n');
 		printf("FIRST: ");
 		print_term_set(nterm->first);
@@ -236,7 +239,7 @@ static void list_symbols()
 	});
 	printf("nterminals: %lu\n", nterm_dict.size());
 	for_each_nterm([](Symbol *nterm) {
-		print_symbol(nterm, stdout);
+		print_symbol(false, nterm, stdout);
 		putchar('\n');
 	});
 }
@@ -266,17 +269,18 @@ static enum {
 	PRINT_FIRST_FOLLOW,
 	GENERATE_PARSER,
 } action;
+static bool rich; // print ATG rather than plain EBNF
 
 void usage(const char *progname)
 {
-	fprintf(stderr, "usage: %s (-c|-f|-g|-l|-p) <file>\n", progname);
+	fprintf(stderr, "usage: %s (-c|-f|-g|-l|-p|-P) <file>\n", progname);
 	exit(2);
 }
 
 int main(int argc, char **argv)
 {
 	int opt;
-	while ((opt = getopt(argc, argv, "cfglp")) != -1) {
+	while ((opt = getopt(argc, argv, "cfglpP")) != -1) {
 		switch (opt) {
 		case 'c':
 			action = CHECK_GRAMMAR;
@@ -290,6 +294,9 @@ int main(int argc, char **argv)
 		case 'l':
 			action = LIST_SYMBOLS;
 			break;
+		case 'P':
+			rich = true;
+			/* fallthrough */
 		case 'p':
 			action = PRINT_RULES;
 			break;
@@ -314,7 +321,7 @@ int main(int argc, char **argv)
 	check_undefined();
 	switch (action) {
 	case PRINT_RULES:
-		print_rules(stdout);
+		print_rules(rich, stdout);
 		break;
 	case LIST_SYMBOLS:
 		list_symbols();

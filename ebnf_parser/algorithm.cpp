@@ -5,7 +5,7 @@
 
 using namespace std;
 
-void print_production(Symbol *nterm, const Choice &body, FILE *fp);
+void print_production(bool rich, Symbol *nterm, const Choice &body, FILE *fp);
 
 static bool insert_all(set<Symbol*> &a, const set<Symbol*> &b)
 {
@@ -136,8 +136,8 @@ bool check_grammar()
 			for (Symbol *s: f) {
 				if (m[s]) {
 					fprintf(stderr, "conflict on %s:\n", s->name.c_str());
-					print_production(nterm, *m[s], stderr);
-					print_production(nterm, choice, stderr);
+					print_production(false, nterm, *m[s], stderr);
+					print_production(false, nterm, choice, stderr);
 					ans = false;
 				} else {
 					m[s] = &choice;

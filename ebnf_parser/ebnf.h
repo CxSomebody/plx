@@ -29,7 +29,10 @@ struct Symbol {
 	ParamList params;
 	std::vector<Param> locals;
 	union {
-		const char *sp = nullptr; // TERM: semantic predicate
+		struct {
+			const char *sp = nullptr; // TERM: semantic predicate
+			Symbol *inner;
+		};
 		const char *action; // ACTION (inline)
 	};
 	int id = -1;

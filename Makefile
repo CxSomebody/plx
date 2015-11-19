@@ -1,4 +1,4 @@
-plx: plx.o lexer.o keywords.o parser.o
+plx: plx.o lexer.o keywords.o symtab.o parser.o
 	c++ -o $@ $^
 
 lexer_test: keywords.o lexer.o lexer_test.o

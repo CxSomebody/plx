@@ -5,6 +5,7 @@
 using namespace std;
 
 set<Symbol*> first_of_production(Symbol *nterm, const Choice &body);
+void print_symbol(Symbol *s, FILE *fp);
 
 #include "preamble.inc"
 
@@ -45,6 +46,11 @@ static void emit_proc_header(Symbol *nterm)
 	emit_proc_param_list(nterm);
 }
 
+static string term_sv(Symbol *term)
+{
+	return term->params.out.empty() ? "" : "tokval."+term->params.out[0].name;
+}
+
 static void emit_proc(Symbol *nterm, int level)
 {
 	bool use_getsym = false;
@@ -74,7 +80,7 @@ static void emit_proc(Symbol *nterm, int level)
 				Symbol *term = *it;
 				printf("sym == %s", term->name.c_str());
 				if (term->sp)
-					printf(" && %s()", term->sp);
+					printf(" && %s(%s)", term->sp, term_sv(term->inner).c_str());
 				if (next(it) != f.end())
 					printf(" || ");
 				it++;
@@ -178,7 +184,7 @@ static void emit_proc(Symbol *nterm, int level)
 								fprintf(stderr, "error: more than one output argument passed to %s", s->name.c_str());
 							}
 							indent();
-							printf("%s = tokval.%s;\n", inst->args->out[0].c_str(), s->params.out[0].name.c_str());
+							printf("%s = %s;\n", inst->args->out[0].c_str(), term_sv(s).c_str());
 						}
 					}
 				}
@@ -260,14 +266,22 @@ void generate_rd()
 			for (Instance *inst: choice) {
 				if (!inst->args)
 					continue;
+				Symbol *s = inst->sym;
 				size_t n = inst->args->out.size();
-				for (size_t i=0; i<n; i++) {
-					const string &arg = inst->args->out[i];
-					if (attrtype.count(arg))
-						continue;
-					const string &type = inst->sym->params.out[i].type;
-					nterm->locals.emplace_back(type, arg);
-					attrtype[arg] = type;
+				if (s->params.out.size() == n) {
+					for (size_t i=0; i<n; i++) {
+						const string &arg = inst->args->out[i];
+						if (attrtype.count(arg))
+							continue;
+						const string &type = s->params.out[i].type;
+						nterm->locals.emplace_back(type, arg);
+						attrtype[arg] = type;
+					}
+				} else {
+					fprintf(stderr, "error: ");
+					print_symbol(s, stderr);
+					fprintf(stderr, " expects %lu output arguments, got %lu\n",
+						n, s->params.out.size());
 				}
 			}
 		}
@@ -283,11 +297,11 @@ void generate_rd()
 		}
 	});
 	putchar('\n');
-#if 0
+#if 1
 	printf("bool parse()\n"
 	       "{\n"
 	       "\tgetsym();\n"
-	       "\treturn %s(");printf("set{0}, set{});\n"
+	       "\treturn %s(set{0}, set{});\n"
 	       "}\n",
 	       top->name.c_str());
 #endif

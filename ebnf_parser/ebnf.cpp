@@ -28,7 +28,6 @@ int Symbol::opening_sym() {
 Symbol::Symbol(SymbolKind kind, const string &name):
 	kind(kind), name(name) {}
 Symbol::~Symbol() { delete sp; }
-
 Instance::Instance(Symbol *sym, const ArgList &args):
 	sym(sym), args(make_unique<ArgList>(args)) {}
 Instance::Instance(Symbol *sym): sym(sym) {}
@@ -207,22 +206,25 @@ void print_rules(FILE *fp)
 	});
 }
 
-void print_symbol_set(const char *set_name, const char *nterm_name, const set<Symbol*> &s)
+void print_term_set(const set<Symbol*> &s)
 {
-	printf("%s(<%s>) = {", set_name, nterm_name);
+	putchar('{');
 	for (Symbol *term: s)
 		printf(" %s", term->name.c_str());
-	puts(" }");
+	printf(" }");
 }
 
 void print_first_follow()
 {
 	for_each_nterm([](Symbol *nterm) {
-		if (!nterm->opening_sym()) {
-			const char *nterm_name = nterm->name.c_str();
-			print_symbol_set("FIRST", nterm_name, nterm->first);
-			print_symbol_set("FOLLOW", nterm_name, nterm->follow);
-		}
+		print_symbol(nterm, stdout);
+		putchar('\n');
+		printf("FIRST: ");
+		print_term_set(nterm->first);
+		putchar('\n');
+		printf("FOLLOW: ");
+		print_term_set(nterm->follow);
+		putchar('\n');
 	});
 }
 

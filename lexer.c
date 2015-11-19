@@ -21,8 +21,12 @@ char *fpath;
 static char buf[BUFFER_SIZE]; // buf[BUFFER_SIZE-1] is always 0
 static char *bufp = buf+(BUFFER_SIZE-1);
 
+static char tokstr[MAX_TOKEN_LEN+1];
+static int tokstrlen;
+
 char *tokstart;
 int toklen;
+union tokval_u tokval;
 
 int sym;
 
@@ -71,6 +75,24 @@ static void error(char *fmt, ...)
 	fputc('\n', stderr);
 }
 
+static int myatoi(char *s, int n)
+{
+	int ret = 0;
+	int i;
+	for (i=0; i<n; i++)
+		ret = ret*10 + (s[i]-'0');
+	return ret;
+}
+
+static int mystoi(char *s, int n)
+{
+	int ret = 0;
+	int i;
+	for (i=0; i<n; i++)
+		ret = ret<<8 | s[i];
+	return ret;
+}
+
 void getsym(void)
 {
 	colno += toklen;
@@ -112,7 +134,11 @@ void getsym(void)
 			char saved = *q;
 			*q = 0;
 			struct keyword_sym *ks = gperf_keyword_sym(p, q-p);
-			sym = ks ? ks->sym : IDENT;
+			if (ks) {
+				sym = ks->sym;
+			} else {
+				sym = IDENT;
+			}
 			*q = saved;
 			p = q;
 		} else if (isdigit(*p)) {
@@ -120,6 +146,7 @@ void getsym(void)
 			while (isdigit(*q))
 				q++;
 			sym = INT;
+
 			p = q;
 		} else {
 			sym = *(unsigned char *)p;
@@ -150,11 +177,13 @@ void getsym(void)
 				case '\'':
 				case '"':
 					q = p;
+					tokstrlen = 0;
 					while (*q >= ' ' && *q != *tokstart)
-						q++;
+						tokstr[tokstrlen++] = *q++;
 					if (*q == *tokstart) {
 						p = q+1;
 						sym = *q == '"' ? STRING : CHAR;
+						tokstr[tokstrlen] = 0;
 					} else {
 						errflag = 1;
 						error("unmatched %c", *tokstart);
@@ -164,6 +193,18 @@ void getsym(void)
 		}
 	} while (errflag);
 	toklen = p-tokstart;
+	switch (sym) {
+	case INT:
+		tokval.i = myatoi(tokstart, toklen);
+		break;
+	case IDENT:
+		memcpy(tokstr, tokstart, toklen);
+		tokstr[toklen] = 0;
+		tokval.s = tokstr;
+		break;
+	case CHAR:
+		tokval.i = mystoi(tokstr, tokstrlen);
+	}
 	bufp = p;
 }
 

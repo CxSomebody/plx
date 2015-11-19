@@ -64,6 +64,4 @@ bool isproc() {
 用户提供具名动作过程定义
 <out_type> action(in_type...)
 动作符号至多有一个输出属性
-
-TODO: 参数检查
-TODO: union tokval
+需要为动作符号的输出属性声明类型

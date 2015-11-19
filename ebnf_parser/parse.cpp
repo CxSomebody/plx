@@ -222,6 +222,7 @@ static void parse_choice(Choice &choice, Symbol *lhs, int choice_id)
 								new Symbol(Symbol::TERM, term_name);
 						}
 						guarded_term->sp = strdup(yytext);
+						guarded_term->inner = newsym;
 						newsym = guarded_term;
 						getsym();
 					} else {

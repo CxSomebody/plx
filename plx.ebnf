@@ -1,20 +1,20 @@
-<program> :: ()(<SymbolTable> st) ::= <block>::()(st).
+<program> ::= @makeSymbolTable::st <block>::()(st).
 <block> :: ()(<SymbolTable> st) ::= [<const_part>::()(st)][<var_part>::()(st)]{<proc_def>::()(st)|<func_def>::()(st)}<comp_stmt>
 <const_part> :: ()(<SymbolTable> st) ::= T_CONST <const_def>::()(st) {,<const_def>::()(st)};
 <const_def> :: ()(<SymbolTable> st) ::= IDENT::k = <constant>::v @def_const::()(st,k,v)
 <constant> :: <int> v ::= <opt_sign>::s INT::i @{v=s?-i:i;} | CHAR::c @{v=c;}
 <opt_sign> :: <bool> s ::= @{s=0;} [+|-@{s=1;}]
 <var_part> :: ()(<SymbolTable> st) ::= T_VAR <var_decl>::()(st); {<var_decl>::()(st);}
-<var_decl> :: ()(<SymbolTable> st) ::= <id_list>::ids : <type>::ty @def_vars::()(ids,ty)
+<var_decl> :: ()(<SymbolTable> st) ::= <id_list>::ids : <type>::ty @def_vars::()(st,ids,ty)
 <id_list> :: <vector<string>> v ::= IDENT::id1 @{v.push_back(id1);} {, IDENT::id2 @{v.push_back(id2);} }
 <type> :: <Type*> ty ::= <basic_type>::ty | T_ARRAY'['INT::n']' T_OF <basic_type>::elty @array_type::ty(elty,n)
 <basic_type> :: <Type*> ty ::= T_INTEGER @int_type::ty | T_CHAR @char_type::ty
-<proc_def> :: ()(<SymbolTable> st) ::= <proc_header><block>::()(st); {<proc_header><block>::()(st);}
-<func_def> :: ()(<SymbolTable> st) ::= <func_header><block>::()(st); {<func_header><block>::()(st);}
+<proc_def> :: ()(<SymbolTable> st) ::= <proc_header><block>::()(st);
+<func_def> :: ()(<SymbolTable> st) ::= <func_header><block>::()(st);
 <proc_header> ::= T_PROCEDURE IDENT[<param_list>];
-<func_header> ::= T_FUNCTION IDENT[<param_list>]: <basic_type>;
+<func_header> ::= T_FUNCTION IDENT[<param_list>]: <basic_type>::rty ;
 <param_list> ::= '('<param_group>{; <param_group>}')'
-<param_group> ::= [T_VAR] IDENT {, IDENT} : <basic_type> 
+<param_group> ::= [T_VAR] IDENT {, IDENT} : <basic_type>::ty
 <stmt> ::= <call_stmt>|<assign_stmt>|<cond_stmt>|<do_while_stmt>|<comp_stmt>|<read_stmt>|<write_stmt>|<for_stmt>|<empty>
 <assign_stmt> ::= IDENT['['<expr>']'] BECOMES <expr>
 <expr> ::= [+|-]<term>{<add_op><term>}
@@ -34,4 +34,8 @@
 <write_stmt> ::= T_WRITE '(' ( STRING [, <expr>] | <expr> ) ')'
 IDENT :: <string> s
 INT :: <int> i
-CHAR :: <int> c
+CHAR :: <int> i
+@makeSymbolTable :: <SymbolTable>
+@int_type :: <Type*>
+@char_type :: <Type*>
+@array_type :: <Type*>

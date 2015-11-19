@@ -44,15 +44,14 @@ void compute_first_follow()
 					auto it2 = next(it1);
 					while (it2 != choice.end()) {
 						s2 = (*it2)->sym;
+						if (insert_all(s1->follow, s2->first))
+							changed = true;
 						if (!s2->nullable)
 							break;
 						it2++;
 					}
 					if (it2 == choice.end()) {
 						if (insert_all(s1->follow, nterm->follow))
-							changed = true;
-					} else {
-						if (insert_all(s1->follow, s2->first))
 							changed = true;
 					}
 				}

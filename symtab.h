@@ -32,6 +32,8 @@ struct NameTypePair {
 	NameTypePair(const std::string &name, Type *type);
 };
 
+extern SymbolTable *st;
+
 void def_const(const std::string &name, int val);
 void def_vars(const std::vector<std::string> &names, Type *type);
 void def_proc(const std::string &name, const std::vector<NameTypePair> &names);

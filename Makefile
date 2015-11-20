@@ -1,3 +1,5 @@
+CXXFLAGS += -g
+
 plx: expr.o keywords.o lexer.o parser.o plx.o symtab.o
 	c++ -o $@ $^
 

@@ -162,6 +162,7 @@ static void parse_choice(Choice &choice, Symbol *lhs, int choice_id)
 				newsym = nterm_dict[nterm_name] = new Symbol(Symbol::NTERM, nterm_name);
 				getsym();
 				parse_body(newsym);
+				newsym->up = lhs;
 				if (sym == closing_sym(opening)) getsym();
 				else syntax_error();
 				newsym->choices_core = make_unique<vector<Choice>>(newsym->choices);

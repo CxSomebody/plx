@@ -27,7 +27,7 @@ struct Symbol {
 	std::unique_ptr<std::vector<Choice>> choices_core;
 	std::set<Symbol*> first, follow;
 	ParamSpec params;
-	std::vector<Param> locals;
+	Symbol *up; // for inline symbols
 	union {
 		struct {
 			const char *sp = nullptr; // TERM: semantic predicate

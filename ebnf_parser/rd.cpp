@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <cassert>
 #include <cstring>
 #include "ebnf.h"
@@ -51,6 +52,8 @@ static string term_sv(Symbol *term)
 	return term->params.out.empty() ? "" : "tokval."+term->params.out[0].name;
 }
 
+map<const Choice*, vector<Param>> choice_locals;
+
 static void emit_proc(Symbol *nterm, int level)
 {
 	bool use_getsym = false;
@@ -88,6 +91,13 @@ static void emit_proc(Symbol *nterm, int level)
 			printf(") {\n");
 			use_getsym = true;
 			level++;
+		}
+		// declare locals
+		if (choice_locals.count(&choice)) {
+			for (const Param &p: choice_locals[&choice]) {
+				indent();
+				printf("%s %s;\n", p.type.c_str(), p.name.c_str());
+			}
 		}
 		bool ret_true = true;
 		for (auto it = choice.begin(); it != choice.end(); it++) {
@@ -213,11 +223,7 @@ static void emit_proc(Symbol *nterm, int level)
 	}
 	printf(" {\n");
 	level++;
-	// declare locals
-	for (const Param &p: nterm->locals) {
-		indent();
-		printf("%s %s;\n", p.type.c_str(), p.name.c_str());
-	}
+	// emit start label if necessary
 	for (auto &choice: nterm->choices) {
 		for (Instance *inst: choice) {
 			Symbol *s = inst->sym;
@@ -234,6 +240,61 @@ gen_body:
 	indent();
 	putchar('}');
 	putchar(level ? ' ' : '\n');
+}
+
+static void f(vector<Param> &argtype, size_t pos, const Choice &choice, Symbol *lhs)
+{
+	if (pos == choice.size())
+		return;
+	assert (pos<choice.size());
+	Instance *inst = choice[pos];
+	Symbol *sym = inst->sym;
+	size_t mark = argtype.size();
+	if (sym->kind == Symbol::NTERM && sym->opening_sym() && lhs != sym)
+		for (const Choice &c: sym->choices)
+			f(argtype, 0, c, sym);
+	if (inst->args) {
+		size_t n = inst->args->out.size();
+		if (sym->params.out.size() == n) {
+			for (size_t i=0; i<n; i++) {
+				const string &arg_out = inst->args->out[i];
+				auto it = find_if(argtype.rbegin(), argtype.rend(), [&](const Param &p){return p.name == arg_out;});
+				if (it == argtype.rend()) {
+					/* not found */
+					fputc(10, stderr);
+					const string &type = sym->params.out[i].type;
+					Param p(type, arg_out);
+					argtype.emplace_back(p);
+					choice_locals[&choice].emplace_back(p);
+				}
+			}
+		} else {
+			fprintf(stderr, "error: ");
+			print_symbol(false, sym, stderr);
+			fprintf(stderr, " expects %lu output arguments, got %lu\n",
+				n, sym->params.out.size());
+		}
+	}
+	f(argtype, pos+1, choice, lhs);
+	argtype.erase(argtype.begin()+mark, argtype.end());
+}
+
+void compute_locals()
+{
+	for_each_reachable_nterm([&](Symbol *nterm) {
+		if (nterm->opening_sym())
+			return;
+		vector<Param> argtype;
+		for (const Param &p: nterm->params.in)
+			argtype.emplace_back(p.type, p.name);
+		for (const Param &p: nterm->params.out)
+			argtype.emplace_back(p.type, p.name);
+		size_t n1 = argtype.size();
+		for (const Choice &choice: nterm->choices) {
+			f(argtype, 0, choice, nterm);
+			assert(argtype.size() == n1);
+		}
+	});
 }
 
 void generate_rd()
@@ -257,37 +318,7 @@ void generate_rd()
 			printf(";\n");
 		}
 	});
-	// compute locals
-	for_each_reachable_nterm([](Symbol *nterm) {
-		for (const Choice &choice: nterm->choices) {
-			map<string, string> attrtype;
-			for (const Param &p: nterm->params.out)
-				attrtype[p.name] = p.type;
-			for (const Param &p: nterm->params.in)
-				attrtype[p.name] = p.type;
-			for (Instance *inst: choice) {
-				if (!inst->args)
-					continue;
-				Symbol *s = inst->sym;
-				size_t n = inst->args->out.size();
-				if (s->params.out.size() == n) {
-					for (size_t i=0; i<n; i++) {
-						const string &arg = inst->args->out[i];
-						if (attrtype.count(arg))
-							continue;
-						const string &type = s->params.out[i].type;
-						nterm->locals.emplace_back(type, arg);
-						attrtype[arg] = type;
-					}
-				} else {
-					fprintf(stderr, "error: ");
-					print_symbol(false, s, stderr);
-					fprintf(stderr, " expects %lu output arguments, got %lu\n",
-						n, s->params.out.size());
-				}
-			}
-		}
-	});
+	compute_locals();
 	for_each_term([](Symbol *term) {
 		if (term->kind == Symbol::ACTION && !term->action) {
 			size_t n = term->params.in.size();

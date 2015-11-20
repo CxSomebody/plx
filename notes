@@ -60,7 +60,7 @@ bool isproc() {
 输入输出属性均可有多个
 输出属性数目为1时，可省略括号，以增强可读性
 内部属性（右部符号输出的非接口属性）需要声明局部变量
-无名动作符号不接受参数列表，因为无意义
+无名动作符号及无名nterm不接受参数列表，因为无意义 (TODO: check)
 用户提供具名动作过程定义
 <out_type> action(in_type...)
 动作符号至多有一个输出属性
@@ -69,3 +69,8 @@ bool isproc() {
 binary	add sub mul div index
 unary	neg
 n-ary	apply
+
+内层过程存取外层变量
+
+当term为最后一个，若有output arg，不能直接return (TODO)
+把INT↑i这种形式parse为一个INT↑i加一个@{i=tokval.i}？

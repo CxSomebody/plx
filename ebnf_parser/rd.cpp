@@ -100,13 +100,15 @@ static void emit_proc(Symbol *nterm, int level)
 				if (s->action) {
 					printf("{%s}\n", s->action);
 				} else {
-					const vector<string> &out_args = inst->args->out;
-					size_t n_out = out_args.size();
-					if (n_out) {
-						if (n_out > 1) {
-							fprintf(stderr, "error: more than one output argument passed to @%s", s->name.c_str());
+					if (inst->args) {
+						const vector<string> &out_args = inst->args->out;
+						size_t n_out = out_args.size();
+						if (n_out) {
+							if (n_out > 1) {
+								fprintf(stderr, "error: more than one output argument passed to @%s", s->name.c_str());
+							}
+							printf("%s = ", out_args[0].c_str());
 						}
-						printf("%s = ", out_args[0].c_str());
 					}
 					printf("%s(", s->name.c_str());
 					if (inst->args) {

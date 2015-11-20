@@ -1,20 +1,20 @@
-<program> ::= @makeSymbolTable::st <block>::()(st).
-<block> :: ()(<SymbolTable> st) ::= [<const_part>::()(st)][<var_part>::()(st)]{<proc_def>::()(st)|<func_def>::()(st)}<comp_stmt>
-<const_part> :: ()(<SymbolTable> st) ::= T_CONST <const_def>::()(st) {,<const_def>::()(st)};
-<const_def> :: ()(<SymbolTable> st) ::= IDENT::k = <constant>::v @def_const::()(st,k,v)
+<program> ::= <block>.
+<block> ::= @push_symtab [<const_part>][<var_part>]{<proc_def>|<func_def>}<comp_stmt> @pop_symtab
+<const_part> ::= T_CONST <const_def> {,<const_def>};
+<const_def> ::= IDENT::name = <constant>::val @def_const::()(name,val)
 <constant> :: <int> v ::= <opt_sign>::s INT::i @{v=s?-i:i;} | CHAR::c @{v=c;}
 <opt_sign> :: <bool> s ::= @{s=0;} [+|-@{s=1;}]
-<var_part> :: ()(<SymbolTable> st) ::= T_VAR <var_decl>::()(st); {<var_decl>::()(st);}
-<var_decl> :: ()(<SymbolTable> st) ::= <id_list>::ids : <type>::ty @def_vars::()(st,ids,ty)
+<var_part> ::= T_VAR <var_decl>; {<var_decl>;}
+<var_decl> ::= <id_list>::ids : <type>::ty @def_vars::()(ids,ty)
 <id_list> :: <vector<string>> v ::= IDENT::id1 @{v.push_back(id1);} {, IDENT::id2 @{v.push_back(id2);} }
 <type> :: <Type*> ty ::= <basic_type>::ty | T_ARRAY'['INT::n']' T_OF <basic_type>::elty @array_type::ty(elty,n)
 <basic_type> :: <Type*> ty ::= T_INTEGER @int_type::ty | T_CHAR @char_type::ty
-<proc_def> :: ()(<SymbolTable> st) ::= <proc_header><block>::()(st);
-<func_def> :: ()(<SymbolTable> st) ::= <func_header><block>::()(st);
-<proc_header> ::= T_PROCEDURE IDENT[<param_list>];
-<func_header> ::= T_FUNCTION IDENT[<param_list>]: <basic_type>::rty ;
-<param_list> ::= '('<param_group>{; <param_group>}')'
-<param_group> ::= [T_VAR] IDENT {, IDENT} : <basic_type>::ty
+<proc_def> ::= <proc_header>::(name,params) <block> @def_proc::()(name,params);
+<func_def> ::= <func_header>::(name,params,rty) <block> @def_func::()(name,params,rty);
+<proc_header> :: (<string> name, <vector<NameTypePair>> params) ::= T_PROCEDURE IDENT::name [<param_list>::params];
+<func_header> :: (<string> name, <vector<NameTypePair>> params, <Type*> rty) ::= T_FUNCTION IDENT::name [<param_list>::params]: <basic_type>::rty ;
+<param_list> :: <vector<NameTypePair>> params ::= '(' <ntpair_group>::()(params) {; <ntpair_group>::()(params)} ')'
+<ntpair_group> ::()(<vector<NameTypePair>> ntpairs) ::= [T_VAR] <id_list>::names : <basic_type>::ty @push_ntpair_group::()(ntpairs,names,ty)
 <stmt> ::= <call_stmt>|<assign_stmt>|<cond_stmt>|<do_while_stmt>|<comp_stmt>|<read_stmt>|<write_stmt>|<for_stmt>|<empty>
 <assign_stmt> ::= IDENT['['<expr>']'] BECOMES <expr>
 <expr> ::= [+|-]<term>{<add_op><term>}

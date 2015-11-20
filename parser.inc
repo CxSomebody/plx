@@ -8,6 +8,7 @@ extern "C" {
 }
 
 #include "symtab.h"
+#include "expr.h"
 
 using std::string;
 using std::vector;

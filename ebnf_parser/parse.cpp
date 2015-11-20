@@ -52,6 +52,11 @@ static vector<string> parse_arg_list(void)
 {
 	lexenv = 1;
 	vector<string> list;
+	if (sym == IDENT) {
+		list.push_back(yytext);
+		getsym();
+		goto finish;
+	}
 	if (sym == '(') getsym();
 	else syntax_error();
 	if (sym == ')') {
@@ -87,11 +92,14 @@ static Param parse_param()
 	return Param(type, name);
 }
 
-// (<A> a, <B> b, <C> c, ...)
 static vector<Param> parse_param_list()
 {
 	lexenv = 1;
 	vector<Param> list;
+	if (sym == QUOTE) {
+		list.emplace_back(parse_param());
+		goto finish;
+	}
 	if (sym == '(') getsym();
 	else syntax_error();
 	if (sym == ')') {
@@ -112,37 +120,30 @@ finish:
 	return list;
 }
 
-static ArgList parse_args()
-{
-	ArgList args;
-	if (sym == '(') {
-		args.out = parse_arg_list();
-	} else if (sym == IDENT) {
-		args.out.emplace_back(yytext);
+static ParamSpec parse_params() {
+	ParamSpec params;
+	if (sym == IN) {
 		getsym();
-	} else {
-		syntax_error();
-	}
-	if (sym == '(') {
-		args.in = parse_arg_list();
-	}
-	return args;
-}
-
-static ParamList parse_params()
-{
-	ParamList params;
-	if (sym == '(') {
-		params.out = parse_param_list();
-	} else if (sym == QUOTE) {
-		params.out.emplace_back(parse_param());
-	} else {
-		syntax_error();
-	}
-	if (sym == '(') {
 		params.in = parse_param_list();
 	}
+	if (sym == OUT) {
+		getsym();
+		params.out = parse_param_list();
+	}
 	return params;
+}
+
+static ArgSpec parse_args() {
+	ArgSpec args;
+	if (sym == IN) {
+		getsym();
+		args.in = parse_arg_list();
+	}
+	if (sym == OUT) {
+		getsym();
+		args.out = parse_arg_list();
+	}
+	return args;
 }
 
 static void parse_choice(Choice &choice, Symbol *lhs, int choice_id)
@@ -255,15 +256,12 @@ static void parse_choice(Choice &choice, Symbol *lhs, int choice_id)
 				choice.clear();
 			return;
 		}
-		// ::out
-		// ::(out...)
 		Instance *newinst;
-		if (sym == AS) {
-			getsym();
-			newinst = new Instance(newsym, parse_args());
-		} else {
+		ArgSpec args = parse_args();
+		if (!(args.in.empty() && args.out.empty()))
+			newinst = new Instance(newsym, std::move(args));
+		else
 			newinst = new Instance(newsym);
-		}
 		choice.emplace_back(newinst);
 	}
 }
@@ -315,10 +313,7 @@ static void parse_rule()
 	}
 #endif
 
-	if (sym == AS) {
-		getsym();
-		nterm->params = parse_params();
-	}
+	nterm->params = parse_params();
 
 	if (sym != IS) syntax_error();
 	getsym();
@@ -347,8 +342,6 @@ static void parse_decl()
 	} else {
 		syntax_error();
 	}
-	if (sym != AS) syntax_error();
-	getsym();
 	s->params = parse_params();
 	if (sym != '\n') syntax_error();
 	getsym();

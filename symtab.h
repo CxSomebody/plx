@@ -40,7 +40,6 @@ Type *int_type();
 Type *char_type();
 Type *array_type(Type *elty, int n);
 bool is_proc(const std::string &ident);
-SymbolTable makeSymbolTable();
 void push_ntpair_group(std::vector<NameTypePair> &ntpairs,
 		       const std::vector<std::string> &names,
 		       Type *type);

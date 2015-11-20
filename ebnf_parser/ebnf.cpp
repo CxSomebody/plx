@@ -28,8 +28,8 @@ int Symbol::opening_sym() {
 Symbol::Symbol(SymbolKind kind, const string &name):
 	kind(kind), name(name) {}
 Symbol::~Symbol() { delete sp; }
-Instance::Instance(Symbol *sym, const ArgList &args):
-	sym(sym), args(make_unique<ArgList>(args)) {}
+Instance::Instance(Symbol *sym, ArgSpec &&args):
+	sym(sym), args(make_unique<ArgSpec>(std::move(args))) {}
 Instance::Instance(Symbol *sym): sym(sym) {}
 
 Param::Param(const std::string &type, const std::string &name):
@@ -148,13 +148,17 @@ void print_symbol(bool rich, Symbol *s, FILE *fp)
 void print_choice(bool rich, const Choice &choice, FILE *fp)
 {
 	auto print_arg_list = [=](const vector<string> &list) {
-		fputc('(', fp);
 		size_t n = list.size();
-		for (size_t i=0; i<n; i++) {
-			fputs(list[i].c_str(), fp);
-			if (i<n-1) fprintf(fp, ", ");
+		if (n == 1) {
+			fputs(list[0].c_str(), fp);
+		} else {
+			fputc('(', fp);
+			for (size_t i=0; i<n; i++) {
+				fputs(list[i].c_str(), fp);
+				if (i<n-1) fprintf(fp, ", ");
+			}
+			fputc(')', fp);
 		}
-		fputc(')', fp);
 	};
 	bool sep = false;
 	for (Instance *inst: choice) {
@@ -165,9 +169,14 @@ void print_choice(bool rich, const Choice &choice, FILE *fp)
 		sep = true;
 		print_symbol(rich, inst->sym, fp);
 		if (rich && inst->args) {
-			fputs("::", fp);
-			print_arg_list(inst->args->out);
-			print_arg_list(inst->args->in);
+			if (!inst->args->in.empty()) {
+				fputs("↓", fp);
+				print_arg_list(inst->args->in);
+			}
+			if (!inst->args->out.empty()) {
+				fputs("↑", fp);
+				print_arg_list(inst->args->out);
+			}
 		}
 	}
 }
@@ -184,23 +193,35 @@ void print_body(bool rich, const vector<Choice> &choices, FILE *fp)
 
 void print_rules(bool rich, FILE *fp)
 {
+	auto print_param = [=](const Param &p) {
+		fprintf(fp, "<%s> %s", p.type.c_str(), p.name.c_str());
+	};
 	auto print_param_list = [=](const std::vector<Param> &list) {
-		fputc('(', fp);
 		size_t n = list.size();
-		for (size_t i=0; i<n; i++) {
-			const Param &p = list[i];
-			fprintf(fp, "<%s> %s", p.type.c_str(), p.name.c_str());
-			if (i<n-1) fprintf(fp, ", ");
+		if (n == 1) {
+			print_param(list[0]);
+		} else {
+			fputc('(', fp);
+			for (size_t i=0; i<n; i++) {
+				print_param(list[i]);
+				if (i < n-1)
+					fputs(", ", fp);
+			}
+			fputc(')', fp);
 		}
-		fputc(')', fp);
 	};
 	for_each_reachable_nterm([=](Symbol *nterm) {
 		if (!nterm->opening_sym()) {
 			fprintf(fp, "<%s>", nterm->name.c_str());
 			if (rich && !(nterm->params.out.empty() && nterm->params.in.empty())) {
-				fprintf(fp, " :: ");
-				print_param_list(nterm->params.out);
-				print_param_list(nterm->params.in);
+				if (!nterm->params.in.empty()) {
+					fputs("↓", fp);
+					print_param_list(nterm->params.in);
+				}
+				if (!nterm->params.out.empty()) {
+					fputs("↑", fp);
+					print_param_list(nterm->params.out);
+				}
 			}
 			fprintf(fp, " ::= ");
 			print_body(rich, nterm->choices, fp);

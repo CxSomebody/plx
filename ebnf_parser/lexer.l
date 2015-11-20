@@ -24,7 +24,8 @@ int qlen;
 	[^{}]*	{ assert(qlen+yyleng <= MAX_QUOTE); memcpy(qtext+qlen, yytext, yyleng); qlen += yyleng; }
 }
 ::=	return IS;
-::	return AS;
+↑	return OUT;
+↓	return IN;
 '.'	{ tokval = ((unsigned char *)yytext)[1]; return CHAR; }
 {ID}	return IDENT;
 @{ID}	return ACTION_NAMED;

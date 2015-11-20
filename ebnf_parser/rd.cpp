@@ -27,7 +27,7 @@ static void print_arg_list(const vector<string> &list)
 		printf("%s, ", arg.c_str());
 }
 
-static void print_args(const ArgList &args)
+static void print_args(const ArgSpec &args)
 {
 	print_arg_list(args.out);
 	print_arg_list(args.in);

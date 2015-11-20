@@ -1,6 +1,7 @@
 enum {
 	IS = 256,
-	AS,
+	IN,
+	OUT,
 	CHAR,
 	QUOTE,
 	ACTION_NAMED,

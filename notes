@@ -65,3 +65,7 @@ bool isproc() {
 <out_type> action(in_type...)
 动作符号至多有一个输出属性
 需要为动作符号的输出属性声明类型
+
+binary	add sub mul div index
+unary	neg
+n-ary	apply

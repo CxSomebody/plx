@@ -38,6 +38,7 @@ void def_vars(const vector<string> &names, Type *type)
 {
 	for (const string &name: names) {
 		Symbol *s = new Symbol(Symbol::VAR, name);
+		s->type = type;
 		st->map[name] = s;
 	}
 }
@@ -51,33 +52,32 @@ void def_proc(const string &name, const vector<NameTypePair> &names)
 void def_func(const string &name, const vector<NameTypePair> &names, Type *rettype)
 {
 	Symbol *s = new Symbol(Symbol::PROC, name);
+	s->rettype = rettype;
 	st->map[name] = s;
 }
 
 Type *int_type()
 {
-	return nullptr;
+	static Type type { Type::INT };
+	return &type;
 }
 
 Type *char_type()
 {
-	return nullptr;
+	static Type type { Type::CHAR };
+	return &type;
 }
 
 Type *array_type(Type *elty, int n)
 {
-	return nullptr;
+	// TODO memory leak
+	return new Type { Type::ARRAY, elty };
 }
 
 bool is_proc(const string &name)
 {
 	Symbol *s = st->lookup(name);
 	return s && s->kind == Symbol::PROC && !s->rettype;
-}
-
-SymbolTable makeSymbolTable()
-{
-	return SymbolTable();
 }
 
 void push_ntpair_group(std::vector<NameTypePair> &ntpairs,
@@ -88,8 +88,29 @@ void push_ntpair_group(std::vector<NameTypePair> &ntpairs,
 		ntpairs.emplace_back(name, type);
 }
 
+void print_type(Type *ty)
+{
+	assert(ty);
+	const char *kindstr;
+	switch (ty->kind) {
+	case Type::INT:
+		printf("int");
+		break;
+	case Type::CHAR:
+		printf("char");
+		break;
+	case Type::ARRAY:
+		printf("array of ");
+		print_type(ty->elemtype);
+		break;
+	default:
+		assert(0);
+	}
+}
+
 void print_symtab(SymbolTable *st)
 {
+	assert(st);
 	for (auto &pair: st->map) {
 		Symbol *s = pair.second;
 		const char *kindstr;
@@ -106,7 +127,14 @@ void print_symtab(SymbolTable *st)
 		default:
 			assert(0);
 		}
-		printf("%s %s\n", s->name.c_str(), kindstr);
+		printf("%s %s", s->name.c_str(), kindstr);
+		if (s->kind == Symbol::VAR) {
+			putchar(' ');
+			print_type(s->type);
+		} else if (s->kind == Symbol::CONST) {
+			printf(" %d", s->val);
+		}
+		putchar('\n');
 	}
 }
 

@@ -4,7 +4,7 @@
 #include <string>
 #include <vector>
 
-struct ArgList;
+struct ArgSpec;
 struct Instance;
 
 // TODO unique_ptr<Instance> would be better
@@ -16,7 +16,7 @@ struct Param {
 	Param(const std::string &type, const std::string &name);
 };
 
-struct ParamList {
+struct ParamSpec {
 	std::vector<Param> out, in;
 };
 
@@ -26,7 +26,7 @@ struct Symbol {
 	std::vector<Choice> choices;
 	std::unique_ptr<std::vector<Choice>> choices_core;
 	std::set<Symbol*> first, follow;
-	ParamList params;
+	ParamSpec params;
 	std::vector<Param> locals;
 	union {
 		struct {
@@ -44,14 +44,14 @@ struct Symbol {
 	~Symbol();
 };
 
-struct ArgList {
+struct ArgSpec {
 	std::vector<std::string> out, in;
 };
 
 struct Instance {
 	Symbol *sym;
-	std::unique_ptr<ArgList> args;
-	Instance(Symbol *sym, const ArgList &args);
+	std::unique_ptr<ArgSpec> args;
+	Instance(Symbol *sym, ArgSpec &&args);
 	Instance(Symbol *sym);
 };
 

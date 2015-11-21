@@ -120,7 +120,7 @@ static void gen_input(const Branch &branch, Branch::const_iterator it, int level
 		printf("if (!expect(%s, ", s->name.c_str());
 	} else /* NTERM */ {
 		printf("if (!");
-		if (s->opening_sym())
+		if (s->up)
 			emit_proc(s, level);
 		else
 			printf("%s", s->name.c_str());
@@ -226,7 +226,7 @@ static void emit_proc(Symbol *nterm, int level)
 							printf("goto start;\n");
 						} else {
 							printf("return ");
-							if (s->opening_sym())
+							if (s->up)
 								emit_proc(s, level);
 							else
 								printf("%s", s->name.c_str());
@@ -290,7 +290,7 @@ static void f(vector<Param> &argtype, size_t pos, const Branch &branch, Symbol *
 	Instance *inst = branch[pos];
 	Symbol *sym = inst->sym;
 	size_t mark = argtype.size();
-	if (sym->kind == Symbol::NTERM && sym->opening_sym() && lhs != sym)
+	if (sym->kind == Symbol::NTERM && sym->up && lhs != sym /* prevent infinite recursion */ )
 		for (const Branch &c: sym->branches)
 			f(argtype, 0, c, sym);
 	if (inst->args) {
@@ -316,7 +316,7 @@ static void f(vector<Param> &argtype, size_t pos, const Branch &branch, Symbol *
 void compute_locals()
 {
 	for_each_reachable_nterm([&](Symbol *nterm) {
-		if (nterm->opening_sym())
+		if (nterm->up)
 			return;
 		vector<Param> argtype;
 		for (const Param &p: nterm->params.in)
@@ -345,7 +345,7 @@ void generate_rd()
 	putchar('\n');
 	// forward declarations of parsing routines
 	for_each_reachable_nterm([](Symbol *nterm) {
-		if (!nterm->opening_sym()) {
+		if (!nterm->up) {
 			emit_proc_header(nterm);
 			printf(";\n");
 		}
@@ -372,7 +372,7 @@ void generate_rd()
 	       top->name.c_str());
 #endif
 	for_each_reachable_nterm([](Symbol *nterm) {
-		if (!nterm->opening_sym())
+		if (!nterm->up)
 			emit_proc(nterm, 0);
 	});
 }

@@ -253,7 +253,7 @@ static void parse_branch(Branch &branch, Symbol *lhs, int branch_id)
 		}
 		Instance *newinst;
 		ArgSpec args = parse_args();
-		if (!(args.in.empty() && args.out.empty()))
+		if (!args.empty())
 			newinst = new Instance(newsym, std::move(args));
 		else
 			newinst = new Instance(newsym);

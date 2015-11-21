@@ -42,6 +42,7 @@ struct Symbol {
 
 struct ArgSpec {
 	std::vector<std::string> out, in;
+	bool empty() const;
 };
 
 struct Instance {

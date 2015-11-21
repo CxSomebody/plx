@@ -39,6 +39,11 @@ bool ParamSpec::empty() const
 	return out.empty() && in.empty();
 }
 
+bool ArgSpec::empty() const
+{
+	return out.empty() && in.empty();
+}
+
 void for_each_reachable_nterm(std::function<void(Symbol*)> f)
 {
 	struct Visitor {

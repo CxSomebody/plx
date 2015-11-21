@@ -99,7 +99,7 @@ Expr *sym_expr(Symbol *sym)
 Expr *ident_expr(const string &name)
 {
 	// TODO what if name is undefined
-	return sym_expr(st->lookup(name));
+	return sym_expr(symtab->lookup(name));
 }
 
 Expr *lit_expr(int lit)
@@ -135,6 +135,25 @@ void print_stmt(Stmt *s)
 		}
 		putchar(')');
 		break;
+	case Stmt::IF:
+		printf("IF ");
+		print_cond(s->cond);
+		printf(" THEN ");
+		print_stmt(s->st);
+		printf(" ELSE ");
+		print_stmt(s->sf);
+		break;
+	case Stmt::COMP:
+		putchar('(');
+		sep = false;
+		for (Stmt *t: *s->body) {
+			if (sep)
+				printf("; ");
+			print_stmt(t);
+			sep = true;
+		}
+		putchar(')');
+		break;
 	default:
 		assert(0);
 	};
@@ -155,10 +174,61 @@ Stmt *call_stmt(const string &name, const vector<Expr*> &args)
 {
 	Stmt *s = new Stmt();
 	s->kind = Stmt::CALL;
-	s->proc = st->lookup(name);
+	s->proc = symtab->lookup(name);
 	// TODO memory leak
 	s->args = new vector<Expr*>(args);
 	print_stmt(s);
 	putchar(10);
 	return s;
+}
+
+Stmt *if_stmt(Cond *cond, Stmt *st, Stmt *sf)
+{
+	Stmt *s = new Stmt();
+	s->kind = Stmt::IF;
+	s->cond = cond;
+	s->st = st;
+	s->sf = sf;
+	print_stmt(s);
+	putchar(10);
+	return s;
+}
+
+Stmt *if_stmt(Cond *cond, Stmt *st)
+{
+	return if_stmt(cond, st, nullptr);
+}
+
+Stmt *comp_stmt(const std::vector<Stmt*> &body)
+{
+	Stmt *s = new Stmt();
+	s->kind = Stmt::COMP;
+	s->body = new vector<Stmt*>(body);
+	return s;
+}
+
+void print_cond(Cond *c)
+{
+	const char *opstr;
+	switch (c->op) {
+	case Cond::EQ: opstr = "=" ; break;
+	case Cond::NE: opstr = "<>"; break;
+	case Cond::LT: opstr = "<" ; break;
+	case Cond::GE: opstr = ">="; break;
+	case Cond::GT: opstr = ">" ; break;
+	case Cond::LE: opstr = "<="; break;
+	default: assert(0);
+	}
+	print_expr(c->left);
+	printf(" %s ", opstr);
+	print_expr(c->right);
+}
+
+Cond *cond(Cond::Op op, Expr *left, Expr *right)
+{
+	Cond *c = new Cond();
+	c->op = op;
+	c->left = left;
+	c->right= right;
+	return c;
 }

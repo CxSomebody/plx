@@ -39,7 +39,7 @@ struct Param {
 
 typedef std::vector<Param> ParamList;
 
-extern SymbolTable *st;
+extern SymbolTable *symtab;
 
 void def_const(const std::string &name, int val);
 void def_vars(const std::vector<std::string> &names, Type *type);

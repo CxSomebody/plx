@@ -25,7 +25,7 @@ Param::Param(const std::string &name, Type *type, bool byref):
 {
 }
 
-SymbolTable *st;
+SymbolTable *symtab;
 
 Symbol *var_symbol(const string &name, Type *type)
 {
@@ -50,7 +50,7 @@ Symbol *proc_symbol(const string &name, Type *rettype)
 
 bool check_redef(const string &name)
 {
-	if (st->map.count(name)) {
+	if (symtab->map.count(name)) {
 		fprintf(stderr, "error: redefinition of ‘%s’\n", name.c_str());
 		return false;
 	}
@@ -60,7 +60,7 @@ bool check_redef(const string &name)
 void def_const(const string &name, int val)
 {
 	if (check_redef(name)) {
-		st->map[name] = const_symbol(name, val);
+		symtab->map[name] = const_symbol(name, val);
 	}
 }
 
@@ -68,20 +68,20 @@ void def_vars(const vector<string> &names, Type *type)
 {
 	for (const string &name: names)
 		if (check_redef(name))
-			st->map[name] = var_symbol(name, type);
+			symtab->map[name] = var_symbol(name, type);
 }
 
 void def_proc(const string &name, const ParamList &names)
 {
 	if (check_redef(name)) {
-		st->map[name] = proc_symbol(name, nullptr);
+		symtab->map[name] = proc_symbol(name, nullptr);
 	}
 }
 
 void def_func(const string &name, const ParamList &names, Type *rettype)
 {
 	if (check_redef(name)) {
-		st->map[name] = proc_symbol(name, rettype);
+		symtab->map[name] = proc_symbol(name, rettype);
 	}
 }
 
@@ -90,7 +90,7 @@ void def_params(const ParamList &params)
 	for (const Param &p: params) {
 		const string &name = p.name;
 		if (check_redef(name)) {
-			st->map[name] = var_symbol(name, p.type);
+			symtab->map[name] = var_symbol(name, p.type);
 		}
 	}
 }
@@ -115,7 +115,7 @@ Type *array_type(Type *elty, int n)
 
 bool is_proc(const string &name)
 {
-	Symbol *s = st->lookup(name);
+	Symbol *s = symtab->lookup(name);
 	return s && s->kind == Symbol::PROC && !s->rettype;
 }
 
@@ -148,10 +148,10 @@ void print_type(Type *ty)
 	}
 }
 
-void print_symtab(SymbolTable *st)
+void print_symtab(SymbolTable *symtab)
 {
-	assert(st);
-	for (auto &pair: st->map) {
+	assert(symtab);
+	for (auto &pair: symtab->map) {
 		Symbol *s = pair.second;
 		const char *kindstr;
 		switch (s->kind) {
@@ -181,14 +181,14 @@ void print_symtab(SymbolTable *st)
 void push_symtab()
 {
 	SymbolTable *newst = new SymbolTable();
-	newst->up = st;
-	st = newst;
+	newst->up = symtab;
+	symtab = newst;
 }
 
 void pop_symtab()
 {
-	print_symtab(st);
-	SymbolTable *savedst = st;
-	st = st->up;
+	print_symtab(symtab);
+	SymbolTable *savedst = symtab;
+	symtab = symtab->up;
 	delete savedst;
 }

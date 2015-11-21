@@ -14,22 +14,37 @@ struct Expr {
 		APPLY,
 	};
 	union {
-		Symbol *sym;
-		int lit;
+		Symbol *sym; // SYM
+		int lit; // LIT
 		struct {
 			Op op;
 			union {
 				struct {
 					Expr *left;
 					Expr *right;
-				};
-				std::vector<Expr*> *args;
+				}; // binary & unary
+				std::vector<Expr*> *args; // APPLY
 			};
-		};
+		}; // COMP
+	};
+};
+
+struct Stmt {
+	enum Kind {
+		ASSIGN,
+	} kind;
+	union {
+		struct {
+			Expr *var;
+			Expr *val;
+		}; // ASSIGN
 	};
 };
 
 Expr *binary_expr(Expr::Op op, Expr *left, Expr *right);
+Expr *unary_expr(Expr::Op op, Expr *right);
 Expr *ident_expr(const std::string &name);
 Expr *lit_expr(int lit);
-Expr *index_expr(Expr *base, Expr *index);
+void print_expr(Expr *e);
+
+Stmt *assign_stmt(Expr *var, Expr *val);

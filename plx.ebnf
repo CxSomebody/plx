@@ -15,11 +15,11 @@
 <func_header> ↑ (<string> name, <vector<NameTypePair>> params, <Type*> rty) ::= T_FUNCTION IDENT↑name [<param_list>↑params]: <basic_type>↑rty ;
 <param_list> ↑ <vector<NameTypePair>> params ::= '(' <ntpair_group>↓params {; <ntpair_group>↓params} ')'
 <ntpair_group> ↓ <vector<NameTypePair>> ntpairs ::= [T_VAR] <id_list>↑names : <basic_type>↑ty @push_ntpair_group↓(ntpairs,names,ty)
-<stmt> ::= <call_stmt>|<assign_stmt>|<cond_stmt>|<do_while_stmt>|<comp_stmt>|<read_stmt>|<write_stmt>|<for_stmt>|<empty>
-<assign_stmt> ::= IDENT['['<expr>↑index']'] BECOMES <expr>↑val
-<expr> ↑ <Expr*> e ::= <opt_sign>↑s <term>↑e {<add_op>↑op <term>↑e2 @binary_expr↓(op,e,e2)↑e}
+<stmt> ::= <call_stmt>|<assign_stmt>↑s|<cond_stmt>|<do_while_stmt>|<comp_stmt>|<read_stmt>|<write_stmt>|<for_stmt>|<empty>
+<assign_stmt> ↑ <Stmt*> s ::= IDENT↑name @ident_expr↓name↑var ['['<expr>↑idx']'@{var = binary_expr(Expr::INDEX, var, idx);}] BECOMES <expr>↑val @assign_stmt↓(var,val)↑s
+<expr> ↑ <Expr*> e ::= <opt_sign>↑s <term>↑e {<add_op>↑op <term>↑e2 @binary_expr↓(op,e,e2)↑e} @{if (s) e = unary_expr(Expr::NEG, e);}
 <term> ↑ <Expr*> e ::= <factor>↑e {<mul_op>↑op <factor>↑e2 @binary_expr↓(op,e,e2)↑e}
-<factor> ↑ <Expr*> e ::= IDENT↑name @ident_expr↓name↑e [ '['<expr>↑index']' @index_expr↓(e,index)↑e | <arg_list> ] | INT↑i @lit_expr↓i↑e | '('<expr>↑e')'
+<factor> ↑ <Expr*> e ::= IDENT↑name @ident_expr↓name↑e [ '['<expr>↑idx']' @{e = binary_expr(Expr::INDEX, e, idx);} | <arg_list> ] | INT↑i @lit_expr↓i↑e | '('<expr>↑e')'
 <arg_list> ::= '(' <expr>↑e1 {, <expr>↑e2} ')'
 <add_op> ↑ <Expr::Op> op ::= +@{op = Expr::ADD;}|-@{op = Expr::SUB;}
 <mul_op> ↑ <Expr::Op> op ::= *@{op = Expr::MUL;}|/@{op = Expr::DIV;}
@@ -39,6 +39,7 @@ CHAR ↑ <int> i
 @char_type ↑ <Type*>
 @array_type ↑ <Type*>
 @binary_expr ↑ <Expr*>
-@index_expr ↑ <Expr*>
+@unary_expr ↑ <Expr*>
 @ident_expr ↑ <Expr*>
 @lit_expr ↑ <Expr*>
+@assign_stmt ↑ <Stmt*>

@@ -9,7 +9,7 @@ lexer_test: keywords.o lexer.o lexer_test.o
 keywords.c: keywords.gperf
 	gperf -t -I -N gperf_keyword_sym $< > $@
 
-parser.cpp: plx.ebnf
+parser.cpp: ebnf
 	ebnf_parser/ebnf -g $< > $@
 
 tokens.h keywords.gperf keywords.gperf.h tokname.inc: tokens.in keywords.in

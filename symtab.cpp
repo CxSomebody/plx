@@ -20,8 +20,8 @@ Symbol *SymbolTable::lookup(const string &name)
 	return nullptr;
 }
 
-NameTypePair::NameTypePair(const std::string &name, Type *type):
-	name(name), type(type)
+Param::Param(const std::string &name, Type *type, bool byref):
+	name(name), type(type), byref(byref)
 {
 }
 
@@ -43,13 +43,13 @@ void def_vars(const vector<string> &names, Type *type)
 	}
 }
 
-void def_proc(const string &name, const vector<NameTypePair> &names)
+void def_proc(const string &name, const vector<Param> &names)
 {
 	Symbol *s = new Symbol(Symbol::PROC, name);
 	st->map[name] = s;
 }
 
-void def_func(const string &name, const vector<NameTypePair> &names, Type *rettype)
+void def_func(const string &name, const vector<Param> &names, Type *rettype)
 {
 	Symbol *s = new Symbol(Symbol::PROC, name);
 	s->rettype = rettype;
@@ -80,12 +80,13 @@ bool is_proc(const string &name)
 	return s && s->kind == Symbol::PROC && !s->rettype;
 }
 
-void push_ntpair_group(std::vector<NameTypePair> &ntpairs,
-		       const std::vector<string> &names,
-		       Type *type)
+void push_param_group(std::vector<Param> &params,
+		      const std::vector<string> &names,
+		      Type *type,
+		      bool byref)
 {
 	for (const string &name: names)
-		ntpairs.emplace_back(name, type);
+		params.emplace_back(name, type, byref);
 }
 
 void print_type(Type *ty)

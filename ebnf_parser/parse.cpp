@@ -1,6 +1,5 @@
 #include <cassert>
 #include <cstdio>
-#include <cstring>
 #include "ebnf.h"
 #include "tokens.h"
 
@@ -10,7 +9,6 @@ extern char *yytext;
 extern int yyleng;
 extern int yylineno;
 extern int tokval;
-extern int lexenv;
 extern char qtext[];
 extern int qlen;
 
@@ -31,7 +29,7 @@ static void syntax_error()
 
 int closing_sym(int opening);
 
-static void parse_body(Symbol *lhs);
+static void parse_branches(Symbol *lhs);
 
 static void synth_nterm_name(int kind, char *name)
 {
@@ -50,7 +48,6 @@ static void synth_nterm_name(int kind, char *name)
 // (a, b, c, ...)
 static vector<string> parse_arg_list(void)
 {
-	lexenv = 1;
 	vector<string> list;
 	if (sym == IDENT) {
 		list.push_back(yytext);
@@ -75,7 +72,6 @@ static vector<string> parse_arg_list(void)
 		else syntax_error();
 	}
 finish:
-	lexenv = 0;
 	return list;
 }
 
@@ -94,7 +90,6 @@ static Param parse_param()
 
 static vector<Param> parse_param_list()
 {
-	lexenv = 1;
 	vector<Param> list;
 	if (sym == QUOTE) {
 		list.emplace_back(parse_param());
@@ -116,7 +111,6 @@ static vector<Param> parse_param_list()
 		else syntax_error();
 	}
 finish:
-	lexenv = 0;
 	return list;
 }
 
@@ -146,7 +140,7 @@ static ArgSpec parse_args() {
 	return args;
 }
 
-static void parse_choice(Choice &choice, Symbol *lhs, int choice_id)
+static void parse_branch(Branch &branch, Symbol *lhs, int branch_id)
 {
 	for (;;) {
 		Symbol *newsym;
@@ -161,19 +155,19 @@ static void parse_choice(Choice &choice, Symbol *lhs, int choice_id)
 				string nterm_name(synth_name);
 				newsym = nterm_dict[nterm_name] = new Symbol(Symbol::NTERM, nterm_name);
 				getsym();
-				parse_body(newsym);
+				parse_branches(newsym);
 				newsym->up = lhs;
 				if (sym == closing_sym(opening)) getsym();
 				else syntax_error();
-				newsym->choices_core = make_unique<vector<Choice>>(newsym->choices);
+				newsym->branches_core = make_unique<vector<Branch>>(newsym->branches);
 				switch (opening) {
 				case '{':
-					for (auto &c: newsym->choices)
+					for (auto &c: newsym->branches)
 						c.emplace_back(new Instance(newsym));
-				       	newsym->choices.emplace_back();
+				       	newsym->branches.emplace_back();
 					break;
 				case '[':
-				       	newsym->choices.emplace_back();
+				       	newsym->branches.emplace_back();
 					break;
 				case '(':
 					break;
@@ -223,7 +217,7 @@ static void parse_choice(Choice &choice, Symbol *lhs, int choice_id)
 							guarded_term = term_dict[guarded_term_name] =
 								new Symbol(Symbol::TERM, term_name);
 						}
-						guarded_term->sp = strdup(yytext);
+						guarded_term->sp = yytext;
 						guarded_term->inner = newsym;
 						newsym = guarded_term;
 						getsym();
@@ -233,7 +227,7 @@ static void parse_choice(Choice &choice, Symbol *lhs, int choice_id)
 				}
 			}
 			break;
-		case ACTION_NAMED:
+		case NAMED_ACTION:
 			{
 				string name(yytext+1); // +1 for leading '@'
 				getsym();
@@ -243,18 +237,18 @@ static void parse_choice(Choice &choice, Symbol *lhs, int choice_id)
 				newsym->nullable = true;
 			}
 			break;
-		case ACTION_INLINE:
+		case INLINE_ACTION:
 			{
 				newsym = new Symbol(Symbol::ACTION, "");
-				newsym->action = strdup(qtext);
+				newsym->action = qtext;
 				getsym();
 				newsym->nullable = true;
 			}
 			break;
 		default:
 			// S ::= ... | <empty> | ...
-			if (choice.size() == 1 && choice[0]->sym == empty)
-				choice.clear();
+			if (branch.size() == 1 && branch[0]->sym == empty)
+				branch.clear();
 			return;
 		}
 		Instance *newinst;
@@ -263,17 +257,17 @@ static void parse_choice(Choice &choice, Symbol *lhs, int choice_id)
 			newinst = new Instance(newsym, std::move(args));
 		else
 			newinst = new Instance(newsym);
-		choice.emplace_back(newinst);
+		branch.emplace_back(newinst);
 	}
 }
 
-static void parse_body(Symbol *lhs)
+static void parse_branches(Symbol *lhs)
 {
-	vector<Choice> &body = lhs->choices;
+	vector<Branch> &branches = lhs->branches;
 	for (;;) {
-		int choice_id = body.size();
-		body.emplace_back();
-		parse_choice(body.back(), lhs, choice_id);
+		int branch_id = branches.size();
+		branches.emplace_back();
+		parse_branch(branches.back(), lhs, branch_id);
 		if (sym != '|')
 			break;
 		getsym();
@@ -290,8 +284,8 @@ static void parse_rule()
 #ifdef ENABLE_WEAK
 	// TODO fix broken code
 	if (nterm_name == "WEAK") {
-		Choice weak_symbols;
-		parse_choice(weak_symbols, nullptr, 0);
+		Branch weak_symbols;
+		parse_branch(weak_symbols, nullptr, 0);
 		for (Symbol *s: weak_symbols)
 			s->weak = true;
 	} else {
@@ -319,7 +313,7 @@ static void parse_rule()
 	if (sym != IS) syntax_error();
 	getsym();
 
-	parse_body(nterm);
+	parse_branches(nterm);
 
 	if (sym != '\n') syntax_error();
 	getsym();
@@ -334,7 +328,7 @@ static void parse_decl()
 		s = term_dict[name];
 		if (!s)
 			s = term_dict[name] = new Symbol(Symbol::TERM, name);
-	} else if (sym == ACTION_NAMED) {
+	} else if (sym == NAMED_ACTION) {
 		string name(yytext+1);
 		getsym();
 		s = action_dict[name];

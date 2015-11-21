@@ -101,3 +101,16 @@ Expr *index_expr(Expr *base, Expr *index)
 {
 	return binary_expr(Expr::INDEX, base, index);
 }
+
+Stmt *assign_stmt(Expr *var, Expr *val)
+{
+	Stmt *s = new Stmt();
+	s->kind = Stmt::ASSIGN;
+	s->var = var;
+	s->val = val;
+	print_expr(var);
+	printf(" := ");
+	print_expr(val);
+	putchar(10);
+	return s;
+}

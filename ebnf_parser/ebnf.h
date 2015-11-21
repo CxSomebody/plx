@@ -8,7 +8,7 @@ struct ArgSpec;
 struct Instance;
 
 // TODO unique_ptr<Instance> would be better
-typedef std::vector<Instance*> Choice;
+typedef std::vector<Instance*> Branch;
 
 struct Param {
 	std::string type;
@@ -18,30 +18,26 @@ struct Param {
 
 struct ParamSpec {
 	std::vector<Param> out, in;
+	bool empty() const;
 };
 
 struct Symbol {
 	enum SymbolKind { TERM, NTERM, ACTION } kind;
 	std::string name;
-	std::vector<Choice> choices;
-	std::unique_ptr<std::vector<Choice>> choices_core;
+	std::vector<Branch> branches;
+	std::unique_ptr<std::vector<Branch>> branches_core;
 	std::set<Symbol*> first, follow;
 	ParamSpec params;
 	Symbol *up; // for inline symbols
-	union {
-		struct {
-			const char *sp = nullptr; // TERM: semantic predicate
-			Symbol *inner;
-		};
-		const char *action; // ACTION (inline)
-	};
+	std::string sp; // TERM: semantic predicate
+	Symbol *inner; // TERM
+	std::string action; // ACTION (inline)
 	int id = -1;
 	bool nullable = false;
 	bool defined = false;
 	bool weak = false;
 	int opening_sym();
 	Symbol(SymbolKind kind, const std::string &name);
-	~Symbol();
 };
 
 struct ArgSpec {

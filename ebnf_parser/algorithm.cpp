@@ -5,7 +5,7 @@
 
 using namespace std;
 
-void print_production(bool rich, Symbol *nterm, const Choice &body, FILE *fp);
+void print_production(bool rich, Symbol *nterm, const Branch &body, FILE *fp);
 
 static bool insert_all(set<Symbol*> &a, const set<Symbol*> &b)
 {
@@ -23,26 +23,26 @@ void compute_first_follow()
 	do {
 		changed = false;
 		for_each_nterm([&](Symbol *nterm) {
-			for (auto &choice: nterm->choices) {
+			for (auto &branch: nterm->branches) {
 				if (!nterm->nullable) {
-					if (all_of(choice.begin(), choice.end(), [](Instance *inst){return inst->sym->nullable;})) {
+					if (all_of(branch.begin(), branch.end(), [](Instance *inst){return inst->sym->nullable;})) {
 						nterm->nullable = true;
 						changed = true;
 					}
 				}
-				for (Instance *inst: choice) {
+				for (Instance *inst: branch) {
 					Symbol *s = inst->sym;
 					if (insert_all(nterm->first, s->first))
 						changed = true;
 					if (!s->nullable)
 						break;
 				}
-				for (auto it1 = choice.begin(); it1 != choice.end(); it1++) {
+				for (auto it1 = branch.begin(); it1 != branch.end(); it1++) {
 					Symbol *s1 = (*it1)->sym, *s2;
 					if (s1->kind != Symbol::NTERM)
 						continue;
 					auto it2 = next(it1);
-					while (it2 != choice.end()) {
+					while (it2 != branch.end()) {
 						s2 = (*it2)->sym;
 						if (insert_all(s1->follow, s2->first))
 							changed = true;
@@ -50,7 +50,7 @@ void compute_first_follow()
 							break;
 						it2++;
 					}
-					if (it2 == choice.end()) {
+					if (it2 == branch.end()) {
 						if (insert_all(s1->follow, nterm->follow))
 							changed = true;
 					}
@@ -82,9 +82,9 @@ bool check_left_recursion()
 				return;
 			}
 			vis.insert(nterm);
-			for (auto &choice: nterm->choices) {
-				auto it = choice.begin();
-				while (it != choice.end()) {
+			for (auto &branch: nterm->branches) {
+				auto it = branch.begin();
+				while (it != branch.end()) {
 					Symbol *s = (*it)->sym;
 					if (s->kind == Symbol::NTERM)
 						visit(s);
@@ -99,7 +99,7 @@ bool check_left_recursion()
 	return visitor.ans;
 }
 
-set<Symbol*> first_of_production(Symbol *nterm, const Choice &body)
+set<Symbol*> first_of_production(Symbol *nterm, const Branch &body)
 {
 	set<Symbol*> f;
 	auto it = body.begin();
@@ -130,17 +130,17 @@ bool check_grammar()
 	if (!check_left_recursion())
 		ans = false;
 	for_each_nterm([&](Symbol *nterm) {
-		map<Symbol*, Choice*> m;
-		for (auto &choice: nterm->choices) {
-			set<Symbol*> f = first_of_production(nterm, choice);
+		map<Symbol*, Branch*> m;
+		for (auto &branch: nterm->branches) {
+			set<Symbol*> f = first_of_production(nterm, branch);
 			for (Symbol *s: f) {
 				if (m[s]) {
 					fprintf(stderr, "conflict on %s:\n", s->name.c_str());
 					print_production(false, nterm, *m[s], stderr);
-					print_production(false, nterm, choice, stderr);
+					print_production(false, nterm, branch, stderr);
 					ans = false;
 				} else {
-					m[s] = &choice;
+					m[s] = &branch;
 				}
 			}
 		}

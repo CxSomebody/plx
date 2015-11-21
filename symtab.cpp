@@ -27,33 +27,72 @@ Param::Param(const std::string &name, Type *type, bool byref):
 
 SymbolTable *st;
 
-void def_const(const string &name, int val)
+Symbol *var_symbol(const string &name, Type *type)
+{
+	Symbol *s = new Symbol(Symbol::VAR, name);
+	s->type = type;
+	return s;
+}
+
+Symbol *const_symbol(const string &name, int val)
 {
 	Symbol *s = new Symbol(Symbol::CONST, name);
 	s->val = val;
-	st->map[name] = s;
+	return s;
+}
+
+Symbol *proc_symbol(const string &name, Type *rettype)
+{
+	Symbol *s = new Symbol(Symbol::PROC, name);
+	s->rettype = rettype;
+	return s;
+}
+
+bool check_redef(const string &name)
+{
+	if (st->map.count(name)) {
+		fprintf(stderr, "error: redefinition of ‘%s’\n", name.c_str());
+		return false;
+	}
+	return true;
+}
+
+void def_const(const string &name, int val)
+{
+	if (check_redef(name)) {
+		st->map[name] = const_symbol(name, val);
+	}
 }
 
 void def_vars(const vector<string> &names, Type *type)
 {
-	for (const string &name: names) {
-		Symbol *s = new Symbol(Symbol::VAR, name);
-		s->type = type;
-		st->map[name] = s;
+	for (const string &name: names)
+		if (check_redef(name))
+			st->map[name] = var_symbol(name, type);
+}
+
+void def_proc(const string &name, const ParamList &names)
+{
+	if (check_redef(name)) {
+		st->map[name] = proc_symbol(name, nullptr);
 	}
 }
 
-void def_proc(const string &name, const vector<Param> &names)
+void def_func(const string &name, const ParamList &names, Type *rettype)
 {
-	Symbol *s = new Symbol(Symbol::PROC, name);
-	st->map[name] = s;
+	if (check_redef(name)) {
+		st->map[name] = proc_symbol(name, rettype);
+	}
 }
 
-void def_func(const string &name, const vector<Param> &names, Type *rettype)
+void def_params(const ParamList &params)
 {
-	Symbol *s = new Symbol(Symbol::PROC, name);
-	s->rettype = rettype;
-	st->map[name] = s;
+	for (const Param &p: params) {
+		const string &name = p.name;
+		if (check_redef(name)) {
+			st->map[name] = var_symbol(name, p.type);
+		}
+	}
 }
 
 Type *int_type()
@@ -80,7 +119,7 @@ bool is_proc(const string &name)
 	return s && s->kind == Symbol::PROC && !s->rettype;
 }
 
-void push_param_group(std::vector<Param> &params,
+void push_param_group(ParamList &params,
 		      const std::vector<string> &names,
 		      Type *type,
 		      bool byref)

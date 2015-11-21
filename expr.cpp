@@ -9,15 +9,18 @@
 
 using namespace std;
 
+void print_symbol(Symbol *s)
+{
+	if (s) printf("%s", s->name.c_str());
+	else printf("<error>");
+}
+
 void print_expr(Expr *e)
 {
 	switch (e->kind) {
 		const char *opstr;
 	case Expr::SYM:
-		if (e->sym)
-			printf("%s", e->sym->name.c_str());
-		else
-			printf("<error>");
+		print_symbol(e->sym);
 		break;
 	case Expr::LIT:
 		printf("%d", e->lit);
@@ -41,7 +44,17 @@ void print_expr(Expr *e)
 			print_expr(e->left);
 			putchar(' ');
 		}
-		print_expr(e->right);
+		if (e->op == Expr::APPLY) {
+			bool sep = false;
+			for (Expr *arg: *e->args) {
+				if (sep)
+					putchar(' ');
+				print_expr(arg);
+				sep = true;
+			}
+		} else {
+			print_expr(e->right);
+		}
 		putchar(')');
 		break;
 	default:
@@ -64,14 +77,14 @@ Expr *unary_expr(Expr::Op op, Expr *right)
 	return binary_expr(op, nullptr, right);
 }
 
-Expr *apply_expr(Expr *func, vector<Expr*> &&args)
+Expr *apply_expr(Expr *func, const vector<Expr*> &args)
 {
 	Expr *e = new Expr();
 	e->kind = Expr::COMP;
 	e->op = Expr::APPLY;
 	e->left = func;
 	// TODO memory leak
-	e->args = new vector<Expr*>(std::move(args));
+	e->args = new vector<Expr*>(args);
 	return e;
 }
 
@@ -97,9 +110,34 @@ Expr *lit_expr(int lit)
 	return e;
 }
 
-Expr *index_expr(Expr *base, Expr *index)
+void print_stmt(Stmt *s)
 {
-	return binary_expr(Expr::INDEX, base, index);
+	if (!s) {
+		printf("<null>");
+		return;
+	}
+	switch (s->kind) {
+		bool sep;
+	case Stmt::ASSIGN:
+		print_expr(s->var);
+		printf(" := ");
+		print_expr(s->val);
+		break;
+	case Stmt::CALL:
+		print_symbol(s->proc);
+		putchar('(');
+		sep = false;
+		for (Expr *arg: *s->args) {
+			if (sep)
+				printf(", ");
+			print_expr(arg);
+			sep = true;
+		}
+		putchar(')');
+		break;
+	default:
+		assert(0);
+	};
 }
 
 Stmt *assign_stmt(Expr *var, Expr *val)
@@ -108,9 +146,19 @@ Stmt *assign_stmt(Expr *var, Expr *val)
 	s->kind = Stmt::ASSIGN;
 	s->var = var;
 	s->val = val;
-	print_expr(var);
-	printf(" := ");
-	print_expr(val);
+	print_stmt(s);
+	putchar(10);
+	return s;
+}
+
+Stmt *call_stmt(const string &name, const vector<Expr*> &args)
+{
+	Stmt *s = new Stmt();
+	s->kind = Stmt::CALL;
+	s->proc = st->lookup(name);
+	// TODO memory leak
+	s->args = new vector<Expr*>(args);
+	print_stmt(s);
 	putchar(10);
 	return s;
 }

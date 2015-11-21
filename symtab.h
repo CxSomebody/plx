@@ -14,11 +14,15 @@ struct Symbol {
 		PROC,
 	} kind;
 	std::string name;
-	Type *type = nullptr; // VAR
-	int val = 0; // CONST
-	Type *rettype = nullptr; // PROC
+	Type *type; // VAR
+	int val; // CONST
+	Type *rettype; // PROC
 	Symbol(SymbolKind kind, const std::string &name);
 };
+
+Symbol *var_symbol(const std::string &name, Type *type);
+Symbol *const_symbol(const std::string &name, int val);
+Symbol *proc_symbol(const std::string &name, Type *rettype);
 
 struct SymbolTable {
 	std::map<std::string, Symbol*> map;
@@ -33,12 +37,15 @@ struct Param {
 	Param(const std::string &name, Type *type, bool byref);
 };
 
+typedef std::vector<Param> ParamList;
+
 extern SymbolTable *st;
 
 void def_const(const std::string &name, int val);
 void def_vars(const std::vector<std::string> &names, Type *type);
 void def_proc(const std::string &name, const std::vector<Param> &names);
 void def_func(const std::string &name, const std::vector<Param> &names, Type *rettype);
+void def_params(const ParamList &params);
 Type *int_type();
 Type *char_type();
 Type *array_type(Type *elty, int n);

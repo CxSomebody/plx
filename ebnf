@@ -1,46 +1,51 @@
-<program> ::= <block> '.'
-<block> ::= @push_symtab [ <const_part> ] [ <var_part> ] { <proc_def> | <func_def> } <comp_stmt> @pop_symtab
+<program> ::= @ParamList↑params <block>↓params '.'
+<block>↓<ParamList>params ::= @push_symtab @def_params↓params [ <const_part> ] [ <var_part> ] { <proc_def> | <func_def> } <comp_stmt> @pop_symtab
 <const_part> ::= T_CONST <const_def> { ',' <const_def> } ';'
 <const_def> ::= IDENT↑name '=' <constant>↑val @def_const↓(name,val)
 <constant>↑<int> v ::= <opt_sign>↑s INT↑i @{v=s?-i:i;} | CHAR↑c @{v=c;}
 <opt_sign>↑<bool> s ::= @{s=0;} [ '+' | '-' @{s=1;} ]
 <var_part> ::= T_VAR <var_decl> ';' { <var_decl> ';' }
 <var_decl> ::= <id_list>↑ids ':' <type>↑ty @def_vars↓(ids,ty)
-<id_list>↑<vector<string>> v ::= IDENT↑id1 @{v.push_back(id1);} { ',' IDENT↑id2 @{v.push_back(id2);} }
+<id_list>↑<vector<string>> v ::= IDENT↑id @{v.push_back(id);} { ',' IDENT↑id @{v.push_back(id);} }
 <type>↑<Type*> ty ::= <basic_type>↑ty | T_ARRAY '[' INT↑n ']' T_OF <basic_type>↑elty @array_type↓(elty,n)↑ty
 <basic_type>↑<Type*> ty ::= T_INTEGER @int_type↑ty | T_CHAR @char_type↑ty
-<proc_def> ::= <proc_header>↑(name,params) @def_proc↓(name,params) <block> ';'
-<proc_header>↑(<string> name, <vector<Param>> params) ::= T_PROCEDURE IDENT↑name [ <param_list>↑params ] ';'
-<param_list>↑<vector<Param>> params ::= '(' <param_group>↓params { ';' <param_group>↓params } ')'
-<param_group>↓<vector<Param>> params ::= <opt_var>↑byref <id_list>↑names ':' <basic_type>↑ty @push_param_group↓(params,names,ty,byref)
+<proc_def> ::= <proc_header>↑(name,params) @def_proc↓(name,params) <block>↓params ';'
+<proc_header>↑(<string> name, <ParamList> params) ::= T_PROCEDURE IDENT↑name [ <param_list>↑params ] ';'
+<param_list>↑<ParamList> params ::= '(' <param_group>↓params { ';' <param_group>↓params } ')'
+<param_group>↓<ParamList> params ::= <opt_var>↑byref <id_list>↑names ':' <basic_type>↑ty @push_param_group↓(params,names,ty,byref)
 <opt_var>↑<bool> byref ::= @{byref=false;} [ T_VAR @{byref=true;} ]
-<func_def> ::= <func_header>↑(name,params,rty) @def_func↓(name,params,rty) <block> ';'
-<func_header>↑(<string> name, <vector<Param>> params, <Type*> rty) ::= T_FUNCTION IDENT↑name [ <param_list>↑params ] ':' <basic_type>↑rty ';'
-<comp_stmt> ::= T_BEGIN <stmt> { ';' <stmt> } T_END
-<stmt> ::= <call_stmt> | <assign_stmt>↑s | <cond_stmt> | <do_while_stmt> | <comp_stmt> | <read_stmt> | <write_stmt> | <for_stmt> | 
-<call_stmt> ::= IDENT?is_proc [ <arg_list> ]
-<arg_list> ::= '(' <expr>↑e1 { ',' <expr>↑e2 } ')'
+<func_def> ::= <func_header>↑(name,params,rty) @def_func↓(name,params,rty) <block>↓params ';'
+<func_header>↑(<string> name, <ParamList> params, <Type*> rty) ::= T_FUNCTION IDENT↑name [ <param_list>↑params ] ':' <basic_type>↑rty ';'
+<comp_stmt> ::= T_BEGIN <stmt>↑s { ';' <stmt>↑s } T_END
+<stmt>↑<Stmt*>s ::= <call_stmt>↑s | <assign_stmt>↑s | <cond_stmt> | <do_while_stmt> | <comp_stmt> | <read_stmt> | <write_stmt> | <for_stmt> | <empty> @{s=nullptr;}
+<call_stmt>↑<Stmt*>s ::= IDENT?is_proc↑name @ExprList↑args [ <arg_list>↑args ] @call_stmt↓(name,args)↑s
+<arg_list>↑<vector<Expr*>>v ::= '(' <expr>↑e @{v.push_back(e);} { ',' <expr>↑e } @{v.push_back(e);} ')'
 <expr>↑<Expr*> e ::= <opt_sign>↑s <term>↑e { <add_op>↑op <term>↑e2 @binary_expr↓(op,e,e2)↑e } @{if (s) e = unary_expr(Expr::NEG, e);}
 <term>↑<Expr*> e ::= <factor>↑e { <mul_op>↑op <factor>↑e2 @binary_expr↓(op,e,e2)↑e }
-<factor>↑<Expr*> e ::= IDENT↑name @ident_expr↓name↑e [ '[' <expr>↑idx ']' @{e = binary_expr(Expr::INDEX, e, idx);} | <arg_list> ] | INT↑i @lit_expr↓i↑e | '(' <expr>↑e ')'
+<factor>↑<Expr*> e ::= IDENT↑name @ident_expr↓name↑e [ '[' <expr>↑idx ']' @{e = binary_expr(Expr::INDEX, e, idx);} | <arg_list>↑args @{e = apply_expr(e, args);} ] | INT↑i @lit_expr↓i↑e | '(' <expr>↑e ')'
 <mul_op>↑<Expr::Op> op ::= '*' @{op = Expr::MUL;} | '/' @{op = Expr::DIV;}
 <add_op>↑<Expr::Op> op ::= '+' @{op = Expr::ADD;} | '-' @{op = Expr::SUB;}
-<assign_stmt>↑<Stmt*> s ::= IDENT↑name @ident_expr↓name↑var [ '[' <expr>↑idx ']' @{var = binary_expr(Expr::INDEX, var, idx);} ] BECOMES <expr>↑val @assign_stmt↓(var,val)↑s
-<cond_stmt> ::= T_IF <cond> T_THEN <stmt> [ T_ELSE <stmt> ]
+<lvalue>↑<Expr*>var ::= IDENT↑name @ident_expr↓name↑var [ '[' <expr>↑idx ']' @{var = binary_expr(Expr::INDEX, var, idx);} ]
+<assign_stmt>↑<Stmt*> s ::= <lvalue>↑var BECOMES <expr>↑val @assign_stmt↓(var,val)↑s
+<cond_stmt> ::= T_IF <cond> T_THEN <stmt>↑st [ T_ELSE <stmt>↑sf ]
 <cond> ::= <expr>↑e1 <rel_op> <expr>↑e2
 <rel_op> ::= '<' | GE | '>' | LE | '=' | NE
-<do_while_stmt> ::= T_DO <stmt> T_WHILE <cond>
-<read_stmt> ::= T_READ '(' IDENT { ',' IDENT } ')'
+<do_while_stmt> ::= T_DO <stmt>↑s T_WHILE <cond>
+<read_stmt> ::= T_READ '(' <id_list>↑names ')'
 <write_stmt> ::= T_WRITE '(' ( STRING [ ',' <expr>↑e ] | <expr>↑e ) ')'
-<for_stmt> ::= T_FOR IDENT BECOMES <expr>↑e1 ( T_DOWNTO | T_TO ) <expr>↑e2 T_DO <stmt>
+<for_stmt> ::= T_FOR <lvalue>↑var BECOMES <expr>↑e1 ( T_DOWNTO | T_TO ) <expr>↑e2 T_DO <stmt>↑s
 CHAR↑<int> i
 IDENT↑<string> s
 INT↑<int> i
+@apply_expr↑<vector<Expr*>>
 @array_type↑<Type*> 
 @assign_stmt↑<Stmt*> 
+@call_stmt↑<Stmt*>
 @binary_expr↑<Expr*> 
 @char_type↑<Type*> 
 @ident_expr↑<Expr*> 
 @int_type↑<Type*> 
 @lit_expr↑<Expr*> 
 @unary_expr↑<Expr*> 
+@ParamList↑<ParamList>
+@ExprList↑<vector<Expr*>>

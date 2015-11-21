@@ -310,10 +310,10 @@ static void number_terms()
 
 void parse();
 
-void check_grammar();
+bool check_grammar();
 void compute_first_follow();
 
-void generate_rd();
+bool generate_rd();
 
 extern FILE *yyin;
 static enum {
@@ -373,6 +373,7 @@ int main(int argc, char **argv)
 		exit(1);
 	}
 	check_undefined();
+	int ret = 0;
 	switch (action) {
 	case PRINT_RULES:
 		print_rules(rich, stdout);
@@ -391,13 +392,10 @@ int main(int argc, char **argv)
 		print_first_follow();
 		break;
 	case GENERATE_PARSER:
-		compute_first_follow();
-		check_grammar();
-		//number_terms();
-		generate_rd();
+		ret = !generate_rd();
 		break;
 	default:
 		assert(0);
 	}
-	return 0;
+	return ret;
 }

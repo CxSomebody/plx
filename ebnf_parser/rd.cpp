@@ -10,16 +10,36 @@ void print_symbol(bool rich, Symbol *s, FILE *fp);
 
 #include "preamble.inc"
 
-static bool check_output_arity(Instance *inst)
+static bool check_arity(Instance *inst, bool input)
 {
-	size_t narg = inst->args ? inst->args->out.size() : 0;
-	if (narg == inst->sym->params.out.size())
+	size_t narg = inst->args ? (input ? inst->args->in.size() : inst->args->out.size()) : 0;
+	Symbol *sym = inst->sym;
+	if (sym->inner)
+		sym = sym->inner; // special case for guarded symbols
+	size_t nparam = input ? sym->params.in.size() : sym->params.out.size();
+	if (narg == nparam)
 		return true;
 	fprintf(stderr, "error: ");
-	print_symbol(false, inst->sym, stderr);
-	fprintf(stderr, " expects %lu output arguments, got %lu\n",
-		inst->sym->params.out.size(), narg);
+	print_symbol(false, sym, stderr);
+	fprintf(stderr, " expects %lu %s arguments, got %lu\n",
+		nparam, input ? "input" : "output", narg);
 	return false;
+}
+
+static bool check_arity_all()
+{
+	bool ret = true;
+	for_each_nterm([&](Symbol *nterm) {
+		for (const Branch &branch: nterm->branches) {
+			for (Instance *inst: branch) {
+				if (inst->sym->kind == Symbol::NTERM && !check_arity(inst, true))
+					ret = false;
+				if (!check_arity(inst, false))
+					ret = false;
+			}
+		}
+	});
+	return ret;
 }
 
 static void print_param_list(const vector<Param> &list)
@@ -169,7 +189,7 @@ static void emit_proc(Symbol *nterm, int level)
 			while (it != f.end()) {
 				Symbol *term = *it;
 				printf("sym == %s", term->name.c_str());
-				if (!term->sp.empty())
+				if (term->inner)
 					printf(" && %s(%s)", term->sp.c_str(), term_sv(term->inner).c_str());
 				if (next(it) != f.end())
 					printf(" || ");
@@ -191,6 +211,8 @@ static void emit_proc(Symbol *nterm, int level)
 		for (auto it = branch.begin(); it != branch.end(); it++) {
 			Instance *inst = *it;
 			Symbol *s = inst->sym;
+			if (s->inner)
+				s = s->inner;
 			indent();
 			if (s->kind == Symbol::ACTION) {
 				emit_action(inst);
@@ -289,23 +311,23 @@ static void f(vector<Param> &argtype, size_t pos, const Branch &branch, Symbol *
 	assert (pos<branch.size());
 	Instance *inst = branch[pos];
 	Symbol *sym = inst->sym;
+	if (sym->inner)
+		sym = sym->inner;
 	size_t mark = argtype.size();
 	if (sym->kind == Symbol::NTERM && sym->up && lhs != sym /* prevent infinite recursion */ )
 		for (const Branch &c: sym->branches)
 			f(argtype, 0, c, sym);
 	if (inst->args) {
 		size_t n = inst->args->out.size();
-		if (check_output_arity(inst)) {
-			for (size_t i=0; i<n; i++) {
-				const string &arg_out = inst->args->out[i];
-				auto it = find_if(argtype.rbegin(), argtype.rend(), [&](const Param &p){return p.name == arg_out;});
-				if (it == argtype.rend()) {
-					/* not found */
-					const string &type = sym->params.out[i].type;
-					Param p(type, arg_out);
-					argtype.emplace_back(p);
-					branch_locals[&branch].emplace_back(p);
-				}
+		for (size_t i=0; i<n; i++) {
+			const string &arg_out = inst->args->out[i];
+			auto it = find_if(argtype.rbegin(), argtype.rend(), [&](const Param &p){return p.name == arg_out;});
+			if (it == argtype.rend()) {
+				/* not found */
+				const string &type = sym->params.out[i].type;
+				Param p(type, arg_out);
+				argtype.emplace_back(p);
+				branch_locals[&branch].emplace_back(p);
 			}
 		}
 	}
@@ -328,8 +350,15 @@ void compute_locals()
 	});
 }
 
-void generate_rd()
+void compute_first_follow();
+void check_grammar();
+
+bool generate_rd()
 {
+	compute_first_follow();
+	check_grammar();
+	if (!check_arity_all())
+		return false;
 	// emit preamble
 	fputs(preamble1, stdout);
 	{
@@ -375,4 +404,5 @@ void generate_rd()
 		if (!nterm->up)
 			emit_proc(nterm, 0);
 	});
+	return true;
 }

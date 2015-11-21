@@ -70,7 +70,7 @@ static void emit_proc_param_list(Symbol *nterm)
 {
 	putchar('(');
 	print_params(nterm);
-	printf("set &&t, set &&f)");
+	printf("set &&_t, set &&_f)");
 }
 
 static void emit_proc_header(Symbol *nterm)
@@ -166,11 +166,11 @@ static void gen_input(const Branch &branch, Branch::const_iterator it, int level
 	printf("set");
 	print_set(nt);
 	if (thru) {
-		printf("|t, std::move(f)");
+		printf("|_t, std::move(_f)");
 	} else {
-		printf(", t|f");
+		printf(", _t|_f");
 	}
-	printf(")) return t.get(sym);\n");
+	printf(")) return _t.get(sym);\n");
 }
 
 static void emit_proc(Symbol *nterm, int level)
@@ -222,7 +222,7 @@ static void emit_proc(Symbol *nterm, int level)
 					bool need_indent = false;
 					if (!use_getsym) {
 						if (atend && !inst->args) {
-							printf("return expect(%s, std::move(t), std::move(f));\n", s->name.c_str());
+							printf("return expect(%s, std::move(_t), std::move(_f));\n", s->name.c_str());
 							returned = true;
 						} else {
 							gen_input(branch, it, level);
@@ -255,7 +255,7 @@ static void emit_proc(Symbol *nterm, int level)
 							putchar('(');
 							if (inst->args)
 								print_args(*inst->args);
-							printf("std::move(t), std::move(f));\n");
+							printf("std::move(_t), std::move(_f));\n");
 						}
 						returned = true;
 					} else {

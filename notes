@@ -71,6 +71,3 @@ unary	neg
 n-ary	apply
 
 内层过程存取外层变量
-
-当term为最后一个，若有output arg，不能直接return (TODO)
-把INT↑i这种形式parse为一个INT↑i加一个@{i=tokval.i}？

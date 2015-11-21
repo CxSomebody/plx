@@ -118,16 +118,27 @@ void print_stmt(Stmt *s)
 	}
 	switch (s->kind) {
 		bool sep;
-	case Stmt::ASSIGN:
-		print_expr(s->var);
-		printf(" := ");
-		print_expr(s->val);
-		break;
-	case Stmt::CALL:
-		print_symbol(s->proc);
+	case Stmt::COMP:
 		putchar('(');
 		sep = false;
-		for (Expr *arg: *s->args) {
+		for (Stmt *t: *s->comp.body) {
+			if (sep)
+				printf("; ");
+			print_stmt(t);
+			sep = true;
+		}
+		putchar(')');
+		break;
+	case Stmt::ASSIGN:
+		print_expr(s->assign.var);
+		printf(" := ");
+		print_expr(s->assign.val);
+		break;
+	case Stmt::CALL:
+		print_symbol(s->call.proc);
+		putchar('(');
+		sep = false;
+		for (Expr *arg: *s->call.args) {
 			if (sep)
 				printf(", ");
 			print_expr(arg);
@@ -137,22 +148,27 @@ void print_stmt(Stmt *s)
 		break;
 	case Stmt::IF:
 		printf("IF ");
-		print_cond(s->cond);
+		print_cond(s->if_.cond);
 		printf(" THEN ");
-		print_stmt(s->st);
+		print_stmt(s->if_.st);
 		printf(" ELSE ");
-		print_stmt(s->sf);
+		print_stmt(s->if_.sf);
 		break;
-	case Stmt::COMP:
-		putchar('(');
-		sep = false;
-		for (Stmt *t: *s->body) {
-			if (sep)
-				printf("; ");
-			print_stmt(t);
-			sep = true;
-		}
-		putchar(')');
+	case Stmt::DO_WHILE:
+		printf("DO ");
+		print_stmt(s->do_while.body);
+		printf(" WHILE ");
+		print_cond(s->do_while.cond);
+		break;
+	case Stmt::FOR:
+		printf("FOR ");
+		print_expr(s->for_.indvar);
+		printf(" := ");
+		print_expr(s->for_.from);
+		printf(s->for_.down ? " DOWNTO " : " TO ");
+		print_expr(s->for_.to);
+		printf(" DO ");
+		print_stmt(s->for_.body);
 		break;
 	default:
 		assert(0);
@@ -163,8 +179,8 @@ Stmt *assign_stmt(Expr *var, Expr *val)
 {
 	Stmt *s = new Stmt();
 	s->kind = Stmt::ASSIGN;
-	s->var = var;
-	s->val = val;
+	s->assign.var = var;
+	s->assign.val = val;
 	print_stmt(s);
 	putchar(10);
 	return s;
@@ -174,9 +190,9 @@ Stmt *call_stmt(const string &name, const vector<Expr*> &args)
 {
 	Stmt *s = new Stmt();
 	s->kind = Stmt::CALL;
-	s->proc = symtab->lookup(name);
+	s->call.proc = symtab->lookup(name);
 	// TODO memory leak
-	s->args = new vector<Expr*>(args);
+	s->call.args = new vector<Expr*>(args);
 	print_stmt(s);
 	putchar(10);
 	return s;
@@ -186,9 +202,9 @@ Stmt *if_stmt(Cond *cond, Stmt *st, Stmt *sf)
 {
 	Stmt *s = new Stmt();
 	s->kind = Stmt::IF;
-	s->cond = cond;
-	s->st = st;
-	s->sf = sf;
+	s->if_.cond = cond;
+	s->if_.st = st;
+	s->if_.sf = sf;
 	print_stmt(s);
 	putchar(10);
 	return s;
@@ -203,7 +219,27 @@ Stmt *comp_stmt(const std::vector<Stmt*> &body)
 {
 	Stmt *s = new Stmt();
 	s->kind = Stmt::COMP;
-	s->body = new vector<Stmt*>(body);
+	s->comp.body = new vector<Stmt*>(body);
+	return s;
+}
+
+Stmt *do_while_stmt(Cond *cond, Stmt *body)
+{
+	Stmt *s = new Stmt();
+	s->kind = Stmt::DO_WHILE;
+	s->do_while.cond = cond;
+	s->do_while.body = body;
+	return s;
+}
+
+Stmt *for_stmt(Expr *indvar, Expr *from, Expr *to, Stmt *body)
+{
+	Stmt *s = new Stmt();
+	s->kind = Stmt::FOR;
+	s->for_.indvar = indvar;
+	s->for_.from = from;
+	s->for_.to = to;
+	s->for_.body = body;
 	return s;
 }
 

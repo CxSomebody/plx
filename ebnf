@@ -18,9 +18,9 @@
 <func_header>↑(<string> name, <ParamList> params, <Type*> rty) ::= T_FUNCTION IDENT↑name [ <param_list>↑params ] ':' <basic_type>↑rty ';'
 <comp_stmt>↑<Stmt*>s ::= T_BEGIN <stmt_list>↑body T_END @comp_stmt↓body↑s
 <stmt_list>↑<vector<Stmt*>>v ::= <stmt>↑s @{v.push_back(s);} { ';' <stmt>↑s @{v.push_back(s);} }
-<stmt>↑<Stmt*>s ::= @{s=nullptr;} (<call_stmt>↑s | <assign_stmt>↑s | <if_stmt>↑s | <do_while_stmt> | <comp_stmt>↑s | <read_stmt> | <write_stmt> | <for_stmt> | <empty>)
+<stmt>↑<Stmt*>s ::= <call_stmt>↑s | <assign_stmt>↑s | <if_stmt>↑s | <do_while_stmt>↑s | <comp_stmt>↑s | <read_stmt> @{s=nullptr;} | <write_stmt> @{s=nullptr;} | <for_stmt>↑s | @{s=nullptr;}
 <call_stmt>↑<Stmt*>s ::= IDENT?is_proc↑name @ExprList↑args [ <arg_list>↑args ] @call_stmt↓(name,args)↑s
-<arg_list>↑<vector<Expr*>>v ::= '(' <expr>↑e @{v.push_back(e);} { ',' <expr>↑e } @{v.push_back(e);} ')'
+<arg_list>↑<vector<Expr*>>v ::= '(' <expr>↑e @{v.push_back(e);} { ',' <expr>↑e @{v.push_back(e);} } ')'
 <expr>↑<Expr*> e ::= <opt_sign>↑s <term>↑e { <add_op>↑op <term>↑e2 @binary_expr↓(op,e,e2)↑e } @{if (s) e = unary_expr(Expr::NEG, e);}
 <term>↑<Expr*> e ::= <factor>↑e { <mul_op>↑op <factor>↑e2 @binary_expr↓(op,e,e2)↑e }
 <factor>↑<Expr*> e ::= IDENT↑name @ident_expr↓name↑e [ '[' <expr>↑idx ']' @{e = binary_expr(Expr::INDEX, e, idx);} | <arg_list>↑args @{e = apply_expr(e, args);} ] | INT↑i @lit_expr↓i↑e | '(' <expr>↑e ')'
@@ -31,10 +31,10 @@
 <if_stmt>↑<Stmt*>s ::= T_IF <cond>↑c T_THEN <stmt>↑st ( T_ELSE <stmt>↑sf @if_stmt↓(c,st,sf)↑s | @if_stmt↓(c,st)↑s )
 <cond>↑<Cond*>c ::= <expr>↑e1 <rel_op>↑op <expr>↑e2 @cond↓(op,e1,e2)↑c
 <rel_op>↑<Cond::Op>op ::= '<' @{op = Cond::LT;} | GE @{op = Cond::GE;} | '>' @{op = Cond::GT;} | LE @{op = Cond::LE;} | '=' @{op = Cond::EQ;} | NE @{op = Cond::NE;}
-<do_while_stmt> ::= T_DO <stmt>↑s T_WHILE <cond>↑c
+<do_while_stmt>↑<Stmt*>s ::= T_DO <stmt>↑b T_WHILE <cond>↑c @do_while_stmt↓(c,b)↑s
 <read_stmt> ::= T_READ '(' <id_list>↑names ')'
 <write_stmt> ::= T_WRITE '(' ( STRING [ ',' <expr>↑e ] | <expr>↑e ) ')'
-<for_stmt> ::= T_FOR <lvalue>↑var BECOMES <expr>↑e1 ( T_DOWNTO | T_TO ) <expr>↑e2 T_DO <stmt>↑s
+<for_stmt>↑<Stmt*>s ::= T_FOR <lvalue>↑i BECOMES <expr>↑f ( T_DOWNTO | T_TO ) <expr>↑t T_DO <stmt>↑b @for_stmt↓(i,f,t,b)↑s
 CHAR↑<int> i
 IDENT↑<string> s
 INT↑<int> i
@@ -43,6 +43,8 @@ INT↑<int> i
 @assign_stmt↑<Stmt*> 
 @call_stmt↑<Stmt*>
 @if_stmt↑<Stmt*>
+@do_while_stmt↑<Stmt*>
+@for_stmt↑<Stmt*>
 @comp_stmt↑<Stmt*>
 @binary_expr↑<Expr*> 
 @char_type↑<Type*> 

@@ -45,24 +45,37 @@ struct Stmt {
 		ASSIGN,
 		CALL,
 		IF,
+		DO_WHILE,
+		FOR,
 	} kind;
 	union {
 		struct {
 			std::vector<Stmt*> *body;
-		}; // COMP
+		} comp;
 		struct {
 			Expr *var;
 			Expr *val;
-		}; // ASSIGN
+		} assign;
 		struct {
 			Symbol *proc;
 			std::vector<Expr*> *args;
-		}; // CALL
+		} call;
 		struct {
 			Cond *cond;
 			Stmt *st;
 			Stmt *sf;
-		}; // IF
+		} if_;
+		struct {
+			Cond *cond;
+			Stmt *body;
+		} do_while;
+		struct {
+			Expr *indvar;
+			Expr *from;
+			Expr *to;
+			Stmt *body;
+			bool down;
+		} for_;
 	};
 };
 
@@ -80,6 +93,8 @@ Stmt *call_stmt(const std::string &name, const std::vector<Expr*> &args);
 Stmt *if_stmt(Cond *cond, Stmt *st);
 Stmt *if_stmt(Cond *cond, Stmt *st, Stmt *sf);
 Stmt *comp_stmt(const std::vector<Stmt*> &body);
+Stmt *do_while_stmt(Cond *cond, Stmt *body);
+Stmt *for_stmt(Expr *indvar, Expr *from, Expr *to, Stmt *body);
 void print_stmt(Stmt *s);
 
 Cond *cond(Cond::Op op, Expr *left, Expr *right);

@@ -47,6 +47,8 @@ struct Stmt {
 		IF,
 		DO_WHILE,
 		FOR,
+		READ,
+		WRITE,
 	} kind;
 	union {
 		struct {
@@ -76,6 +78,13 @@ struct Stmt {
 			Stmt *body;
 			bool down;
 		} for_;
+		struct {
+			std::vector<Expr*> *vars;
+		} read;
+		struct {
+			char *str;
+			Expr *val;
+		} write;
 	};
 };
 
@@ -94,7 +103,9 @@ Stmt *if_stmt(Cond *cond, Stmt *st);
 Stmt *if_stmt(Cond *cond, Stmt *st, Stmt *sf);
 Stmt *comp_stmt(const std::vector<Stmt*> &body);
 Stmt *do_while_stmt(Cond *cond, Stmt *body);
-Stmt *for_stmt(Expr *indvar, Expr *from, Expr *to, Stmt *body);
+Stmt *for_stmt(Expr *indvar, Expr *from, Expr *to, Stmt *body, bool down);
+Stmt *read_stmt(const std::vector<Expr*> &vars);
+Stmt *write_stmt(const std::string &str, Expr *val);
 void print_stmt(Stmt *s);
 
 Cond *cond(Cond::Op op, Expr *left, Expr *right);

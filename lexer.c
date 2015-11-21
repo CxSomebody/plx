@@ -198,6 +198,7 @@ void getsym(void)
 		tokval.i = myatoi(tokstart, toklen);
 		break;
 	case IDENT:
+	case STRING:
 		memcpy(tokstr, tokstart, toklen);
 		tokstr[toklen] = 0;
 		tokval.s = tokstr;

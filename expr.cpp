@@ -1,5 +1,6 @@
 #include <cassert>
 #include <cstdlib>
+#include <cstring>
 #include <map>
 #include <string>
 #include <vector>
@@ -83,7 +84,6 @@ Expr *apply_expr(Expr *func, const vector<Expr*> &args)
 	e->kind = Expr::COMP;
 	e->op = Expr::APPLY;
 	e->left = func;
-	// TODO memory leak
 	e->args = new vector<Expr*>(args);
 	return e;
 }
@@ -98,7 +98,6 @@ Expr *sym_expr(Symbol *sym)
 
 Expr *ident_expr(const string &name)
 {
-	// TODO what if name is undefined
 	return sym_expr(symtab->lookup(name));
 }
 
@@ -181,8 +180,6 @@ Stmt *assign_stmt(Expr *var, Expr *val)
 	s->kind = Stmt::ASSIGN;
 	s->assign.var = var;
 	s->assign.val = val;
-	print_stmt(s);
-	putchar(10);
 	return s;
 }
 
@@ -191,10 +188,7 @@ Stmt *call_stmt(const string &name, const vector<Expr*> &args)
 	Stmt *s = new Stmt();
 	s->kind = Stmt::CALL;
 	s->call.proc = symtab->lookup(name);
-	// TODO memory leak
 	s->call.args = new vector<Expr*>(args);
-	print_stmt(s);
-	putchar(10);
 	return s;
 }
 
@@ -205,8 +199,6 @@ Stmt *if_stmt(Cond *cond, Stmt *st, Stmt *sf)
 	s->if_.cond = cond;
 	s->if_.st = st;
 	s->if_.sf = sf;
-	print_stmt(s);
-	putchar(10);
 	return s;
 }
 
@@ -232,7 +224,7 @@ Stmt *do_while_stmt(Cond *cond, Stmt *body)
 	return s;
 }
 
-Stmt *for_stmt(Expr *indvar, Expr *from, Expr *to, Stmt *body)
+Stmt *for_stmt(Expr *indvar, Expr *from, Expr *to, Stmt *body, bool down)
 {
 	Stmt *s = new Stmt();
 	s->kind = Stmt::FOR;
@@ -240,6 +232,24 @@ Stmt *for_stmt(Expr *indvar, Expr *from, Expr *to, Stmt *body)
 	s->for_.from = from;
 	s->for_.to = to;
 	s->for_.body = body;
+	s->for_.down = down;
+	return s;
+}
+
+Stmt *read_stmt(const std::vector<Expr*> &vars)
+{
+	Stmt *s = new Stmt();
+	s->kind = Stmt::READ;
+	s->read.vars = new vector<Expr*>(vars);
+	return s;
+}
+
+Stmt *write_stmt(const std::string &str, Expr *val)
+{
+	Stmt *s = new Stmt();
+	s->kind = Stmt::WRITE;
+	s->write.str = strdup(str.c_str());
+	s->write.val = val;
 	return s;
 }
 

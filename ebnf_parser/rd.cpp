@@ -3,6 +3,8 @@
 #include <cstring>
 #include "ebnf.h"
 
+#define PREFIX "_parse_"
+
 using namespace std;
 
 set<Symbol*> first_of_production(Symbol *nterm, const Branch &body);
@@ -75,7 +77,7 @@ static void emit_proc_param_list(Symbol *nterm)
 
 static void emit_proc_header(Symbol *nterm)
 {
-	printf("static bool parse_%s", nterm->name.c_str());
+	printf("static bool " PREFIX "%s", nterm->name.c_str());
 	emit_proc_param_list(nterm);
 }
 
@@ -143,7 +145,7 @@ static void gen_input(const Branch &branch, Branch::const_iterator it, int level
 		if (s->up)
 			emit_proc(s, level);
 		else
-			printf("parse_%s", s->name.c_str());
+			printf(PREFIX "%s", s->name.c_str());
 		putchar('(');
 		if (inst->args)
 			print_args(*inst->args);
@@ -251,7 +253,7 @@ static void emit_proc(Symbol *nterm, int level)
 							if (s->up)
 								emit_proc(s, level);
 							else
-								printf("parse_%s", s->name.c_str());
+								printf(PREFIX "%s", s->name.c_str());
 							putchar('(');
 							if (inst->args)
 								print_args(*inst->args);
@@ -396,7 +398,7 @@ bool generate_rd()
 	printf("bool parse()\n"
 	       "{\n"
 	       "\tgetsym();\n"
-	       "\treturn parse_%s(set{0}, set{});\n"
+	       "\treturn " PREFIX "%s(set{0}, set{});\n"
 	       "}\n",
 	       top->name.c_str());
 #endif

@@ -114,7 +114,7 @@ static void emit_action(Instance *inst)
 		}
 		printf(");\n");
 	} else {
-		printf("{%s}\n", s->action.c_str());
+		printf("%s\n", s->action.c_str());
 	}
 }
 

@@ -1,4 +1,4 @@
-<program> ::= @entry_name↑name @ParamList↑params <block>↓(name,params)↑blk '.' @translate↓blk
+<program> ::= @{string name("main");} @ParamList↑params <block>↓(name,params)↑blk '.' @translate↓blk
 <block>↓(<string>name, <ParamList>params)↑<Block*>blk ::= @push_symtab @def_params↓params [ <const_part> ] [ <var_part> ] <sub_list>↑subs <comp_stmt>↑ss @pop_symtab↑st @{blk = new Block(name, subs, ss, st);}
 <sub_list>↑<vector<Block*>>v ::= { <proc_def>↑b @{v.push_back(b);} | <func_def>↑b @{v.push_back(b);} }
 <const_part> ::= T_CONST <const_def> { ',' <const_def> } ';'
@@ -63,4 +63,3 @@ STRING↑<string> s
 @ExprList↑<vector<Expr*>>
 @cond↑<Cond*>
 @pop_symtab↑<SymbolTable*>
-@entry_name↑<string>

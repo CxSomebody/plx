@@ -4,32 +4,50 @@ struct Expr {
 		LIT,
 		COMP,
 	} kind;
+	virtual ~Expr();
+protected:
+	Expr(Kind kind);
+};
+
+struct SymExpr: Expr
+{
+	Symbol *sym;
+	SymExpr(Symbol *sym);
+};
+
+struct LitExpr: Expr
+{
+	int lit;
+	LitExpr(int lit);
+};
+
+struct BinaryExpr: Expr
+{
 	enum Op {
 		ADD,
 		SUB,
 		MUL,
 		DIV,
-		NEG,
 		INDEX,
-		APPLY,
 	};
-	union {
-		Symbol *sym; // SYM
-		int lit; // LIT
-		struct {
-			Op op;
-			union {
-				struct {
-					Expr *left; // null for unary
-					Expr *right;
-				}; // binary & unary
-				struct {
-					Expr *func;
-					std::vector<Expr*> *args;
-				}; // APPLY
-			};
-		}; // COMP
-	};
+	std::unique_ptr<Expr*> left, right;
+	BinaryExpr(Expr *left, Expr *right);
+};
+
+struct UnaryExpr: Expr
+{
+	enum Op {
+		NEG,
+	} op;
+	std::unique_ptr<Expr*> sub;
+	UnaryExpr(Expr *sub);
+};
+
+struct ApplyExpr: Expr
+{
+	std::unique_ptr<Expr> func;
+	std::vector<std::unique_ptr<Expr>> args;
+	ApplyExpr(Expr *func, decltype(args) &&args);
 };
 
 struct Cond {

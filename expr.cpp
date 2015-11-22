@@ -10,6 +10,9 @@
 
 using namespace std;
 
+Expr::Expr(Expr::Kind kind): kind(kind) {}
+Expr::~Expr(){}
+
 void print_symbol(Symbol *s)
 {
 	if (s) printf("%s", s->name.c_str());

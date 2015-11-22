@@ -169,6 +169,23 @@ void print_stmt(Stmt *s)
 		printf(" DO ");
 		print_stmt(s->for_.body);
 		break;
+	case Stmt::READ:
+		printf("READ ");
+		sep = false;
+		for (Expr *e: *s->read.vars) {
+			if (sep)
+				printf(", ");
+			print_expr(e);
+			sep = true;
+		}
+		break;
+	case Stmt::WRITE:
+		printf("WRITE \"%s\"", s->write.str);
+		if (s->write.val) {
+			putchar(' ');
+			print_expr(s->write.val);
+		}
+		break;
 	default:
 		assert(0);
 	};

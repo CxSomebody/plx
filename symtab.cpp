@@ -185,10 +185,48 @@ void push_symtab()
 	symtab = newst;
 }
 
-void pop_symtab()
+SymbolTable *pop_symtab()
 {
-	print_symtab(symtab);
 	SymbolTable *savedst = symtab;
 	symtab = symtab->up;
-	delete savedst;
+	return savedst;
+}
+
+Block::Block(const std::string &name, const std::vector<Block*> &subs, const std::vector<Stmt*> &stmts, SymbolTable *symtab):
+	name(name), subs(subs), stmts(stmts), symtab(symtab)
+{
+}
+
+void print_stmt(Stmt *s);
+
+void print_block(Block *blk, int level)
+{
+	auto indent = [&]() {
+		for (int i=0; i<level; i++)
+			printf("  ");
+	};
+	indent();
+	printf("%s {\n", blk->name.c_str());
+	level++;
+	for (Block *sub: blk->subs) {
+		print_block(sub, level);
+	}
+	for (Stmt *s: blk->stmts) {
+		indent();
+		print_stmt(s);
+		putchar('\n');
+	}
+	level--;
+	indent();
+	printf("}\n");
+}
+
+void translate(Block *blk)
+{
+	print_block(blk, 0);
+}
+
+const char *entry_name()
+{
+	return "main";
 }

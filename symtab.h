@@ -20,6 +20,8 @@ struct Symbol {
 	Symbol(SymbolKind kind, const std::string &name);
 };
 
+struct Stmt;
+
 Symbol *var_symbol(const std::string &name, Type *type);
 Symbol *const_symbol(const std::string &name, int val);
 Symbol *proc_symbol(const std::string &name, Type *rettype);
@@ -28,6 +30,14 @@ struct SymbolTable {
 	std::map<std::string, Symbol*> map;
 	SymbolTable *up;
 	Symbol *lookup(const std::string &name);
+};
+
+struct Block {
+	std::string name;
+	std::vector<Block*> subs;
+	std::vector<Stmt*> stmts;
+	SymbolTable *symtab;
+	Block(const std::string &name, const std::vector<Block*> &subs, const std::vector<Stmt*> &stmts, SymbolTable *symtab);
 };
 
 struct Param {
@@ -55,4 +65,6 @@ void push_param_group(std::vector<Param> &params,
 		      Type *type,
 		      bool byref);
 void push_symtab();
-void pop_symtab();
+SymbolTable *pop_symtab();
+void translate(Block *blk);
+const char *entry_name();

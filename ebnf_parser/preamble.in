@@ -6,6 +6,8 @@
 #include <utility>
 #include "parser.inc"
 
+int syntax_errors;
+
 class SyntaxError: std::runtime_error
 {
 public:
@@ -59,6 +61,7 @@ static bool check(int s, const set &t, const set &f)
 {
 	if (sym == s)
 		return true;
+	syntax_errors++;
 	fprintf(stderr, "%d:%d: syntax error at ‘%.*s’\n",
 		lineno, colno, toklen, tokstart);
 	for (;;) {

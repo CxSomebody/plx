@@ -447,12 +447,15 @@ bool generate_rd()
 #endif
 	putchar('\n');
 #if 1
-	printf("void parse()\n"
+	const char *rettype = top->svtype();
+	if (!rettype)
+		rettype = "void";
+	printf("%1$s parse()\n"
 	       "{\n"
 	       "\tgetsym();\n"
-	       "\t" PREFIX "%s(set{0}, set{});\n"
+	       "\treturn " PREFIX "%2$s(set{0}, set{});\n"
 	       "}\n",
-	       top->name.c_str());
+	       rettype, top->name.c_str());
 #endif
 	for_each_term([](Symbol *term) {
 		const char *svtype = term->svtype();

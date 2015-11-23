@@ -136,7 +136,6 @@ vector<Param> param_group(const vector<string> &names, Type *type, bool byref)
 void print_type(Type *ty)
 {
 	assert(ty);
-	const char *kindstr;
 	switch (ty->kind) {
 	case Type::INT:
 		printf("int");

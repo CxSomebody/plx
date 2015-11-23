@@ -1,9 +1,17 @@
 #include <cstdio>
 #include <cstdlib>
+#include <map>
+#include <memory>
+#include <string>
+#include <vector>
+
 extern "C" {
 #include "lexer.h"
 #include "tokens.h"
 }
+#include "semant.h"
+
+using namespace std;
 
 void usage()
 {
@@ -11,7 +19,8 @@ void usage()
 	exit(2);
 }
 
-void parse();
+unique_ptr<Block> parse();
+extern int syntax_errors;
 
 int main(int argc, char **argv)
 {
@@ -26,7 +35,9 @@ int main(int argc, char **argv)
 		printf("%.*s (%d)\n", token_len, token_start, sym);
 	}
 #else
-	parse();
+	unique_ptr<Block> blk = parse();
+	if (!syntax_errors)
+		translate(move(blk));
 #endif
 	lexer_close();
 	return 0;

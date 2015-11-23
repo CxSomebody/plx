@@ -134,9 +134,7 @@ void AssignStmt::print()
 void CallStmt::print()
 {
 	proc->print();
-	putchar('(');
 	print_expr_list(args);
-	putchar(')');
 }
 
 void IfStmt::print()

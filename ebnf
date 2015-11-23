@@ -1,4 +1,4 @@
-<program> ::= <block>↓<ProcHeader("main", vector<Param>())>↑blk '.' @{translate(move(blk));}
+<program>↑<unique_ptr<Block>> ::= <block>↓<ProcHeader("main", vector<Param>())>↑blk '.' @{return blk;}
 <block>↓<ProcHeader>header↑<unique_ptr<Block>> ::= @{auto name = header.first; auto params = header.second;} @push_symtab @def_params↓params [ <const_part> ] [ <var_part> ] <sub_list>↑subs <comp_stmt>↑stmts @{auto st = pop_symtab();} @{return make_unique<Block>(name, move(subs), move(stmts), st);}
 <sub_list>↑<vector<unique_ptr<Block>>> ::= @{vector<unique_ptr<Block>> v;} { <proc_def>${v.push_back($);} | <func_def>${v.push_back($);} } @{return v;}
 <const_part> ::= T_CONST <const_def> { ',' <const_def> } ';'

@@ -34,7 +34,7 @@
 <do_while_stmt>↑<unique_ptr<Stmt>> ::= T_DO <stmt>↑body T_WHILE <cond>↑cond @{return make_unique<DoWhileStmt>(move(cond), move(body));}
 <lvalue_list>↑<vector<unique_ptr<Expr>>> ::= @{vector<unique_ptr<Expr>> v;} <lvalue>${v.push_back($);} {',' <lvalue>${v.push_back($);} }
 <read_stmt>↑<unique_ptr<Stmt>> ::= T_READ '(' <lvalue_list>↑vars ')' @{return make_unique<ReadStmt>(move(vars));}
-<write_stmt>↑<unique_ptr<Stmt>> ::= @{string str; unique_ptr<Expr> val;} T_WRITE '(' ( STRING${str = $;} [ ',' <expr>${val = $;} ] ) | <expr>${val = $;} ) ')' @{return unique_ptr<WriteStmt>(str,val);}
+<write_stmt>↑<unique_ptr<Stmt>> ::= @{string str; unique_ptr<Expr> val;} T_WRITE '(' ( STRING${str = $;} [ ',' <expr>${val = $;} ] | <expr>${val = $;} ) ')' @{return unique_ptr<WriteStmt>(str,val);}
 <for_stmt>↑<unique_ptr<Stmt>> ::= @{bool down;} T_FOR <lvalue>↑i BECOMES <expr>↑from (T_DOWNTO @{down = true;} | T_TO @{down = false;}) <expr>↑to T_DO <stmt>↑body @{return make_unique<ForStmt>(move(i), move(from), move(to), move(body), down);}
 CHAR↑<int> i
 IDENT↑<string> s

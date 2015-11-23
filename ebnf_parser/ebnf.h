@@ -32,6 +32,7 @@ struct Symbol {
 	std::string sp; // TERM: semantic predicate
 	Symbol *inner; // TERM
 	std::string action; // ACTION (inline)
+	std::string attached_action;
 	int id = -1;
 	bool nullable = false;
 	bool defined = false;

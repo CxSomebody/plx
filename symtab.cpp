@@ -7,10 +7,12 @@
 
 using namespace std;
 
-Symbol::Symbol(SymbolKind kind, const string &name):
-	kind(kind), name(name)
-{
-}
+Type::~Type() {}
+Type::Type(Kind kind): kind(kind) {}
+IntType::IntType(): Type(INT) {}
+CharType::CharType(): Type(CHAR) {}
+ArrayType::ArrayType(Type *elemtype, int size): Type(ARRAY), elemtype(elemtype), size(size) {}
+Symbol::Symbol(SymbolKind kind, const string &name): kind(kind), name(name) {}
 
 void Symbol::print()
 {
@@ -103,20 +105,20 @@ void def_params(const vector<Param> &params)
 
 Type *int_type()
 {
-	static Type type { Type::INT };
+	static IntType type;
 	return &type;
 }
 
 Type *char_type()
 {
-	static Type type { Type::CHAR };
+	static CharType type;
 	return &type;
 }
 
 Type *array_type(Type *elty, int n)
 {
 	// TODO memory leak
-	return new Type { Type::ARRAY, elty };
+	return new ArrayType(elty, n);
 }
 
 bool is_proc(const string &name)
@@ -133,23 +135,20 @@ vector<Param> param_group(const vector<string> &names, Type *type, bool byref)
 	return params;
 }
 
-void print_type(Type *ty)
+void IntType::print()
 {
-	assert(ty);
-	switch (ty->kind) {
-	case Type::INT:
-		printf("int");
-		break;
-	case Type::CHAR:
-		printf("char");
-		break;
-	case Type::ARRAY:
-		printf("array of ");
-		print_type(ty->elemtype);
-		break;
-	default:
-		assert(0);
-	}
+	printf("int");
+}
+
+void CharType::print()
+{
+	printf("char");
+}
+
+void ArrayType::print()
+{
+	printf("array[%d] of ", size);
+	elemtype->print();
 }
 
 void print_symtab(SymbolTable *symtab)
@@ -174,7 +173,7 @@ void print_symtab(SymbolTable *symtab)
 		printf("%s %s", s->name.c_str(), kindstr);
 		if (s->kind == Symbol::VAR) {
 			putchar(' ');
-			print_type(s->type);
+			s->type->print();
 		} else if (s->kind == Symbol::CONST) {
 			printf(" %d", s->val);
 		}

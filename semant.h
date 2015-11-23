@@ -1,10 +1,33 @@
 struct Type {
-	enum TypeKind {
+	enum Kind {
 		INT,
 		CHAR,
 		ARRAY,
 	} kind;
-	Type *elemtype; // ARRAY
+	virtual ~Type();
+	virtual void print() = 0;
+protected:
+	Type(Kind kind);
+};
+
+struct IntType: Type
+{
+	IntType();
+	void print() override;
+};
+
+struct CharType: Type
+{
+	CharType();
+	void print() override;
+};
+
+struct ArrayType: Type
+{
+	Type *elemtype;
+	int size;
+	ArrayType(Type *elemtype, int size);
+	void print() override;
 };
 
 struct Symbol {

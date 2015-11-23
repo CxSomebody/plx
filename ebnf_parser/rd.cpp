@@ -12,6 +12,7 @@ void print_symbol(bool rich, Symbol *s, FILE *fp);
 
 #include "preamble.inc"
 
+#if 0
 static bool check_arity(Instance *inst, bool input)
 {
 	size_t narg = inst->args ? (input ? inst->args->in.size() : inst->args->out.size()) : 0;
@@ -43,11 +44,12 @@ static bool check_arity_all()
 	});
 	return ret;
 }
+#endif
 
 static void print_param_list(const vector<Param> &list)
 {
 	for (const Param &p: list)
-		printf("%s &%s, ", p.type.c_str(), p.name.c_str());
+		printf("%s %s, ", p.type.c_str(), p.name.c_str());
 }
 
 static void print_params(Symbol *nterm)
@@ -72,12 +74,13 @@ static void emit_proc_param_list(Symbol *nterm)
 {
 	putchar('(');
 	print_params(nterm);
-	printf("set &&_t, set &&_f)");
+	printf("const set &_t, const set &_f)");
 }
 
 static void emit_proc_header(Symbol *nterm)
 {
-	printf("static bool " PREFIX "%s", nterm->name.c_str());
+	const char *rettype = nterm->params.out.empty() ? "void" : nterm->params.out[0].type.c_str();
+	printf("static %s " PREFIX "%s", rettype, nterm->name.c_str());
 	emit_proc_param_list(nterm);
 }
 
@@ -86,7 +89,7 @@ static string term_sv(Symbol *term)
 	return term->params.out.empty() ? "" : "tokval."+term->params.out[0].name;
 }
 
-static map<const Branch*, vector<Param>> branch_locals;
+//static map<const Branch*, vector<Param>> branch_locals;
 
 static void emit_action(Instance *inst)
 {
@@ -139,13 +142,13 @@ static void gen_input(const Branch &branch, Branch::const_iterator it, int level
 	Instance *inst = *it;
 	Symbol *s = inst->sym;
 	if (s->kind == Symbol::TERM) {
-		printf("if (!expect(%s, ", s->name.c_str());
+		printf("expect(%s, ", s->name.c_str());
 	} else /* NTERM */ {
-		printf("if (!");
-		if (s->up)
+		if (s->up) {
 			emit_proc(s, level);
-		else
+		} else {
 			printf(PREFIX "%s", s->name.c_str());
+		}
 		putchar('(');
 		if (inst->args)
 			print_args(*inst->args);
@@ -168,11 +171,11 @@ static void gen_input(const Branch &branch, Branch::const_iterator it, int level
 	printf("set");
 	print_set(nt);
 	if (thru) {
-		printf("|_t, std::move(_f)");
+		printf("|_t, _f");
 	} else {
 		printf(", _t|_f");
 	}
-	printf(")) return _t.get(sym);\n");
+	printf(");\n");
 }
 
 static void emit_proc(Symbol *nterm, int level)
@@ -201,6 +204,7 @@ static void emit_proc(Symbol *nterm, int level)
 			use_getsym = true;
 			level++;
 		}
+#if 0
 		// declare locals
 		if (branch_locals.count(&branch)) {
 			for (const Param &p: branch_locals[&branch]) {
@@ -208,7 +212,7 @@ static void emit_proc(Symbol *nterm, int level)
 				printf("%s %s;\n", p.type.c_str(), p.name.c_str());
 			}
 		}
-		bool returned = false;
+#endif
 		// emit code for each symbol in sequence
 		for (auto it = branch.begin(); it != branch.end(); it++) {
 			Instance *inst = *it;
@@ -219,16 +223,10 @@ static void emit_proc(Symbol *nterm, int level)
 			if (s->kind == Symbol::ACTION) {
 				emit_action(inst);
 			} else {
-				bool atend = next(it) == branch.end();
 				if (s->kind == Symbol::TERM) {
 					bool need_indent = false;
 					if (!use_getsym) {
-						if (atend && !inst->args) {
-							printf("return expect(%s, std::move(_t), std::move(_f));\n", s->name.c_str());
-							returned = true;
-						} else {
-							gen_input(branch, it, level);
-						}
+						gen_input(branch, it, level);
 						need_indent = true;
 					}
 					// save token value
@@ -244,32 +242,18 @@ static void emit_proc(Symbol *nterm, int level)
 						printf("getsym();\n");
 						need_indent = true;
 					}
-				} else {
-					if (atend) {
-						if (s == nterm) {
-							printf("goto start;\n");
-						} else {
-							printf("return ");
-							if (s->up)
-								emit_proc(s, level);
-							else
-								printf(PREFIX "%s", s->name.c_str());
-							putchar('(');
-							if (inst->args)
-								print_args(*inst->args);
-							printf("std::move(_t), std::move(_f));\n");
-						}
-						returned = true;
+				} else /* NTERM s */ {
+					if (nterm->opening_sym() == '{' && next(it) == branch.end()) {
+						printf("goto start;\n");
 					} else {
+						if (inst->args && !inst->args->out.empty()) {
+							printf("auto %s = ", inst->args->out[0].c_str());
+						}
 						gen_input(branch, it, level);
 					}
 				}
 				use_getsym = false;
 			}
-		}
-		if (!returned) {
-			indent();
-			printf("return true;\n");
 		}
 		if (ctl) {
 			level--;
@@ -287,11 +271,14 @@ static void emit_proc(Symbol *nterm, int level)
 	}
 	printf(" {\n");
 	level++;
+	indent();
+	printf("try {\n");
+	level++;
 	// emit start label if necessary
 	for (const Branch &branch: nterm->branches) {
 		for (Instance *inst: branch) {
 			Symbol *s = inst->sym;
-			if (s == nterm) {
+			if (s == nterm && s->opening_sym() == '{') {
 				printf("start:\n");
 				goto gen_body;
 			}
@@ -302,10 +289,20 @@ gen_body:
 		gen_branch(nterm, *it, next(it) != nterm->branches.end());
 	level--;
 	indent();
+	printf("} catch (SyntaxError &_e) {\n");
+	level++;
+	indent();
+	printf("if (!_t.get(sym)) throw _e;\n");
+	level--;
+	indent();
+	printf("}\n");
+	level--;
+	indent();
 	putchar('}');
 	putchar(level ? ' ' : '\n');
 }
 
+#if 0
 static void f(vector<Param> &argtype, size_t pos, const Branch &branch, Symbol *lhs)
 {
 	if (pos == branch.size())
@@ -351,6 +348,7 @@ void compute_locals()
 			f(argtype, 0, branch, nterm);
 	});
 }
+#endif
 
 void compute_first_follow();
 void check_grammar();
@@ -359,8 +357,10 @@ bool generate_rd()
 {
 	compute_first_follow();
 	check_grammar();
+#if 0
 	if (!check_arity_all())
 		return false;
+#endif
 	// emit preamble
 	fputs(preamble1, stdout);
 	{
@@ -382,7 +382,7 @@ bool generate_rd()
 		}
 	});
 	// determine local variables needed in each proc
-	compute_locals();
+	//compute_locals();
 	for_each_term([](Symbol *term) {
 		if (term->kind == Symbol::ACTION && term->action.empty()) {
 			size_t n = term->params.in.size();
@@ -395,10 +395,10 @@ bool generate_rd()
 	});
 	putchar('\n');
 #if 1
-	printf("bool parse()\n"
+	printf("void parse()\n"
 	       "{\n"
 	       "\tgetsym();\n"
-	       "\treturn " PREFIX "%s(set{0}, set{});\n"
+	       "\t" PREFIX "%s(set{0}, set{});\n"
 	       "}\n",
 	       top->name.c_str());
 #endif

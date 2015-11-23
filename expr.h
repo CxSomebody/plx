@@ -109,7 +109,7 @@ struct CallStmt: Stmt
 {
 	Symbol *proc;
 	std::vector<std::unique_ptr<Expr>> args;
-	CallStmt(decltype(args) &&args);
+	CallStmt(Symbol *proc, decltype(args) &&args);
 	void print() override;
 };
 
@@ -117,6 +117,7 @@ struct IfStmt: Stmt
 {
 	std::unique_ptr<Cond> cond;
 	std::unique_ptr<Stmt> st, sf;
+	IfStmt(Cond *cond, Stmt *st);
 	IfStmt(Cond *cond, Stmt *st, Stmt *sf);
 	void print() override;
 };

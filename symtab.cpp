@@ -33,6 +33,11 @@ Param::Param(const string &name, Type *type, bool byref):
 
 SymbolTable *symtab;
 
+Symbol *lookup(const string &name)
+{
+	return symtab->lookup(name);
+}
+
 Symbol *var_symbol(const string &name, Type *type)
 {
 	Symbol *s = new Symbol(Symbol::VAR, name);
@@ -121,7 +126,7 @@ Type *array_type(Type *elty, int n)
 
 bool is_proc(const string &name)
 {
-	Symbol *s = symtab->lookup(name);
+	Symbol *s = lookup(name);
 	return s && s->kind == Symbol::PROC && !s->rettype;
 }
 

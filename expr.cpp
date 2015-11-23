@@ -98,7 +98,8 @@ Stmt::Stmt(Kind kind): kind(kind) {}
 EmptyStmt::EmptyStmt(): Stmt(EMPTY) {}
 CompStmt::CompStmt(vector<unique_ptr<Stmt>> &&body): Stmt(COMP), body(move(body)) {}
 AssignStmt::AssignStmt(Expr *var, Expr *val): Stmt(ASSIGN), var(var), val(val) {}
-CallStmt::CallStmt(vector<unique_ptr<Expr>> &&args): Stmt(CALL), args(move(args)) {}
+CallStmt::CallStmt(Symbol *proc, vector<unique_ptr<Expr>> &&args): Stmt(CALL), proc(proc), args(move(args)) {}
+IfStmt::IfStmt(Cond *cond, Stmt *st): Stmt(IF), cond(cond), st(st) {}
 IfStmt::IfStmt(Cond *cond, Stmt *st, Stmt *sf): Stmt(IF), cond(cond), st(st), sf(sf) {}
 DoWhileStmt::DoWhileStmt(Cond *cond, Stmt *body): Stmt(DO_WHILE), cond(cond), body(body) {}
 ForStmt::ForStmt(Expr *indvar, Expr *from, Expr *to, Stmt *body, bool down): Stmt(FOR), indvar(indvar), from(from), to(to), body(body), down(down) {}

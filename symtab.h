@@ -69,3 +69,4 @@ void push_symtab();
 SymbolTable *pop_symtab();
 void translate(Block *blk);
 const char *entry_name();
+Symbol *lookup(const std::string &name);

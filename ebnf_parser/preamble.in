@@ -1,9 +1,16 @@
 =1
 #include <cassert>
 #include <cstdio>
+#include <exception>
 #include <initializer_list>
 #include <utility>
 #include "parser.inc"
+
+class SyntaxError: std::runtime_error
+{
+public:
+	SyntaxError(): runtime_error("syntax error") {}
+};
 
 constexpr size_t log2_r(size_t n, size_t a)
 {
@@ -48,17 +55,17 @@ public:
 	}
 };
 =2
-static bool expect(int s, set &&t, set &&f)
+static void expect(int s, const set &t, const set &f)
 {
 	if (sym == s) {
 		getsym();
-		return true;
+		return;
 	}
 	fprintf(stderr, "%d:%d: syntax error at ‘%.*s’\n",
 		lineno, colno, toklen, tokstart);
 	for (;;) {
-		if (t.get(sym)) return true;
-		if (f.get(sym)) return false;
+		if (t.get(sym)) return;
+		if (f.get(sym)) throw SyntaxError();
 		fprintf(stderr, "%d:%d: [skipping ‘%.*s’]\n",
 			lineno, colno, toklen, tokstart);
 		getsym();

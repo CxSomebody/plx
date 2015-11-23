@@ -11,6 +11,12 @@ Symbol::Symbol(SymbolKind kind, const string &name):
 {
 }
 
+void Symbol::print()
+{
+	if (this) printf("%s", name.c_str());
+	else printf("<error>");
+}
+
 Symbol *SymbolTable::lookup(const string &name)
 {
 	if (map.count(name))
@@ -20,7 +26,7 @@ Symbol *SymbolTable::lookup(const string &name)
 	return nullptr;
 }
 
-Param::Param(const std::string &name, Type *type, bool byref):
+Param::Param(const string &name, Type *type, bool byref):
 	name(name), type(type), byref(byref)
 {
 }
@@ -120,7 +126,7 @@ bool is_proc(const string &name)
 }
 
 void push_param_group(ParamList &params,
-		      const std::vector<string> &names,
+		      const vector<string> &names,
 		      Type *type,
 		      bool byref)
 {
@@ -192,7 +198,7 @@ SymbolTable *pop_symtab()
 	return savedst;
 }
 
-Block::Block(const std::string &name, const std::vector<Block*> &subs, const std::vector<Stmt*> &stmts, SymbolTable *symtab):
+Block::Block(const string &name, const vector<unique_ptr<Block>> &subs, const vector<Stmt*> &stmts, SymbolTable *symtab):
 	name(name), subs(subs), stmts(stmts), symtab(symtab)
 {
 }

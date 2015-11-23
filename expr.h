@@ -2,9 +2,12 @@ struct Expr {
 	enum Kind {
 		SYM,
 		LIT,
-		COMP,
+		BINARY,
+		UNARY,
+		APPLY,
 	} kind;
-	virtual ~Expr();
+	virtual void print() = 0;
+	virtual ~Expr() = 0;
 protected:
 	Expr(Kind kind);
 };
@@ -13,12 +16,14 @@ struct SymExpr: Expr
 {
 	Symbol *sym;
 	SymExpr(Symbol *sym);
+	void print() override;
 };
 
 struct LitExpr: Expr
 {
 	int lit;
 	LitExpr(int lit);
+	void print() override;
 };
 
 struct BinaryExpr: Expr
@@ -29,9 +34,10 @@ struct BinaryExpr: Expr
 		MUL,
 		DIV,
 		INDEX,
-	};
-	std::unique_ptr<Expr*> left, right;
+	} op;
+	std::unique_ptr<Expr> left, right;
 	BinaryExpr(Expr *left, Expr *right);
+	void print() override;
 };
 
 struct UnaryExpr: Expr
@@ -39,8 +45,9 @@ struct UnaryExpr: Expr
 	enum Op {
 		NEG,
 	} op;
-	std::unique_ptr<Expr*> sub;
+	std::unique_ptr<Expr> sub;
 	UnaryExpr(Expr *sub);
+	void print() override;
 };
 
 struct ApplyExpr: Expr
@@ -48,17 +55,21 @@ struct ApplyExpr: Expr
 	std::unique_ptr<Expr> func;
 	std::vector<std::unique_ptr<Expr>> args;
 	ApplyExpr(Expr *func, decltype(args) &&args);
+	void print() override;
 };
 
 struct Cond {
 	enum Op {
 		EQ, NE, LT, GE, GT, LE
 	} op;
-	Expr *left, *right;
+	std::unique_ptr<Expr> left, right;
+	Cond(Op op, Expr *left, Expr *right);
+	void print();
 };
 
 struct Stmt {
 	enum Kind {
+		EMPTY,
 		COMP,
 		ASSIGN,
 		CALL,
@@ -68,63 +79,78 @@ struct Stmt {
 		READ,
 		WRITE,
 	} kind;
-	union {
-		struct {
-			std::vector<Stmt*> *body;
-		} comp;
-		struct {
-			Expr *var;
-			Expr *val;
-		} assign;
-		struct {
-			Symbol *proc;
-			std::vector<Expr*> *args;
-		} call;
-		struct {
-			Cond *cond;
-			Stmt *st;
-			Stmt *sf;
-		} if_;
-		struct {
-			Cond *cond;
-			Stmt *body;
-		} do_while;
-		struct {
-			Expr *indvar;
-			Expr *from;
-			Expr *to;
-			Stmt *body;
-			bool down;
-		} for_;
-		struct {
-			std::vector<Expr*> *vars;
-		} read;
-		struct {
-			char *str;
-			Expr *val;
-		} write;
-	};
+	virtual ~Stmt() = 0;
+	virtual void print() = 0;
+protected:
+	Stmt(Kind kind);
 };
 
-typedef std::vector<Expr*> ExprList;
+struct EmptyStmt: Stmt
+{
+	EmptyStmt();
+	void print() override;
+};
 
-Expr *binary_expr(Expr::Op op, Expr *left, Expr *right);
-Expr *unary_expr(Expr::Op op, Expr *right);
+struct CompStmt: Stmt
+{
+	std::vector<std::unique_ptr<Stmt>> body;
+	CompStmt(decltype(body) &&body);
+	void print() override;
+};
+
+struct AssignStmt: Stmt
+{
+	std::unique_ptr<Expr> var, val;
+	AssignStmt(Expr *var, Expr *val);
+	void print() override;
+};
+
+struct CallStmt: Stmt
+{
+	Symbol *proc;
+	std::vector<std::unique_ptr<Expr>> args;
+	CallStmt(decltype(args) &&args);
+	void print() override;
+};
+
+struct IfStmt: Stmt
+{
+	std::unique_ptr<Cond> cond;
+	std::unique_ptr<Stmt> st, sf;
+	IfStmt(Cond *cond, Stmt *st, Stmt *sf);
+	void print() override;
+};
+
+struct DoWhileStmt: Stmt
+{
+	std::unique_ptr<Cond> cond;
+	std::unique_ptr<Stmt> body;
+	DoWhileStmt(Cond *cond, Stmt *body);
+	void print() override;
+};
+
+struct ForStmt: Stmt
+{
+	std::unique_ptr<Expr> indvar, from, to;
+	std::unique_ptr<Stmt> body;
+	bool down;
+	ForStmt(Expr *indvar, Expr *from, Expr *to, Stmt *body, bool down);
+	void print() override;
+};
+
+struct ReadStmt: Stmt
+{
+	std::vector<std::unique_ptr<Expr>> vars;
+	ReadStmt(decltype(vars) &&vars);
+	void print() override;
+};
+
+struct WriteStmt: Stmt
+{
+	std::string str;
+	std::unique_ptr<Expr> val;
+	WriteStmt(const std::string &str, Expr *val);
+	void print() override;
+};
+
 Expr *ident_expr(const std::string &name);
-Expr *lit_expr(int lit);
-Expr *apply_expr(Expr *func, const std::vector<Expr*> &args);
-void print_expr(Expr *e);
-
-Stmt *assign_stmt(Expr *var, Expr *val);
-Stmt *call_stmt(const std::string &name, const std::vector<Expr*> &args);
-Stmt *if_stmt(Cond *cond, Stmt *st);
-Stmt *if_stmt(Cond *cond, Stmt *st, Stmt *sf);
-Stmt *comp_stmt(const std::vector<Stmt*> &body);
-Stmt *do_while_stmt(Cond *cond, Stmt *body);
-Stmt *for_stmt(Expr *indvar, Expr *from, Expr *to, Stmt *body, bool down);
-Stmt *read_stmt(const std::vector<Expr*> &vars);
-Stmt *write_stmt(const std::string &str, Expr *val);
-void print_stmt(Stmt *s);
-
-Cond *cond(Cond::Op op, Expr *left, Expr *right);
-void print_cond(Cond *c);

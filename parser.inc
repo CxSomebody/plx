@@ -1,4 +1,5 @@
 #include <map>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -10,5 +11,4 @@ extern "C" {
 #include "symtab.h"
 #include "expr.h"
 
-using std::string;
-using std::vector;
+using namespace std;

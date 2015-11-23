@@ -2,6 +2,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <map>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -11,272 +12,185 @@
 using namespace std;
 
 Expr::Expr(Expr::Kind kind): kind(kind) {}
-Expr::~Expr(){}
+SymExpr::SymExpr(Symbol *sym): Expr(SYM), sym(sym) {}
+LitExpr::LitExpr(int lit): Expr(LIT), lit(lit) {}
+BinaryExpr::BinaryExpr(Expr *left, Expr *right): Expr(BINARY), left(left), right(right) {}
+UnaryExpr::UnaryExpr(Expr *sub): Expr(UNARY), sub(sub) {}
+ApplyExpr::ApplyExpr(Expr *func, vector<unique_ptr<Expr>> &&args): Expr(APPLY), func(func), args(move(args)) {}
 
-void print_symbol(Symbol *s)
+void SymExpr::print()
 {
-	if (s) printf("%s", s->name.c_str());
-	else printf("<error>");
+	sym->print();
 }
 
-void print_expr(Expr *e)
+void LitExpr::print()
 {
-	switch (e->kind) {
-		const char *opstr;
-	case Expr::SYM:
-		print_symbol(e->sym);
-		break;
-	case Expr::LIT:
-		printf("%d", e->lit);
-		break;
-	case Expr::COMP:
-		switch (e->op) {
-#define CASE(x) case Expr::x: opstr = #x; break;
-			CASE(ADD)
-			CASE(SUB)
-			CASE(MUL)
-			CASE(DIV)
-			CASE(NEG)
-			CASE(INDEX)
-			CASE(APPLY)
+	printf("%d", lit);
+}
+
+void BinaryExpr::print()
+{
+	if (op == BinaryExpr::INDEX) {
+		left->print();
+		putchar('[');
+		right->print();
+		putchar(']');
+	} else {
+		char opchar;
+		switch (op) {
+#define CASE(x,y) case BinaryExpr::x: opchar = y; break
+			CASE(ADD,'+');
+			CASE(SUB,'-');
+			CASE(MUL,'*');
+			CASE(DIV,'/');
 #undef CASE
 		default:
 			assert(0);
 		}
-		printf("(%s ", opstr);
-		if (e->left) {
-			print_expr(e->left);
-			putchar(' ');
-		}
-		if (e->op == Expr::APPLY) {
-			bool sep = false;
-			for (Expr *arg: *e->args) {
-				if (sep)
-					putchar(' ');
-				print_expr(arg);
-				sep = true;
-			}
-		} else {
-			print_expr(e->right);
-		}
+		putchar('(');
+		left->print();
+		putchar(opchar);
+		right->print();
 		putchar(')');
-		break;
-	default:
-		assert(0);
 	}
 }
 
-Expr *binary_expr(Expr::Op op, Expr *left, Expr *right)
+void UnaryExpr::print()
 {
-	Expr *e = new Expr();
-	e->kind = Expr::COMP;
-	e->op = op;
-	e->left = left;
-	e->right= right;
-	return e;
-};
-
-Expr *unary_expr(Expr::Op op, Expr *right)
-{
-	return binary_expr(op, nullptr, right);
+	const char *opstr;
+	switch (op) {
+#define CASE(x) case UnaryExpr::x: opstr = #x; break;
+		CASE(NEG)
+#undef CASE
+	default:
+		assert(0);
+	}
+	printf("(%s ", opstr);
+	sub->print();
+	putchar(')');
 }
 
-Expr *apply_expr(Expr *func, const vector<Expr*> &args)
+void print_expr_list(const vector<unique_ptr<Expr>> &list)
 {
-	Expr *e = new Expr();
-	e->kind = Expr::COMP;
-	e->op = Expr::APPLY;
-	e->left = func;
-	e->args = new vector<Expr*>(args);
-	return e;
+	bool sep = false;
+	putchar('(');
+	for (auto &e: list) {
+		if (sep)
+			printf(", ");
+		e->print();
+		sep = true;
+	}
+	putchar(')');
 }
 
-Expr *sym_expr(Symbol *sym)
+void ApplyExpr::print()
 {
-	Expr *e = new Expr();
-	e->kind = Expr::SYM;
-	e->sym = sym;
-	return e;
+	func->print();
+	print_expr_list(args);
 }
 
 Expr *ident_expr(const string &name)
 {
-	return sym_expr(symtab->lookup(name));
+	return new SymExpr(symtab->lookup(name));
 }
 
-Expr *lit_expr(int lit)
+Stmt::Stmt(Kind kind): kind(kind) {}
+EmptyStmt::EmptyStmt(): Stmt(EMPTY) {}
+CompStmt::CompStmt(vector<unique_ptr<Stmt>> &&body): Stmt(COMP), body(move(body)) {}
+AssignStmt::AssignStmt(Expr *var, Expr *val): Stmt(ASSIGN), var(var), val(val) {}
+CallStmt::CallStmt(vector<unique_ptr<Expr>> &&args): Stmt(CALL), args(move(args)) {}
+IfStmt::IfStmt(Cond *cond, Stmt *st, Stmt *sf): Stmt(IF), cond(cond), st(st), sf(sf) {}
+DoWhileStmt::DoWhileStmt(Cond *cond, Stmt *body): Stmt(DO_WHILE), cond(cond), body(body) {}
+ForStmt::ForStmt(Expr *indvar, Expr *from, Expr *to, Stmt *body, bool down): Stmt(FOR), indvar(indvar), from(from), to(to), body(body), down(down) {}
+ReadStmt::ReadStmt(vector<unique_ptr<Expr>> &&vars): Stmt(READ), vars(move(vars)) {}
+WriteStmt::WriteStmt(const string &str, Expr *val): Stmt(WRITE), str(str), val(val) {}
+
+void EmptyStmt::print()
 {
-	Expr *e = new Expr();
-	e->kind = Expr::LIT;
-	e->lit = lit;
-	return e;
 }
 
-void print_stmt(Stmt *s)
+void CompStmt::print()
 {
-	if (!s) {
-		printf("<null>");
-		return;
+	bool sep;
+	printf("begin ");
+	for (auto &s: body) {
+		if (sep)
+			printf("; ");
+		s->print();
+		sep = true;
 	}
-	switch (s->kind) {
-		bool sep;
-	case Stmt::COMP:
-		putchar('(');
-		sep = false;
-		for (Stmt *t: *s->comp.body) {
-			if (sep)
-				printf("; ");
-			print_stmt(t);
-			sep = true;
-		}
-		putchar(')');
-		break;
-	case Stmt::ASSIGN:
-		print_expr(s->assign.var);
-		printf(" := ");
-		print_expr(s->assign.val);
-		break;
-	case Stmt::CALL:
-		print_symbol(s->call.proc);
-		putchar('(');
-		sep = false;
-		for (Expr *arg: *s->call.args) {
-			if (sep)
-				printf(", ");
-			print_expr(arg);
-			sep = true;
-		}
-		putchar(')');
-		break;
-	case Stmt::IF:
-		printf("IF ");
-		print_cond(s->if_.cond);
-		printf(" THEN ");
-		print_stmt(s->if_.st);
-		printf(" ELSE ");
-		print_stmt(s->if_.sf);
-		break;
-	case Stmt::DO_WHILE:
-		printf("DO ");
-		print_stmt(s->do_while.body);
-		printf(" WHILE ");
-		print_cond(s->do_while.cond);
-		break;
-	case Stmt::FOR:
-		printf("FOR ");
-		print_expr(s->for_.indvar);
-		printf(" := ");
-		print_expr(s->for_.from);
-		printf(s->for_.down ? " DOWNTO " : " TO ");
-		print_expr(s->for_.to);
-		printf(" DO ");
-		print_stmt(s->for_.body);
-		break;
-	case Stmt::READ:
-		printf("READ ");
-		sep = false;
-		for (Expr *e: *s->read.vars) {
-			if (sep)
-				printf(", ");
-			print_expr(e);
-			sep = true;
-		}
-		break;
-	case Stmt::WRITE:
-		printf("WRITE \"%s\"", s->write.str);
-		if (s->write.val) {
-			putchar(' ');
-			print_expr(s->write.val);
-		}
-		break;
-	default:
-		assert(0);
-	};
+	printf(" end");
 }
 
-Stmt *assign_stmt(Expr *var, Expr *val)
+void AssignStmt::print()
 {
-	Stmt *s = new Stmt();
-	s->kind = Stmt::ASSIGN;
-	s->assign.var = var;
-	s->assign.val = val;
-	return s;
+	var->print();
+	printf(" := ");
+	val->print();
 }
 
-Stmt *call_stmt(const string &name, const vector<Expr*> &args)
+void CallStmt::print()
 {
-	Stmt *s = new Stmt();
-	s->kind = Stmt::CALL;
-	s->call.proc = symtab->lookup(name);
-	s->call.args = new vector<Expr*>(args);
-	return s;
+	proc->print();
+	putchar('(');
+	print_expr_list(args);
+	putchar(')');
 }
 
-Stmt *if_stmt(Cond *cond, Stmt *st, Stmt *sf)
+void IfStmt::print()
 {
-	Stmt *s = new Stmt();
-	s->kind = Stmt::IF;
-	s->if_.cond = cond;
-	s->if_.st = st;
-	s->if_.sf = sf;
-	return s;
+	printf("if ");
+	cond->print();
+	printf(" then ");
+	st->print();
+	if (sf) {
+		printf(" else ");
+		sf->print();
+	}
 }
 
-Stmt *if_stmt(Cond *cond, Stmt *st)
+void DoWhileStmt::print()
 {
-	return if_stmt(cond, st, nullptr);
+	printf("do ");
+	body->print();
+	printf(" while ");
+	cond->print();
 }
 
-Stmt *comp_stmt(const std::vector<Stmt*> &body)
+void ForStmt::print()
 {
-	Stmt *s = new Stmt();
-	s->kind = Stmt::COMP;
-	s->comp.body = new vector<Stmt*>(body);
-	return s;
+	printf("for ");
+	indvar->print();
+	printf(" := ");
+	from->print();
+	printf(down ? " DOWNTO " : " TO ");
+	to->print();
+	printf(" do ");
+	body->print();
 }
 
-Stmt *do_while_stmt(Cond *cond, Stmt *body)
+void ReadStmt::print()
 {
-	Stmt *s = new Stmt();
-	s->kind = Stmt::DO_WHILE;
-	s->do_while.cond = cond;
-	s->do_while.body = body;
-	return s;
+	printf("read");
+	print_expr_list(vars);
 }
 
-Stmt *for_stmt(Expr *indvar, Expr *from, Expr *to, Stmt *body, bool down)
+void WriteStmt::print()
 {
-	Stmt *s = new Stmt();
-	s->kind = Stmt::FOR;
-	s->for_.indvar = indvar;
-	s->for_.from = from;
-	s->for_.to = to;
-	s->for_.body = body;
-	s->for_.down = down;
-	return s;
+	printf("write");
+	putchar('(');
+	printf("\"%s\"", str.c_str());
+	if (val) {
+		printf(", ");
+		val->print();
+	}
+	putchar(')');
 }
 
-Stmt *read_stmt(const std::vector<Expr*> &vars)
-{
-	Stmt *s = new Stmt();
-	s->kind = Stmt::READ;
-	s->read.vars = new vector<Expr*>(vars);
-	return s;
-}
-
-Stmt *write_stmt(const std::string &str, Expr *val)
-{
-	Stmt *s = new Stmt();
-	s->kind = Stmt::WRITE;
-	s->write.str = strdup(str.c_str());
-	s->write.val = val;
-	return s;
-}
-
-void print_cond(Cond *c)
+void Cond::print()
 {
 	const char *opstr;
-	switch (c->op) {
+	switch (op) {
 	case Cond::EQ: opstr = "=" ; break;
 	case Cond::NE: opstr = "<>"; break;
 	case Cond::LT: opstr = "<" ; break;
@@ -285,16 +199,9 @@ void print_cond(Cond *c)
 	case Cond::LE: opstr = "<="; break;
 	default: assert(0);
 	}
-	print_expr(c->left);
+	left->print();
 	printf(" %s ", opstr);
-	print_expr(c->right);
+	right->print();
 }
 
-Cond *cond(Cond::Op op, Expr *left, Expr *right)
-{
-	Cond *c = new Cond();
-	c->op = op;
-	c->left = left;
-	c->right= right;
-	return c;
-}
+Cond::Cond(Op op, Expr *left, Expr *right): op(op), left(left), right(right) {}

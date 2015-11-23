@@ -21,7 +21,7 @@ static void getsym()
 	sym = yylex();
 }
 
-static void syntax_error()
+static void error()
 {
 	fprintf(stderr, "%d: error: syntax error (sym=%d)\n", yylineno, sym);
 	exit(1);
@@ -55,13 +55,13 @@ static vector<string> parse_arg_list(void)
 		goto finish;
 	}
 	if (sym == '(') getsym();
-	else syntax_error();
+	else error();
 	if (sym == ')') {
 		getsym();
 		goto finish;
 	}
 	for (;;) {
-		if (sym != IDENT) syntax_error();
+		if (sym != IDENT) error();
 		list.emplace_back(yytext);
 		getsym();
 		if (sym == ')') {
@@ -69,7 +69,7 @@ static vector<string> parse_arg_list(void)
 			goto finish;
 		}
 		if (sym == ',') getsym();
-		else syntax_error();
+		else error();
 	}
 finish:
 	return list;
@@ -77,7 +77,7 @@ finish:
 
 static Param parse_param()
 {
-	if (sym != QUOTE) syntax_error();
+	if (sym != QUOTE) error();
 	string type(qtext, qlen);
 	getsym();
 	string name;
@@ -96,7 +96,7 @@ static vector<Param> parse_param_list()
 		goto finish;
 	}
 	if (sym == '(') getsym();
-	else syntax_error();
+	else error();
 	if (sym == ')') {
 		getsym();
 		goto finish;
@@ -108,7 +108,7 @@ static vector<Param> parse_param_list()
 			goto finish;
 		}
 		if (sym == ',') getsym();
-		else syntax_error();
+		else error();
 	}
 finish:
 	return list;
@@ -145,6 +145,14 @@ static void parse_branch(Branch &branch, Symbol *lhs, int branch_id)
 	for (;;) {
 		Symbol *newsym;
 		switch (sym) {
+#if 0
+		case '\n':
+			getsym();
+			if (sym != '\t') error();
+			getsym();
+			newsym = nullptr;
+			break;
+#endif
 		case '(':
 		case '[':
 		case '{':
@@ -158,7 +166,7 @@ static void parse_branch(Branch &branch, Symbol *lhs, int branch_id)
 				parse_branches(newsym);
 				newsym->up = lhs;
 				if (sym == closing_sym(opening)) getsym();
-				else syntax_error();
+				else error();
 				newsym->branches_core = make_unique<vector<Branch>>(newsym->branches);
 				switch (opening) {
 				case '{':
@@ -222,7 +230,7 @@ static void parse_branch(Branch &branch, Symbol *lhs, int branch_id)
 						newsym = guarded_term;
 						getsym();
 					} else {
-						syntax_error();
+						error();
 					}
 				}
 			}
@@ -277,7 +285,7 @@ static void parse_branches(Symbol *lhs)
 static void parse_rule()
 {
 	string nterm_name;
-	if (sym != QUOTE) syntax_error();
+	if (sym != QUOTE) error();
 	nterm_name = string(qtext, qlen);
 	getsym();
 
@@ -310,12 +318,12 @@ static void parse_rule()
 
 	nterm->params = parse_params();
 
-	if (sym != IS) syntax_error();
+	if (sym != IS) error();
 	getsym();
 
 	parse_branches(nterm);
 
-	if (sym != '\n') syntax_error();
+	if (sym != '\n') error();
 	getsym();
 }
 
@@ -335,10 +343,10 @@ static void parse_decl()
 		if (!s)
 			s = action_dict[name] = new Symbol(Symbol::ACTION, name);
 	} else {
-		syntax_error();
+		error();
 	}
 	s->params = parse_params();
-	if (sym != '\n') syntax_error();
+	if (sym != '\n') error();
 	getsym();
 }
 
@@ -348,5 +356,7 @@ void parse()
 	while (sym) {
 		if (sym == QUOTE) parse_rule();
 		else parse_decl();
+		while (sym == '\n')
+			getsym(); // skip blank links following declaration
 	}
 }

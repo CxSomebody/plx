@@ -18,6 +18,7 @@ struct Symbol {
 	int val; // CONST
 	Type *rettype; // PROC
 	Symbol(SymbolKind kind, const std::string &name);
+	void print();
 };
 
 struct Stmt;
@@ -34,10 +35,10 @@ struct SymbolTable {
 
 struct Block {
 	std::string name;
-	std::vector<Block*> subs;
-	std::vector<Stmt*> stmts;
+	std::vector<std::unique_ptr<Block>> subs;
+	std::vector<std::unique_ptr<Stmt>> stmts;
 	SymbolTable *symtab;
-	Block(const std::string &name, const std::vector<Block*> &subs, const std::vector<Stmt*> &stmts, SymbolTable *symtab);
+	Block(const std::string &name, const std::vector<std::unique_ptr<Block>> &subs, const std::vector<std::unique_ptr<Stmt>> &stmts, SymbolTable *symtab);
 };
 
 struct Param {

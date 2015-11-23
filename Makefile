@@ -1,4 +1,4 @@
-CXXFLAGS += -g
+CXXFLAGS += -g -Wall
 
 plx: expr.o keywords.o lexer.o parser.o plx.o symtab.o
 	c++ -o $@ $^
@@ -15,9 +15,9 @@ parser.cpp: ebnf
 tokens.h keywords.gperf keywords.gperf.h tokname.inc: tokens.in keywords.in
 	./gen
 
-expr.o: expr.cpp expr.h
+expr.o: expr.cpp semant.h
 lexer.o: lexer.c lexer.h tokens.h keywords.gperf.h tokname.inc
-symtab.o: symtab.cpp symtab.h
+symtab.o: symtab.cpp semant.h
 plx.o: plx.cpp lexer.h tokens.h
 
 clean:

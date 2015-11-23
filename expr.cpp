@@ -6,17 +6,17 @@
 #include <string>
 #include <vector>
 
-#include "symtab.h"
-#include "expr.h"
+#include "semant.h"
 
 using namespace std;
 
+Expr::~Expr() {}
 Expr::Expr(Expr::Kind kind): kind(kind) {}
 SymExpr::SymExpr(Symbol *sym): Expr(SYM), sym(sym) {}
 LitExpr::LitExpr(int lit): Expr(LIT), lit(lit) {}
-BinaryExpr::BinaryExpr(Expr *left, Expr *right): Expr(BINARY), left(left), right(right) {}
-UnaryExpr::UnaryExpr(Expr *sub): Expr(UNARY), sub(sub) {}
-ApplyExpr::ApplyExpr(Expr *func, vector<unique_ptr<Expr>> &&args): Expr(APPLY), func(func), args(move(args)) {}
+BinaryExpr::BinaryExpr(Op op, unique_ptr<Expr> &&left, unique_ptr<Expr> &&right): Expr(BINARY), op(op), left(move(left)), right(move(right)) {}
+UnaryExpr::UnaryExpr(Op op, unique_ptr<Expr> &&sub): Expr(UNARY), op(op), sub(move(sub)) {}
+ApplyExpr::ApplyExpr(unique_ptr<Expr> &&func, vector<unique_ptr<Expr>> &&args): Expr(APPLY), func(move(func)), args(move(args)) {}
 
 void SymExpr::print()
 {
@@ -89,22 +89,23 @@ void ApplyExpr::print()
 	print_expr_list(args);
 }
 
-Expr *ident_expr(const string &name)
+unique_ptr<Expr> ident_expr(const string &name)
 {
-	return new SymExpr(symtab->lookup(name));
+	return make_unique<SymExpr>(symtab->lookup(name));
 }
 
+Stmt::~Stmt() {}
 Stmt::Stmt(Kind kind): kind(kind) {}
 EmptyStmt::EmptyStmt(): Stmt(EMPTY) {}
 CompStmt::CompStmt(vector<unique_ptr<Stmt>> &&body): Stmt(COMP), body(move(body)) {}
-AssignStmt::AssignStmt(Expr *var, Expr *val): Stmt(ASSIGN), var(var), val(val) {}
+AssignStmt::AssignStmt(unique_ptr<Expr> &&var, unique_ptr<Expr> &&val): Stmt(ASSIGN), var(move(var)), val(move(val)) {}
 CallStmt::CallStmt(Symbol *proc, vector<unique_ptr<Expr>> &&args): Stmt(CALL), proc(proc), args(move(args)) {}
-IfStmt::IfStmt(Cond *cond, Stmt *st): Stmt(IF), cond(cond), st(st) {}
-IfStmt::IfStmt(Cond *cond, Stmt *st, Stmt *sf): Stmt(IF), cond(cond), st(st), sf(sf) {}
-DoWhileStmt::DoWhileStmt(Cond *cond, Stmt *body): Stmt(DO_WHILE), cond(cond), body(body) {}
-ForStmt::ForStmt(Expr *indvar, Expr *from, Expr *to, Stmt *body, bool down): Stmt(FOR), indvar(indvar), from(from), to(to), body(body), down(down) {}
+IfStmt::IfStmt(unique_ptr<Cond> &&cond, unique_ptr<Stmt> &&st): Stmt(IF), cond(move(cond)), st(move(st)) {}
+IfStmt::IfStmt(unique_ptr<Cond> &&cond, unique_ptr<Stmt> &&st, unique_ptr<Stmt> &&sf): Stmt(IF), cond(move(cond)), st(move(st)), sf(move(sf)) {}
+DoWhileStmt::DoWhileStmt(unique_ptr<Cond> &&cond, unique_ptr<Stmt> &&body): Stmt(DO_WHILE), cond(move(cond)), body(move(body)) {}
+ForStmt::ForStmt(unique_ptr<Expr> &&indvar, unique_ptr<Expr> &&from, unique_ptr<Expr> &&to, unique_ptr<Stmt> &&body, bool down): Stmt(FOR), indvar(move(indvar)), from(move(from)), to(move(to)), body(move(body)), down(down) {}
 ReadStmt::ReadStmt(vector<unique_ptr<Expr>> &&vars): Stmt(READ), vars(move(vars)) {}
-WriteStmt::WriteStmt(const string &str, Expr *val): Stmt(WRITE), str(str), val(val) {}
+WriteStmt::WriteStmt(const string &str, unique_ptr<Expr> &&val): Stmt(WRITE), str(str), val(move(val)) {}
 
 void EmptyStmt::print()
 {
@@ -164,7 +165,7 @@ void ForStmt::print()
 	indvar->print();
 	printf(" := ");
 	from->print();
-	printf(down ? " DOWNTO " : " TO ");
+	printf(down ? " downto " : " to ");
 	to->print();
 	printf(" do ");
 	body->print();
@@ -205,4 +206,4 @@ void Cond::print()
 	right->print();
 }
 
-Cond::Cond(Op op, Expr *left, Expr *right): op(op), left(left), right(right) {}
+Cond::Cond(Op op, unique_ptr<Expr> &&left, unique_ptr<Expr> &&right): op(op), left(move(left)), right(move(right)) {}

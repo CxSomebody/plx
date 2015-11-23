@@ -15,7 +15,8 @@ map<string, Symbol*> term_dict, nterm_dict, action_dict;
 Symbol *top;
 Symbol *empty;
 
-int Symbol::opening_sym() {
+int Symbol::opening_sym()
+{
 	if (name[0] != '_')
 		return 0;
 	switch (name[1]) {
@@ -24,6 +25,18 @@ int Symbol::opening_sym() {
 	case 'm': return '{';
 	}
 	assert(0);
+}
+const char *Symbol::svtype()
+{
+	return params.out.empty() ? nullptr : params.out[0].type.c_str();
+}
+const char *Instance::outarg()
+{
+	return args && !args->out.empty() ? args->out[0].c_str() : nullptr;
+}
+Symbol *Instance::core_sym()
+{
+	return sym->core ? sym->core : sym;
 }
 Symbol::Symbol(SymbolKind kind, const string &name):
 	kind(kind), name(name) {}

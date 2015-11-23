@@ -1,40 +1,40 @@
-<program> ::= <block>${auto blk = $("main", vector<Param>());} '.' @translate↓blk
-<block>↓(<string>name, <ParamList>params)↑<unique_ptr<Block>> ::= @push_symtab @def_params↓params [ <const_part> ] [ <var_part> ] <sub_list>↑subs <comp_stmt>↑stmts @pop_symtab↑st @{return make_unique<Block>(name, move(subs), move(stmts), st);}
-<sub_list>↑<vector<unique_ptr<Block>>> ::= @{vector<unique_ptr<Block>> v;} { <proc_def>${v.push_back($);} | <func_def>${v.push_back($);} }
+<program> ::= <block>↓<ProcHeader("main", vector<Param>())>↑blk '.' @{translate(move(blk));}
+<block>↓<ProcHeader>header↑<unique_ptr<Block>> ::= @{auto name = header.first; auto params = header.second;} @push_symtab @def_params↓params [ <const_part> ] [ <var_part> ] <sub_list>↑subs <comp_stmt>↑stmts @{auto st = pop_symtab();} @{return make_unique<Block>(name, move(subs), move(stmts), st);}
+<sub_list>↑<vector<unique_ptr<Block>>> ::= @{vector<unique_ptr<Block>> v;} { <proc_def>${v.push_back($);} | <func_def>${v.push_back($);} } @{return v;}
 <const_part> ::= T_CONST <const_def> { ',' <const_def> } ';'
 <const_def> ::= IDENT↑name '=' <constant>↑val @def_const↓(name,val)
-<constant>↑<int> ::= <opt_sign>↑sign INT↑i @{return s?-i:i;} | CHAR${return $;}
+<constant>↑<int> ::= <opt_sign>↑sign INT↑i @{return sign?-i:i;} | CHAR${return $;}
 <opt_sign>↑<bool> ::= ['+'] @{return false;} | '-' @{return true;}
 <var_part> ::= T_VAR <var_decl> ';' { <var_decl> ';' }
 <var_decl> ::= <id_list>↑ids ':' <type>↑ty @def_vars↓(ids,ty)
-<id_list>↑<vector<string>> ::= @{vector<string> v;} IDENT${v.push_back($);} { ',' IDENT${v.push_back($);} }
-<type>↑<Type*> ::= <basic_type>${return $;} | T_ARRAY '[' INT↑n ']' T_OF <basic_type>↑elty @{return array_type(elty,n);}
-<basic_type>↑<Type*> ::= T_INTEGER @{return int_type();} | T_CHAR @{return char_type();}
-<proc_def>↑<unique_ptr<Block>> ::= <proc_header>↑header @{auto name = header.first; auto params = header.second;} @{def_proc(name, params);} <block>↓(name,params)↑blk ';' @{return move(blk);}
-<proc_header>↑<pair<string, ParamList>> ::= @{ParamList params;} T_PROCEDURE IDENT↑name [ <param_list>${params = $;} ] ';' @{return pair(name, params);}
-<param_list>↑<ParamList> ::= @{ParamList params;} '(' <param_group>${params.push_back($);} { ';' <param_group>${params.push_back($);} } ')'
-<param_group>↑<ParamList> ::= @{bool byref = false;} [ T_VAR @{byref = true;} ] <id_list>↑names ':' <basic_type>↑ty @{return param_group(names,ty,byref);}
-<func_def>↑<unique_ptr<Block>> ::= <func_header>↑(name,params,rty) @def_func↓(name,params,rty) <block>↓(name,params)↑blk ';'
-<func_header>↑<tuple<string, ParamList, Type*>> ::= T_FUNCTION IDENT↑name [ <param_list>↑params ] ':' <basic_type>↑rty ';' @{return tuple(name, params, rty);}
+<id_list>↑<vector<string>> ::= @{vector<string> v;} IDENT${v.push_back($);} { ',' IDENT${v.push_back($);} } @{return v;}
+<type>↑<PType> ::= <basic_type>${return $;} | T_ARRAY '[' INT↑n ']' T_OF <basic_type>↑elty @{return array_type(elty,n);}
+<basic_type>↑<PType> ::= T_INTEGER @{return int_type();} | T_CHAR @{return char_type();}
+<proc_def>↑<unique_ptr<Block>> ::= <proc_header>↑header @{def_func(header, nullptr);} <block>↓header↑blk ';' @{return move(blk);}
+<proc_header>↑<ProcHeader> ::= @{vector<Param> params;} T_PROCEDURE IDENT↑name [ <param_list>${params = $;} ] ';' @{return ProcHeader(name, params);}
+<param_list>↑<vector<Param>> ::= @{vector<Param> params;} '(' <param_group>↑g @{params.insert(params.end(), g.begin(), g.end());} { ';' <param_group>↑g @{params.insert(params.end(), g.begin(), g.end());} } ')' @{return params;}
+<param_group>↑<vector<Param>> ::= @{bool byref = false;} [ T_VAR @{byref = true;} ] <id_list>↑names ':' <basic_type>↑ty @{return param_group(names,ty,byref);}
+<func_def>↑<unique_ptr<Block>> ::= <func_header>↑header <block>↓header↑blk ';' @{return move(blk);}
+<func_header>↑<ProcHeader> ::= @{vector<Param> params;} T_FUNCTION IDENT↑name [ <param_list>↑params ] ':' <basic_type>↑rty ';' @{ProcHeader header(name, params);} @{def_func(header, rty);} @{return header;}
 <comp_stmt>↑<vector<unique_ptr<Stmt>>> ::= T_BEGIN <stmt_list>↑stmts T_END @{return move(stmts);}
-<stmt_list>↑<vector<unique_ptr<Stmt>>> ::= @{vector<unique_ptr<Stmt>> v;} <stmt>${v.push_back($);} @{v.push_back(s);} { ';' <stmt>${v.push_back($);} } @{return move(v);}
+<stmt_list>↑<vector<unique_ptr<Stmt>>> ::= @{vector<unique_ptr<Stmt>> v;} <stmt>${v.push_back($);} { ';' <stmt>${v.push_back($);} } @{return move(v);}
 <stmt>↑<unique_ptr<Stmt>> ::= <call_stmt>${return $;} | <assign_stmt>${return $;} | <if_stmt>${return $;} | <do_while_stmt>${return $;} | <comp_stmt>${return make_unique<CompStmt>($);} | <read_stmt>${return $;} | <write_stmt>${return $;} | <for_stmt>${return $;} | @{return make_unique<EmptyStmt>();}
 <call_stmt>↑<unique_ptr<Stmt>> ::= @{vector<unique_ptr<Expr>> args;} IDENT?is_proc↑name [ <arg_list>${args = $;} ] @{return make_unique<CallStmt>(lookup(name), move(args));}
 <arg_list>↑<vector<unique_ptr<Expr>>> ::= @{vector<unique_ptr<Expr>> v;} '(' <expr>${v.push_back($);} { ',' <expr>${v.push_back($);} } ')' @{return move(v);}
 <expr>↑<unique_ptr<Expr>> ::= <opt_sign>↑sign <term>↑e { <add_op>↑op <term>${e = make_unique<BinaryExpr>(op,move(e),$);} } @{return sign ? make_unique<UnaryExpr>(UnaryExpr::NEG, move(e)) : move(e);}
-<term>↑<unique_ptr<Expr>> ::= <factor>↑e { <mul_op>↑op <factor>${e = make_unique<BinaryExpr>(op,e,$);} } @{return move(e);}
-<factor>↑<unique_ptr<Expr>> ::= @{unique_ptr<Expr> e;} ( IDENT↑name @{e = make_unique<SymExpr>(lookup(name));} [ '[' <expr>${e = make_unique<BinaryExpr>(BinaryExpr::INDEX, move(e), $);} ']' | <arg_list>${e = make_unique<ApplyExpr>(move(e),$);} ] | INT↑i @{e = make_unique<LitExpr>(i);} | '(' <expr>↑e ')' ) @{return move(e);}
+<term>↑<unique_ptr<Expr>> ::= <factor>↑e { <mul_op>↑op <factor>${e = make_unique<BinaryExpr>(op, move(e), $);} } @{return move(e);}
+<factor>↑<unique_ptr<Expr>> ::= @{unique_ptr<Expr> e;} ( IDENT↑name @{e = make_unique<SymExpr>(lookup(name));} [ '[' <expr>${e = make_unique<BinaryExpr>(BinaryExpr::INDEX, move(e), $);} ']' | <arg_list>${e = make_unique<ApplyExpr>(move(e),$);} ] | INT↑i @{e = make_unique<LitExpr>(i);} | '(' <expr>${e = $;} ')' ) @{return move(e);}
 <mul_op>↑<BinaryExpr::Op> ::= '*' @{return BinaryExpr::MUL;} | '/' @{return BinaryExpr::DIV;}
 <add_op>↑<BinaryExpr::Op> ::= '+' @{return BinaryExpr::ADD;} | '-' @{return BinaryExpr::SUB;}
-<lvalue>↑<unique_ptr<Expr>> ::= @{unique_ptr<Expr> e;} IDENT↑name @{e = make_unique<SymExpr>(lookup(name));} [ '[' <expr>${e = make_unique<BinaryExpr>(BinaryExpr::INDEX, move(e), $);} ']' @{return move(e);} ]
+<lvalue>↑<unique_ptr<Expr>> ::= @{unique_ptr<Expr> e;} IDENT↑name @{e = make_unique<SymExpr>(lookup(name));} [ '[' <expr>${e = make_unique<BinaryExpr>(BinaryExpr::INDEX, move(e), $);} ']' ] @{return move(e);}
 <assign_stmt>↑<unique_ptr<Stmt>> ::= <lvalue>↑var BECOMES <expr>↑val @{return make_unique<AssignStmt>(move(var), move(val));}
-<if_stmt>↑<unique_ptr<Stmt>> ::= T_IF <cond>↑cond T_THEN <stmt>↑st [ T_ELSE <stmt>↑sf @{return make_unique<IfStmt>(move(cond), move(st), move(sf));} ] @{return make_unique<IfStmt>(move(cond), move(st));}
+<if_stmt>↑<unique_ptr<Stmt>> ::= @{unique_ptr<Stmt> sf;} T_IF <cond>↑cond T_THEN <stmt>↑st [ T_ELSE <stmt>${sf = $;} ] @{return make_unique<IfStmt>(move(cond), move(st), move(sf));}
 <cond>↑<unique_ptr<Cond>> ::= <expr>↑e1 <rel_op>↑op <expr>↑e2 @{return make_unique<Cond>(op,move(e1),move(e2));}
 <rel_op>↑<Cond::Op>op ::= '<' @{return Cond::LT;} | GE @{return Cond::GE;} | '>' @{return Cond::GT;} | LE @{return Cond::LE;} | '=' @{return Cond::EQ;} | NE @{return Cond::NE;}
 <do_while_stmt>↑<unique_ptr<Stmt>> ::= T_DO <stmt>↑body T_WHILE <cond>↑cond @{return make_unique<DoWhileStmt>(move(cond), move(body));}
-<lvalue_list>↑<vector<unique_ptr<Expr>>> ::= @{vector<unique_ptr<Expr>> v;} <lvalue>${v.push_back($);} {',' <lvalue>${v.push_back($);} }
+<lvalue_list>↑<vector<unique_ptr<Expr>>> ::= @{vector<unique_ptr<Expr>> v;} <lvalue>${v.push_back($);} {',' <lvalue>${v.push_back($);} } @{return v;}
 <read_stmt>↑<unique_ptr<Stmt>> ::= T_READ '(' <lvalue_list>↑vars ')' @{return make_unique<ReadStmt>(move(vars));}
-<write_stmt>↑<unique_ptr<Stmt>> ::= @{string str; unique_ptr<Expr> val;} T_WRITE '(' ( STRING${str = $;} [ ',' <expr>${val = $;} ] | <expr>${val = $;} ) ')' @{return unique_ptr<WriteStmt>(str,val);}
+<write_stmt>↑<unique_ptr<Stmt>> ::= @{string str; unique_ptr<Expr> val;} T_WRITE '(' ( STRING${str = $;} [ ',' <expr>${val = $;} ] | <expr>${val = $;} ) ')' @{return make_unique<WriteStmt>(str, move(val));}
 <for_stmt>↑<unique_ptr<Stmt>> ::= @{bool down;} T_FOR <lvalue>↑i BECOMES <expr>↑from (T_DOWNTO @{down = true;} | T_TO @{down = false;}) <expr>↑to T_DO <stmt>↑body @{return make_unique<ForStmt>(move(i), move(from), move(to), move(body), down);}
 CHAR↑<int> i
 IDENT↑<string> s

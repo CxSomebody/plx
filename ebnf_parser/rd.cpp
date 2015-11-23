@@ -17,8 +17,8 @@ static bool check_arity(Instance *inst, bool input)
 {
 	size_t narg = inst->args ? (input ? inst->args->in.size() : inst->args->out.size()) : 0;
 	Symbol *sym = inst->sym;
-	if (sym->inner)
-		sym = sym->inner; // special case for guarded symbols
+	if (sym->core)
+		sym = sym->core; // special case for guarded symbols
 	size_t nparam = input ? sym->params.in.size() : sym->params.out.size();
 	if (narg == nparam)
 		return true;
@@ -54,7 +54,6 @@ static void print_param_list(const vector<Param> &list)
 
 static void print_params(Symbol *nterm)
 {
-	print_param_list(nterm->params.out);
 	print_param_list(nterm->params.in);
 }
 
@@ -66,7 +65,6 @@ static void print_arg_list(const vector<string> &list)
 
 static void print_args(const ArgSpec &args)
 {
-	print_arg_list(args.out);
 	print_arg_list(args.in);
 }
 
@@ -77,11 +75,11 @@ static void emit_proc_param_list(Symbol *nterm)
 	printf("const set &_t, const set &_f)");
 }
 
-static void emit_proc_header(Symbol *nterm)
+static void emit_proc_header(Symbol *s)
 {
-	const char *rettype = nterm->params.out.empty() ? "void" : nterm->params.out[0].type.c_str();
-	printf("static %s " PREFIX "%s", rettype, nterm->name.c_str());
-	emit_proc_param_list(nterm);
+	const char *rettype = s->params.out.empty() ? "void" : s->params.out[0].type.c_str();
+	printf("static %s " PREFIX "%s", rettype, s->name.c_str());
+	emit_proc_param_list(s);
 }
 
 static string term_sv(Symbol *term)
@@ -137,23 +135,10 @@ static void print_set(const set<Symbol*> f)
 	putchar('}');
 }
 
-static void gen_input(const Branch &branch, Branch::const_iterator it, int level)
+static void print_tf(const Branch &branch, Branch::const_iterator it)
 {
-	Instance *inst = *it;
-	Symbol *s = inst->sym;
-	if (s->kind == Symbol::TERM) {
-		printf("expect(%s, ", s->name.c_str());
-	} else /* NTERM */ {
-		if (s->up) {
-			emit_proc(s, level);
-		} else {
-			printf(PREFIX "%s", s->name.c_str());
-		}
-		putchar('(');
-		if (inst->args)
-			print_args(*inst->args);
-	}
 	set<Symbol*> nt;
+	Symbol *s = (*it)->core_sym();
 	bool thru;
 	if (s->kind == Symbol::NTERM || s->weak) {
 		auto it2 = next(it);
@@ -175,33 +160,69 @@ static void gen_input(const Branch &branch, Branch::const_iterator it, int level
 	} else {
 		printf(", _t|_f");
 	}
-	printf(");\n");
+}
+
+static void gen_input_bare(const Branch &branch, Branch::const_iterator it, int level)
+{
+	Instance *inst = *it;
+	Symbol *s = inst->core_sym();
+	if (s->up) {
+		emit_proc(s, level);
+	} else {
+		printf(PREFIX "%s", s->name.c_str());
+	}
+	putchar('(');
+	if (inst->args)
+		print_args(*inst->args);
+	print_tf(branch, it);
+	putchar(')');
+}
+
+static void gen_input(const Branch &branch, Branch::const_iterator it, int level)
+{
+	Instance *inst = *it;
+	if (inst->attached_action.empty()) {
+		gen_input_bare(branch, it, level);
+		putchar(';');
+	} else {
+		for (char c: inst->attached_action) {
+			if (c == '$')
+				gen_input_bare(branch, it, level);
+			else
+				putchar(c);
+		}
+	}
+	putchar('\n');
 }
 
 static void emit_proc(Symbol *nterm, int level)
 {
-	bool use_getsym = false;
+	bool nocheck = false;
 	auto indent = [&]() {
 		for (int i=0; i<level; i++)
 			putchar('\t');
 	};
-	auto gen_branch = [&](Symbol *nterm, const Branch &branch, bool ctl) {
+	auto gen_branch = [&](Symbol *nterm, const Branch &branch, const char *ctl) {
 		set<Symbol*> f = first_of_production(nterm, branch);
 		if (ctl) {
 			indent();
-			printf("if (");
-			auto it = f.begin();
-			while (it != f.end()) {
-				Symbol *term = *it;
-				printf("sym == %s", term->name.c_str());
-				if (term->inner)
-					printf(" && %s(%s)", term->sp.c_str(), term_sv(term->inner).c_str());
-				if (next(it) != f.end())
-					printf(" || ");
-				it++;
+			if (strcmp(ctl, "else")) {
+				printf("%s (", ctl);
+				auto it = f.begin();
+				while (it != f.end()) {
+					Symbol *term = *it;
+					printf("sym == %s", term->name.c_str());
+					if (term->core)
+						printf(" && %s(%s)", term->sp.c_str(), term_sv(term->core).c_str());
+					if (next(it) != f.end())
+						printf(" || ");
+					it++;
+				}
+				printf(") {\n");
+			} else {
+				printf("else {\n");
 			}
-			printf(") {\n");
-			use_getsym = true;
+			nocheck = true;
 			level++;
 		}
 #if 0
@@ -216,43 +237,50 @@ static void emit_proc(Symbol *nterm, int level)
 		// emit code for each symbol in sequence
 		for (auto it = branch.begin(); it != branch.end(); it++) {
 			Instance *inst = *it;
-			Symbol *s = inst->sym;
-			if (s->inner)
-				s = s->inner;
+			Symbol *s = inst->core_sym();
 			indent();
 			if (s->kind == Symbol::ACTION) {
 				emit_action(inst);
 			} else {
-				if (s->kind == Symbol::TERM) {
-					bool need_indent = false;
-					if (!use_getsym) {
-						gen_input(branch, it, level);
-						need_indent = true;
-					}
-					// save token value
-					if (inst->args) {
-						if (need_indent)
+				if (s->kind == Symbol::TERM && !s->svtype()) {
+					const char *outarg = inst->outarg();
+					string &&sv(term_sv(s));
+					if (outarg)
+						printf("%s %s", s->svtype(), outarg);
+					if (nocheck) {
+						// don't emit check
+						if (outarg) {
+							printf("= %s;\n", sv.c_str());
 							indent();
-						printf("%s = %s;\n", inst->args->out[0].c_str(), term_sv(s).c_str());
-						need_indent = true;
-					}
-					if (use_getsym) {
-						if (need_indent)
-							indent();
-						printf("getsym();\n");
-						need_indent = true;
-					}
-				} else /* NTERM s */ {
-					if (nterm->opening_sym() == '{' && next(it) == branch.end()) {
-						printf("goto start;\n");
-					} else {
-						if (inst->args && !inst->args->out.empty()) {
-							printf("auto %s = ", inst->args->out[0].c_str());
 						}
-						gen_input(branch, it, level);
+						printf("getsym();\n");
+					} else {
+						// emit check
+						if (outarg) {
+							printf("{};\n");
+							indent();
+						}
+						printf("if (check(%s, ", s->name.c_str());
+						print_tf(branch, it);
+						printf(")) {\n");
+						level++;
+						indent();
+						if (outarg) {
+							printf("%s = %s;\n", outarg, sv.c_str());
+							indent();
+						}
+						printf("getsym();\n");
+						level--;
+						indent();
+						printf("}\n");
 					}
+				} else /* NTERM or TERM with svtype */ {
+					const char *outarg = inst->outarg();
+					if (outarg)
+						printf("auto %s = ", outarg);
+					gen_input(branch, it, level);
 				}
-				use_getsym = false;
+				nocheck = false;
 			}
 		}
 		if (ctl) {
@@ -274,25 +302,40 @@ static void emit_proc(Symbol *nterm, int level)
 	indent();
 	printf("try {\n");
 	level++;
-	// emit start label if necessary
-	for (const Branch &branch: nterm->branches) {
-		for (Instance *inst: branch) {
-			Symbol *s = inst->sym;
-			if (s == nterm && s->opening_sym() == '{') {
-				printf("start:\n");
-				goto gen_body;
-			}
+	if (nterm->opening_sym() == '{') {
+		indent();
+		printf("for (;;) {\n");
+		level++;
+		const vector<Branch> &branches = *nterm->branches_core;
+		size_t n = branches.size();
+		for (size_t i=0; i<n; i++)
+			gen_branch(nterm, branches[i], i == 0 ? "if" : "else if");
+		indent();
+		printf("else break;\n");
+		level--;
+		indent();
+		printf("}\n");
+	} else {
+		const vector<Branch> &branches = nterm->branches;
+		size_t n = branches.size();
+		if (n == 1) {
+			gen_branch(nterm, branches[0], nullptr);
+		} else {
+			for (size_t i=0; i<n; i++)
+				gen_branch(nterm, branches[i], i == 0 ? "if" : i < n-1 ? "else if" : "else");
 		}
 	}
-gen_body:
-	for (auto it = nterm->branches.begin(); it != nterm->branches.end(); it++)
-		gen_branch(nterm, *it, next(it) != nterm->branches.end());
 	level--;
 	indent();
 	printf("} catch (SyntaxError &_e) {\n");
 	level++;
 	indent();
 	printf("if (!_t.get(sym)) throw _e;\n");
+	const char *svtype = nterm->svtype();
+	if (svtype) {
+		indent();
+		printf("return %s();\n", svtype);
+	}
 	level--;
 	indent();
 	printf("}\n");
@@ -310,8 +353,8 @@ static void f(vector<Param> &argtype, size_t pos, const Branch &branch, Symbol *
 	assert (pos<branch.size());
 	Instance *inst = branch[pos];
 	Symbol *sym = inst->sym;
-	if (sym->inner)
-		sym = sym->inner;
+	if (sym->core)
+		sym = sym->core;
 	size_t mark = argtype.size();
 	if (sym->kind == Symbol::NTERM && sym->up && lhs != sym /* prevent infinite recursion */ )
 		for (const Branch &c: sym->branches)
@@ -375,6 +418,12 @@ bool generate_rd()
 	fputs(preamble2, stdout);
 	putchar('\n');
 	// forward declarations of parsing routines
+	for_each_term([](Symbol *term) {
+		if (term->svtype()) {
+			emit_proc_header(term);
+			printf(";\n");
+		}
+	});
 	for_each_reachable_nterm([](Symbol *nterm) {
 		if (!nterm->up) {
 			emit_proc_header(nterm);
@@ -383,6 +432,8 @@ bool generate_rd()
 	});
 	// determine local variables needed in each proc
 	//compute_locals();
+#if 0
+	// WTF is this??
 	for_each_term([](Symbol *term) {
 		if (term->kind == Symbol::ACTION && term->action.empty()) {
 			size_t n = term->params.in.size();
@@ -393,6 +444,7 @@ bool generate_rd()
 			}
 		}
 	});
+#endif
 	putchar('\n');
 #if 1
 	printf("void parse()\n"
@@ -402,6 +454,21 @@ bool generate_rd()
 	       "}\n",
 	       top->name.c_str());
 #endif
+	for_each_term([](Symbol *term) {
+		const char *svtype = term->svtype();
+		if (svtype) {
+			emit_proc_header(term);
+			printf(" {\n"
+			       "\t%s sv{};\n"
+			       "\tif (check(%s, _t, _f)) {\n"
+			       "\t\tsv = %s;\n"
+			       "\t\tgetsym();\n"
+			       "\t}\n"
+			       "\treturn sv;\n"
+			       "}\n",
+			       svtype, term->name.c_str(), term_sv(term).c_str());
+		}
+	});
 	for_each_reachable_nterm([](Symbol *nterm) {
 		if (!nterm->up)
 			emit_proc(nterm, 0);

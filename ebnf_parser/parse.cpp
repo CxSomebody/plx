@@ -50,7 +50,12 @@ static vector<string> parse_arg_list(void)
 {
 	vector<string> list;
 	if (sym == IDENT) {
-		list.push_back(yytext);
+		list.emplace_back(yytext);
+		getsym();
+		goto finish;
+	}
+	if (sym == QUOTE) {
+		list.emplace_back(qtext);
 		getsym();
 		goto finish;
 	}
@@ -61,9 +66,15 @@ static vector<string> parse_arg_list(void)
 		goto finish;
 	}
 	for (;;) {
-		if (sym != IDENT) error();
-		list.emplace_back(yytext);
-		getsym();
+		if (sym == IDENT) {
+			list.emplace_back(yytext);
+			getsym();
+		} else if (sym == QUOTE) {
+			list.emplace_back(qtext);
+			getsym();
+		} else {
+			error();
+		}
 		if (sym == ')') {
 			getsym();
 			goto finish;
@@ -226,7 +237,7 @@ static void parse_branch(Branch &branch, Symbol *lhs, int branch_id)
 								new Symbol(Symbol::TERM, term_name);
 						}
 						guarded_term->sp = yytext;
-						guarded_term->inner = newsym;
+						guarded_term->core = newsym;
 						newsym = guarded_term;
 						getsym();
 					} else {
@@ -260,8 +271,9 @@ static void parse_branch(Branch &branch, Symbol *lhs, int branch_id)
 			return;
 		}
 		Instance *newinst;
+		string atact;
 		if (sym == ATTACHED_ACTION) {
-			newsym->attached_action = qtext;
+			atact = qtext;
 			getsym();
 		}
 		ArgSpec args = parse_args();
@@ -269,6 +281,7 @@ static void parse_branch(Branch &branch, Symbol *lhs, int branch_id)
 			newinst = new Instance(newsym, std::move(args));
 		else
 			newinst = new Instance(newsym);
+		newinst->attached_action = atact;
 		branch.emplace_back(newinst);
 	}
 }

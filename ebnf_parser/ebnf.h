@@ -30,14 +30,14 @@ struct Symbol {
 	ParamSpec params;
 	Symbol *up; // for inline symbols
 	std::string sp; // TERM: semantic predicate
-	Symbol *inner; // TERM
+	Symbol *core; // TERM
 	std::string action; // ACTION (inline)
-	std::string attached_action;
 	int id = -1;
 	bool nullable = false;
 	bool defined = false;
 	bool weak = false;
 	int opening_sym();
+	const char *svtype();
 	Symbol(SymbolKind kind, const std::string &name);
 };
 
@@ -49,8 +49,11 @@ struct ArgSpec {
 struct Instance {
 	Symbol *sym;
 	std::unique_ptr<ArgSpec> args;
+	std::string attached_action;
 	Instance(Symbol *sym, ArgSpec &&args);
 	Instance(Symbol *sym);
+	const char *outarg();
+	Symbol *core_sym();
 };
 
 extern std::map<std::string, Symbol*> term_dict, nterm_dict, action_dict;

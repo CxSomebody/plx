@@ -1,8 +1,9 @@
 #include <cassert>
 #include <map>
+#include <memory>
 #include <string>
 #include <vector>
-#include "symtab.h"
+#include "semant.h"
 
 using namespace std;
 
@@ -82,21 +83,15 @@ void def_vars(const vector<string> &names, Type *type)
 			symtab->map[name] = var_symbol(name, type);
 }
 
-void def_proc(const string &name, const ParamList &names)
+void def_func(const ProcHeader &header, Type *rettype)
 {
-	if (check_redef(name)) {
-		symtab->map[name] = proc_symbol(name, nullptr);
-	}
-}
-
-void def_func(const string &name, const ParamList &names, Type *rettype)
-{
+	const string &name = header.first;
 	if (check_redef(name)) {
 		symtab->map[name] = proc_symbol(name, rettype);
 	}
 }
 
-void def_params(const ParamList &params)
+void def_params(const vector<Param> &params)
 {
 	for (const Param &p: params) {
 		const string &name = p.name;
@@ -130,13 +125,12 @@ bool is_proc(const string &name)
 	return s && s->kind == Symbol::PROC && !s->rettype;
 }
 
-void push_param_group(ParamList &params,
-		      const vector<string> &names,
-		      Type *type,
-		      bool byref)
+vector<Param> param_group(const vector<string> &names, Type *type, bool byref)
 {
+	vector<Param> params;
 	for (const string &name: names)
 		params.emplace_back(name, type, byref);
+	return params;
 }
 
 void print_type(Type *ty)
@@ -203,28 +197,28 @@ SymbolTable *pop_symtab()
 	return savedst;
 }
 
-Block::Block(const string &name, const vector<unique_ptr<Block>> &subs, const vector<Stmt*> &stmts, SymbolTable *symtab):
-	name(name), subs(subs), stmts(stmts), symtab(symtab)
+Block::Block(const string &name, vector<unique_ptr<Block>> &&subs, vector<unique_ptr<Stmt>> &&stmts, SymbolTable *symtab):
+	name(name), subs(move(subs)), stmts(move(stmts)), symtab(symtab)
 {
 }
 
 void print_stmt(Stmt *s);
 
-void print_block(Block *blk, int level)
+void Block::print(int level)
 {
 	auto indent = [&]() {
 		for (int i=0; i<level; i++)
 			printf("  ");
 	};
 	indent();
-	printf("%s {\n", blk->name.c_str());
+	printf("%s {\n", name.c_str());
 	level++;
-	for (Block *sub: blk->subs) {
-		print_block(sub, level);
+	for (auto &sub: subs) {
+		sub->print(level);
 	}
-	for (Stmt *s: blk->stmts) {
+	for (auto &s: stmts) {
 		indent();
-		print_stmt(s);
+		s->print();
 		putchar('\n');
 	}
 	level--;
@@ -232,12 +226,7 @@ void print_block(Block *blk, int level)
 	printf("}\n");
 }
 
-void translate(Block *blk)
+void translate(unique_ptr<Block> &&blk)
 {
-	print_block(blk, 0);
-}
-
-const char *entry_name()
-{
-	return "main";
+	blk->print(0);
 }

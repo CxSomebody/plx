@@ -8,7 +8,8 @@ extern "C" {
 #include "tokens.h"
 }
 
-#include "symtab.h"
-#include "expr.h"
+#include "semant.h"
 
 using namespace std;
+
+typedef Type *PType;

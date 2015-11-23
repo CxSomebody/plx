@@ -55,16 +55,14 @@ public:
 	}
 };
 =2
-static void expect(int s, const set &t, const set &f)
+static bool check(int s, const set &t, const set &f)
 {
-	if (sym == s) {
-		getsym();
-		return;
-	}
+	if (sym == s)
+		return true;
 	fprintf(stderr, "%d:%d: syntax error at ‘%.*s’\n",
 		lineno, colno, toklen, tokstart);
 	for (;;) {
-		if (t.get(sym)) return;
+		if (t.get(sym)) return false;
 		if (f.get(sym)) throw SyntaxError();
 		fprintf(stderr, "%d:%d: [skipping ‘%.*s’]\n",
 			lineno, colno, toklen, tokstart);

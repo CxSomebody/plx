@@ -1,4 +1,4 @@
-CXXFLAGS += -g -Wall
+CXXFLAGS += -std=c++14 -g -Wall
 
 plx: expr.o keywords.o lexer.o parser.o plx.o symtab.o
 	c++ -o $@ $^

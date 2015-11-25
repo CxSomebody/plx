@@ -1,10 +1,7 @@
 *.o
-/ebnf_parser/ebnf
-/ebnf_parser/preamble.inc
 /keywords.c
 /keywords.gperf
 /keywords.gperf.h
-/parser.cpp
 /plx
 /tokens.h
 /tokname.inc

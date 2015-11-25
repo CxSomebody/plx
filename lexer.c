@@ -21,14 +21,12 @@ char *fpath;
 static char buf[BUFFER_SIZE]; // buf[BUFFER_SIZE-1] is always 0
 static char *bufp = buf+(BUFFER_SIZE-1);
 
-static char tokstr[MAX_TOKEN_LEN+1];
-static int tokstrlen;
+static char svstr[MAX_TOKEN_LEN+1];
+static int svstrlen;
 
 char *tokstart;
 int toklen;
 union tokval_u tokval;
-
-int sym;
 
 int lineno;
 int colno = 1;
@@ -93,8 +91,9 @@ static int mystoi(char *s, int n)
 	return ret;
 }
 
-void getsym(void)
+int lex(void)
 {
+	int sym;
 	colno += toklen;
 	char *p;
 	char errflag = 0;
@@ -177,13 +176,13 @@ void getsym(void)
 				case '\'':
 				case '"':
 					q = p;
-					tokstrlen = 0;
+					svstrlen = 0;
 					while (*q >= ' ' && *q != *tokstart)
-						tokstr[tokstrlen++] = *q++;
+						svstr[svstrlen++] = *q++;
 					if (*q == *tokstart) {
 						p = q+1;
 						sym = *q == '"' ? STRING : CHAR;
-						tokstr[tokstrlen] = 0;
+						svstr[svstrlen] = 0;
 					} else {
 						errflag = 1;
 						error("unmatched %c", *tokstart);
@@ -198,16 +197,17 @@ void getsym(void)
 		tokval.i = myatoi(tokstart, toklen);
 		break;
 	case IDENT:
-		memcpy(tokstr, tokstart, toklen);
-		tokstr[toklen] = 0;
+		memcpy(svstr, tokstart, toklen);
+		svstr[toklen] = 0;
 		/* fallthrough */
 	case STRING:
-		tokval.s = tokstr;
+		tokval.s = svstr;
 		break;
 	case CHAR:
-		tokval.i = mystoi(tokstr, tokstrlen);
+		tokval.i = mystoi(svstr, svstrlen);
 	}
 	bufp = p;
+	return sym;
 }
 
 void lexer_open(const char *path)

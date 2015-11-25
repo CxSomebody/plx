@@ -183,6 +183,7 @@ static unique_ptr<Expr> term();
 static unique_ptr<Expr> expr();
 static vector<unique_ptr<Expr>> expr_list();
 static vector<unique_ptr<Expr>> lvalue_list();
+static unique_ptr<Cond> cond();
 
 void parse()
 {
@@ -221,7 +222,7 @@ static void block(ProcHeader &&header)
 	X _{';', '.'};
 	try {
 		//const vector<Param> &params = header.second;
-		//push_symtab();
+		push_symtab();
 		//def_params(params);
 		if (tok.sym == T_CONST) {
 			getsym();
@@ -233,7 +234,7 @@ static void block(ProcHeader &&header)
 		}
 		sub_list();
 		comp_stmt();
-		//SymbolTable *symtab = pop_symtab();
+		SymbolTable *symtab = pop_symtab();
 	} CATCH
 }
 
@@ -375,11 +376,13 @@ static void sub_list()
 				ProcHeader header(proc_header());
 				check(';'); getsym();
 				block(move(header));
+				check(';'); getsym();
 			} else if (tok.sym == T_FUNCTION) {
 				getsym();
 				ProcHeader header(func_header());
 				check(';'); getsym();
 				block(move(header));
+				check(';'); getsym();
 			} else {
 				break;
 			}
@@ -461,7 +464,7 @@ static unique_ptr<CompStmt> comp_stmt()
 			getsym();
 		}
 		check(T_END); getsym();
-		return move(stmts);
+		return make_unique<CompStmt>(move(stmts));
 	} CATCH_R(nullptr)
 }
 
@@ -471,9 +474,10 @@ static unique_ptr<Stmt> stmt()
 	try {
 		switch (tok.sym) {
 		case IDENT:
-			if (ntok.sym == '(')
-				return call_stmt();
-			return assign_stmt();
+			if (ntok.sym == BECOMES ||
+			    ntok.sym == '[')
+				return assign_stmt();
+			return call_stmt();
 		case T_IF:
 			return if_stmt();
 		case T_DO:
@@ -502,31 +506,55 @@ static unique_ptr<AssignStmt> assign_stmt()
 
 static unique_ptr<CallStmt> call_stmt()
 {
-	return nullptr;
+	X _{';', T_END, T_ELSE, T_WHILE};
+	try {
+		check(IDENT);
+		Symbol *proc = lookup(tok.s);
+		getsym();
+		check('('); getsym();
+		vector<unique_ptr<Expr>> args(expr_list());
+		check(')'); getsym();
+		return make_unique<CallStmt>(proc, move(args));
+	} CATCH_R(nullptr)
 }
 
 static unique_ptr<IfStmt> if_stmt()
 {
-	return nullptr;
+	X _{';', T_END, T_ELSE, T_WHILE};
+	try {
+		check(T_IF); getsym();
+		unique_ptr<Cond> c(cond());
+		check(T_THEN); getsym();
+		unique_ptr<Stmt> st(stmt());
+		if (tok.sym == T_ELSE) {
+			getsym();
+			return make_unique<IfStmt>(move(c), move(st), stmt());
+		}
+		return make_unique<IfStmt>(move(c), move(st), nullptr);
+	} CATCH_R(nullptr)
 }
 
 static unique_ptr<DoWhileStmt> do_while_stmt()
 {
+	X _{';', T_END, T_ELSE, T_WHILE};
 	return nullptr;
 }
 
 static unique_ptr<ForStmt> for_stmt()
 {
+	X _{';', T_END, T_ELSE, T_WHILE};
 	return nullptr;
 }
 
 static unique_ptr<ReadStmt> read_stmt()
 {
+	X _{';', T_END, T_ELSE, T_WHILE};
 	return nullptr;
 }
 
 static unique_ptr<WriteStmt> write_stmt()
 {
+	X _{';', T_END, T_ELSE, T_WHILE};
 	return nullptr;
 }
 
@@ -545,4 +573,135 @@ static unique_ptr<Expr> lvalue()
 		}
 		return move(e);
 	} CATCH_R(nullptr)
+}
+
+static vector<unique_ptr<Expr>> expr_list()
+{
+	X _{')'};
+	try {
+		vector<unique_ptr<Expr>> ret;
+		for (;;) {
+			ret.emplace_back(expr());
+			if (tok.sym != ',')
+				break;
+			getsym();
+		}
+		return move(ret);
+	} CATCH_R(vector<unique_ptr<Expr>>())
+}
+
+static unique_ptr<Cond> cond()
+{
+	X _{T_THEN, ';', T_END, T_ELSE, T_WHILE};
+	try {
+		unique_ptr<Expr> e1(expr());
+		Cond::Op op;
+		switch (tok.sym) {
+		case '=':
+			op = Cond::EQ;
+			break;
+		case NE:
+			op = Cond::NE;
+			break;
+		case '<':
+			op = Cond::LT;
+			break;
+		case GE:
+			op = Cond::GE;
+			break;
+		case '>':
+			op = Cond::GT;
+			break;
+		case LE:
+			op = Cond::LE;
+			break;
+		default:
+			// TODO report error
+			recover();
+		}
+		getsym();
+		unique_ptr<Expr> e2(expr());
+		return make_unique<Cond>(op, move(e1), move(e2));
+	} CATCH_R(nullptr)
+}
+
+static unique_ptr<Expr> expr()
+{
+	X _{',', ';', ']', ')', T_END, T_THEN, T_ELSE, '<', GE, '>', LE, '=', NE, T_DO, T_WHILE, T_TO, T_DOWNTO};
+	try {
+		bool neg = opt_sign();
+		unique_ptr<Expr> e(term());
+		for (;;) {
+			BinaryExpr::Op op;
+			switch (tok.sym) {
+			case '+':
+				op = BinaryExpr::ADD;
+				break;
+			case '-':
+				op = BinaryExpr::SUB;
+				break;
+			default:
+				if (neg)
+					return make_unique<UnaryExpr>(UnaryExpr::NEG, move(e));
+				return move(e);
+			}
+			getsym();
+			e = make_unique<BinaryExpr>(op, move(e), term());
+		}
+	} CATCH_R(nullptr);
+}
+
+static unique_ptr<Expr> term()
+{
+	unique_ptr<Expr> e(factor());
+	for (;;) {
+		BinaryExpr::Op op;
+		switch (tok.sym) {
+		case '*':
+			op = BinaryExpr::MUL;
+			break;
+		case '/':
+			op = BinaryExpr::DIV;
+			break;
+		default:
+			return move(e);
+		}
+		getsym();
+		e = make_unique<BinaryExpr>(op, move(e), factor());
+	}
+}
+
+static unique_ptr<Expr> factor()
+{
+	unique_ptr<Expr> e;
+	switch (tok.sym) {
+	case IDENT:
+		e = ident_expr(tok.s);
+		getsym();
+		switch (tok.sym) {
+		case '(':
+			getsym();
+			e = make_unique<ApplyExpr>(move(e), expr_list());
+			check(')'); getsym();
+			return e;
+		case '[':
+			getsym();
+			e = make_unique<BinaryExpr>(BinaryExpr::INDEX, move(e), expr());
+			check(']'); getsym();
+			return e;
+		}
+		return move(e);
+	case INT:
+		e = make_unique<LitExpr>(tok.i);
+		getsym();
+		return move(e);
+	case '(':
+		getsym();
+		e = expr();
+		check(')'); getsym();
+		return move(e);
+	}
+	// TODO report error
+	recover();
+	return nullptr;
 }

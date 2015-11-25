@@ -10,8 +10,8 @@
 <type> ::= <basic_type> | T_ARRAY '[' INT ']' T_OF <basic_type>
 <basic_type> ::= T_INTEGER | T_CHAR
 <sub_list> ::= { T_PROCEDURE <proc_def> | T_FUNCTION <func_def> }
-<proc_def> ::= <proc_header> ';' <block>
-<func_def> ::= <func_header> ';' <block>
+<proc_def> ::= <proc_header> ';' <block> ';'
+<func_def> ::= <func_header> ';' <block> ';'
 <proc_header> ::= IDENT [ '(' <param_list> ')' ]
 <func_header> ::= <proc_header> ':' <basic_type>
 <param_list> ::= <param_group> { ';' <param_group> }

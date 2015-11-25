@@ -128,11 +128,11 @@ bool is_proc(const string &name)
 	return s && s->kind == Symbol::PROC && !s->rettype;
 }
 
-vector<Param> param_group(const vector<string> &names, Type *type, bool byref)
+vector<Param> param_group(vector<string> &&names, Type *type, bool byref)
 {
 	vector<Param> params;
-	for (const string &name: names)
-		params.emplace_back(name, type, byref);
+	for (string &name: names)
+		params.emplace_back(move(name), type, byref);
 	return params;
 }
 

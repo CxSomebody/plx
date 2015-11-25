@@ -84,7 +84,7 @@ Type *int_type();
 Type *char_type();
 Type *array_type(Type *elty, int n);
 bool is_proc(const std::string &ident);
-std::vector<Param> param_group(const std::vector<std::string> &names, Type *type, bool byref);
+std::vector<Param> param_group(std::vector<std::string> &&names, Type *type, bool byref);
 void push_symtab();
 SymbolTable *pop_symtab();
 void translate(std::unique_ptr<Block> &&blk);

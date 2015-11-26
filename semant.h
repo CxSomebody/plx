@@ -61,7 +61,10 @@ struct Block {
 	std::vector<std::unique_ptr<Block>> subs;
 	std::vector<std::unique_ptr<Stmt>> stmts;
 	SymbolTable *symtab;
-	Block(const std::string &name, std::vector<std::unique_ptr<Block>> &&subs, std::vector<std::unique_ptr<Stmt>> &&stmts, SymbolTable *symtab);
+	Block(std::string &&name,
+	      std::vector<std::unique_ptr<Block>> &&subs,
+	      std::vector<std::unique_ptr<Stmt>> &&stmts,
+	      SymbolTable *symtab);
 	void print(int level);
 };
 

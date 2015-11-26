@@ -151,8 +151,8 @@ static void missing(int s)
 }
 #endif
 
-static void program();
-static void block(ProcHeader &&header);
+static unique_ptr<Block> program();
+static unique_ptr<Block> block(ProcHeader &&header);
 static void const_part();
 static void const_def();
 static int constant();
@@ -162,7 +162,7 @@ static void var_decl();
 static vector<string> id_list();
 static Type *type();
 static Type *basic_type();
-static void sub_list();
+static vector<unique_ptr<Block>> sub_list();
 static ProcHeader proc_header();
 static ProcHeader func_header();
 static vector<Param> param_list();
@@ -183,11 +183,11 @@ static unique_ptr<Expr> expr();
 static vector<unique_ptr<Expr>> expr_list();
 static unique_ptr<Cond> cond();
 
-void parse()
+unique_ptr<Block> parse()
 {
 	savetok(lex(), &tok);
 	savetok(lex(), &ntok);
-	program();
+	return program();
 }
 
 #define CATCH \
@@ -205,17 +205,18 @@ void parse()
 		return E; \
 	}
 
-static void program()
+static unique_ptr<Block> program()
 {
 	X _{0};
 	try {
-		block(ProcHeader("main", vector<Param>{}));
+		unique_ptr<Block> blk(block(ProcHeader("main", vector<Param>{})));
 		check('.'); getsym();
 		check(0);
-	} CATCH
+		return blk;
+	} CATCH_R(nullptr)
 }
 
-static void block(ProcHeader &&header)
+static unique_ptr<Block> block(ProcHeader &&header)
 {
 	X _{';', '.'};
 	try {
@@ -230,10 +231,15 @@ static void block(ProcHeader &&header)
 			getsym();
 			var_part();
 		}
-		sub_list();
-		comp_stmt();
+		vector<unique_ptr<Block>> subs(sub_list());
+		unique_ptr<CompStmt> body(comp_stmt());
 		SymbolTable *symtab = pop_symtab();
-	} CATCH
+		return make_unique<Block>
+			(move(header.first),
+			 move(subs),
+			 move(body->body),
+			 symtab);
+	} CATCH_R(nullptr)
 }
 
 static void const_part()
@@ -313,6 +319,7 @@ static void var_decl()
 		vector<string> names(id_list());
 		check(':'); getsym();
 		Type *ty = type();
+		def_vars(names, ty);
 	} CATCH
 }
 
@@ -329,7 +336,7 @@ static vector<string> id_list()
 				break;
 			getsym();
 		}
-		return move(ret);
+		return ret;
 	} CATCH_R(vector<string>())
 }
 
@@ -364,44 +371,40 @@ static Type *basic_type()
 	} CATCH_R(nullptr)
 }
 
-static void sub_list()
+static vector<unique_ptr<Block>> sub_list()
 {
 	X _{T_BEGIN};
 	try {
+		vector<unique_ptr<Block>> ret;
 		for (;;) {
-			if (tok.sym == T_PROCEDURE) {
+			bool isfunc = tok.sym == T_FUNCTION;
+			if (tok.sym == T_PROCEDURE || isfunc) {
 				getsym();
-				ProcHeader header(proc_header());
+				ProcHeader header(isfunc ? func_header() : proc_header());
 				check(';'); getsym();
-				block(move(header));
-				check(';'); getsym();
-			} else if (tok.sym == T_FUNCTION) {
-				getsym();
-				ProcHeader header(func_header());
-				check(';'); getsym();
-				block(move(header));
+				ret.emplace_back(block(move(header)));
 				check(';'); getsym();
 			} else {
-				break;
+				return ret;
 			}
 		}
-	} CATCH
+	} CATCH_R(vector<unique_ptr<Block>>())
 }
 
 static ProcHeader proc_header()
 {
 	X _{T_CONST, T_VAR, T_PROCEDURE, T_FUNCTION, T_BEGIN};
 	try {
-		check(IDENT);
-		string name(move(tok.s));
-		getsym();
 		ProcHeader header;
+		check(IDENT);
+		header.first = move(tok.s);
+		getsym();
 		if (tok.sym == '(') {
 			getsym();
-			vector<Param> params(param_list());
+			header.second = param_list();
 			check(')'); getsym();
 		}
-		return move(header);
+		return header;
 	} CATCH_R(ProcHeader())
 }
 
@@ -412,7 +415,8 @@ static ProcHeader func_header()
 		ProcHeader header(proc_header());
 		check(':'); getsym();
 		Type *retty = basic_type();
-		return move(header);
+		def_func(header, retty);
+		return header;
 	} CATCH_R(ProcHeader())
 }
 
@@ -428,7 +432,7 @@ static vector<Param> param_list()
 				break;
 			getsym();
 		}
-		return move(ret);
+		return ret;
 	} CATCH_R(vector<Param>())
 }
 
@@ -624,7 +628,7 @@ static unique_ptr<Expr> lvalue()
 			check(']'); getsym();
 			e = make_unique<BinaryExpr>(BinaryExpr::INDEX, move(e), move(index));
 		}
-		return move(e);
+		return e;
 	} CATCH_R(nullptr)
 }
 
@@ -639,7 +643,7 @@ static vector<unique_ptr<Expr>> expr_list()
 				break;
 			getsym();
 		}
-		return move(ret);
+		return ret;
 	} CATCH_R(vector<unique_ptr<Expr>>())
 }
 
@@ -696,7 +700,7 @@ static unique_ptr<Expr> expr()
 			default:
 				if (neg)
 					return make_unique<UnaryExpr>(UnaryExpr::NEG, move(e));
-				return move(e);
+				return e;
 			}
 			getsym();
 			e = make_unique<BinaryExpr>(op, move(e), term());
@@ -717,7 +721,7 @@ static unique_ptr<Expr> term()
 			op = BinaryExpr::DIV;
 			break;
 		default:
-			return move(e);
+			return e;
 		}
 		getsym();
 		e = make_unique<BinaryExpr>(op, move(e), factor());
@@ -743,16 +747,16 @@ static unique_ptr<Expr> factor()
 			check(']'); getsym();
 			return e;
 		}
-		return move(e);
+		return e;
 	case INT:
 		e = make_unique<LitExpr>(tok.i);
 		getsym();
-		return move(e);
+		return e;
 	case '(':
 		getsym();
 		e = expr();
 		check(')'); getsym();
-		return move(e);
+		return e;
 	}
 	// TODO report error
 	recover();

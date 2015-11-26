@@ -196,8 +196,8 @@ SymbolTable *pop_symtab()
 	return savedst;
 }
 
-Block::Block(const string &name, vector<unique_ptr<Block>> &&subs, vector<unique_ptr<Stmt>> &&stmts, SymbolTable *symtab):
-	name(name), subs(move(subs)), stmts(move(stmts)), symtab(symtab)
+Block::Block(string &&name, vector<unique_ptr<Block>> &&subs, vector<unique_ptr<Stmt>> &&stmts, SymbolTable *symtab):
+	name(move(name)), subs(move(subs)), stmts(move(stmts)), symtab(symtab)
 {
 }
 

@@ -20,46 +20,6 @@ static struct Token {
 	string s;
 } tok, ntok;
 
-enum class nterm {
-	program,
-	block,
-	const_part,
-	const_def,
-	constant,
-	opt_sign,
-	var_part,
-	var_decl,
-	id_list,
-	type,
-	basic_type,
-	sub_list,
-	proc_def,
-	proc_header,
-	param_list,
-	param_group,
-	func_def,
-	func_header,
-	stmt_list,
-	stmt,
-	call_stmt,
-	arg_list,
-	expr,
-	term,
-	factor,
-	mul_op,
-	add_op,
-	lvalue,
-	cond,
-	rel_op,
-	comp_stmt,
-	assign_stmt,
-	if_stmt,
-	do_while_stmt,
-	for_stmt,
-	read_stmt,
-	write_stmt,
-};
-
 // (syncsym, level)
 vector<pair<int, int>> sync;
 // number of synchronizing tokens for each level
@@ -163,8 +123,7 @@ static vector<string> id_list();
 static Type *type();
 static Type *basic_type();
 static vector<unique_ptr<Block>> sub_list();
-static ProcHeader proc_header();
-static ProcHeader func_header();
+static ProcHeader proc_header(bool isfunc);
 static vector<Param> param_list();
 static vector<Param> param_group();
 static unique_ptr<Stmt> stmt();
@@ -266,7 +225,7 @@ static void const_def()
 		getsym();
 		check('='); getsym();
 		int val = constant();
-		printf("const %s = %d\n", name.c_str(), val);
+		def_const(name, val);
 	} CATCH
 }
 
@@ -380,7 +339,7 @@ static vector<unique_ptr<Block>> sub_list()
 			bool isfunc = tok.sym == T_FUNCTION;
 			if (tok.sym == T_PROCEDURE || isfunc) {
 				getsym();
-				ProcHeader header(isfunc ? func_header() : proc_header());
+				ProcHeader header(proc_header(isfunc));
 				check(';'); getsym();
 				ret.emplace_back(block(move(header)));
 				check(';'); getsym();
@@ -391,7 +350,7 @@ static vector<unique_ptr<Block>> sub_list()
 	} CATCH_R(vector<unique_ptr<Block>>())
 }
 
-static ProcHeader proc_header()
+static ProcHeader proc_header(bool isfunc)
 {
 	X _{T_CONST, T_VAR, T_PROCEDURE, T_FUNCTION, T_BEGIN};
 	try {
@@ -404,18 +363,13 @@ static ProcHeader proc_header()
 			header.second = param_list();
 			check(')'); getsym();
 		}
-		return header;
-	} CATCH_R(ProcHeader())
-}
-
-static ProcHeader func_header()
-{
-	X _{T_CONST, T_VAR, T_PROCEDURE, T_FUNCTION, T_BEGIN};
-	try {
-		ProcHeader header(proc_header());
-		check(':'); getsym();
-		Type *retty = basic_type();
-		def_func(header, retty);
+		if (isfunc) {
+			check(':'); getsym();
+			Type *retty = basic_type();
+			def_func(header, retty);
+		} else {
+			def_func(header, nullptr);
+		}
 		return header;
 	} CATCH_R(ProcHeader())
 }

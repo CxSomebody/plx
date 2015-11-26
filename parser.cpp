@@ -94,7 +94,7 @@ static void error(int s)
 	} else {
 		sname = tokname[s-256];
 	}
-	fprintf(stderr, "%d:%d: syntax error: expected %s, found ‘%s’\n",
+	fprintf(stderr, "%d:%d: expected %s, found ‘%s’\n",
 		tok.line, tok.col, sname, tok.spell.c_str());
 	syntax_errors++;
 }
@@ -113,6 +113,14 @@ static void missing(int s)
 	fprintf(stderr, "%d:%d: missing '%c' before ‘%s’\n",
 		tok.line, tok.col, s, tok.spell.c_str());
 	syntax_errors++;
+}
+
+static void skip()
+{
+	fprintf(stderr, "%d:%d: ignoring extra token ‘%s’\n",
+		tok.line, tok.col, tok.spell.c_str());
+	syntax_errors++;
+	getsym();
 }
 
 static unique_ptr<Block> program();
@@ -483,6 +491,8 @@ static unique_ptr<CompStmt> comp_stmt()
 				break;
 			default:
 				error(';');
+				// we may get stuck in an infinite loop otherwise, because <stmt> is nullable
+				getsym();
 			}
 		}
 		check(T_END); getsym();
@@ -553,7 +563,12 @@ static unique_ptr<IfStmt> if_stmt()
 		unique_ptr<Cond> c(cond());
 		check(T_THEN); getsym();
 		unique_ptr<Stmt> st(stmt());
+		if (tok.sym == ';' && ntok.sym == T_ELSE) {
+			skip();
+			goto else_part;
+		}
 		if (tok.sym == T_ELSE) {
+else_part:
 			getsym();
 			return make_unique<IfStmt>(move(c), move(st), stmt());
 		}
@@ -567,7 +582,14 @@ static unique_ptr<DoWhileStmt> do_while_stmt()
 	try {
 		check(T_DO); getsym();
 		unique_ptr<Stmt> body(stmt());
-		check(T_WHILE); getsym();
+		if (tok.sym == T_WHILE) {
+			getsym();
+		} else if (tok.sym == ';' && ntok.sym == T_WHILE) {
+			skip();
+			getsym();
+		} else {
+			error(T_WHILE);
+		}
 		unique_ptr<Cond> c(cond());
 		return make_unique<DoWhileStmt>(move(c), move(body));
 	} CATCH_R(nullptr)

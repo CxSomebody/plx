@@ -6,6 +6,8 @@ struct Type {
 	} kind;
 	virtual ~Type();
 	virtual void print() = 0;
+	virtual int size() = 0;
+	virtual int align() = 0;
 protected:
 	Type(Kind kind);
 };
@@ -14,20 +16,26 @@ struct IntType: Type
 {
 	IntType();
 	void print() override;
+	int size() override;
+	int align() override;
 };
 
 struct CharType: Type
 {
 	CharType();
 	void print() override;
+	int size() override;
+	int align() override;
 };
 
 struct ArrayType: Type
 {
 	Type *elemtype;
-	int size;
-	ArrayType(Type *elemtype, int size);
+	int nelem;
+	ArrayType(Type *elemtype, int nelem);
 	void print() override;
+	int size() override;
+	int align() override;
 };
 
 struct Symbol {

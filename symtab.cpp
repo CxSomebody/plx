@@ -8,11 +8,6 @@
 
 using namespace std;
 
-Type::~Type() {}
-Type::Type(Kind kind): kind(kind) {}
-IntType::IntType(): Type(INT) {}
-CharType::CharType(): Type(CHAR) {}
-ArrayType::ArrayType(Type *elemtype, int size): Type(ARRAY), elemtype(elemtype), size(size) {}
 Symbol::Symbol(SymbolKind kind, const string &name): kind(kind), name(name) {}
 
 void Symbol::print()
@@ -136,22 +131,6 @@ vector<Param> param_group(vector<string> &&names, Type *type, bool byref)
 	return params;
 }
 
-void IntType::print()
-{
-	printf("int");
-}
-
-void CharType::print()
-{
-	printf("char");
-}
-
-void ArrayType::print()
-{
-	printf("array[%d] of ", size);
-	elemtype->print();
-}
-
 void print_symtab(SymbolTable *symtab)
 {
 	assert(symtab);
@@ -223,9 +202,4 @@ void Block::print(int level)
 	level--;
 	indent();
 	printf("}\n");
-}
-
-void translate(unique_ptr<Block> &&blk)
-{
-	blk->print(0);
 }

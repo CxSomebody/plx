@@ -77,39 +77,43 @@ static void recover()
 	}
 }
 
+static void error(int s)
+{
+	char tmp[4];
+	const char *sname;
+	if (s<256) {
+		if (s) {
+			tmp[0] = '\'';
+			tmp[1] = s;
+			tmp[2] = '\'';
+			tmp[3] = 0;
+			sname = tmp;
+		} else {
+			sname = "EOF";
+		}
+	} else {
+		sname = tokname[s-256];
+	}
+	fprintf(stderr, "%d:%d: syntax error: expected %s, found ‘%s’\n",
+		tok.line, tok.col, sname, tok.spell.c_str());
+	syntax_errors++;
+}
+
 // returns true upon ERROR
 static void check(int s)
 {
 	if (tok.sym != s) {
-		char tmp[4];
-		const char *sname;
-		if (s<256) {
-			if (s) {
-				tmp[0] = '\'';
-				tmp[1] = s;
-				tmp[2] = '\'';
-				tmp[3] = 0;
-				sname = tmp;
-			} else {
-				sname = "EOF";
-			}
-		} else {
-			sname = tokname[s-256];
-		}
-		fprintf(stderr, "%d:%d: syntax error: expected %s, found ‘%s’\n",
-			tok.line, tok.col, sname, tok.spell.c_str());
-		syntax_errors++;
+		error(s);
 		recover();
 	}
 }
 
-#if 0
 static void missing(int s)
 {
-	fprintf(stderr, "%d:%d: missing '%c'\n", tok.line, tok.col, s);
+	fprintf(stderr, "%d:%d: missing '%c' before ‘%s’\n",
+		tok.line, tok.col, s, tok.spell.c_str());
 	syntax_errors++;
 }
-#endif
 
 static unique_ptr<Block> program();
 static unique_ptr<Block> block(ProcHeader &&header);
@@ -208,7 +212,19 @@ static void const_part()
 		for (;;) {
 			const_def();
 			if (tok.sym != ',') {
-				check(';'); getsym();
+				switch (tok.sym) {
+				case ';':
+					getsym();
+					break;
+				case T_VAR:
+				case T_PROCEDURE:
+				case T_FUNCTION:
+				case T_BEGIN:
+					missing(';');
+					break;
+				default:
+					error(';');
+				}
 				break;
 			}
 			getsym();
@@ -262,11 +278,22 @@ static bool opt_sign()
 
 static void var_part()
 {
-	X _{';'};
+	X _{T_PROCEDURE, T_FUNCTION, T_BEGIN};
 	try {
 		do {
 			var_decl();
-			check(';'); getsym();
+			switch (tok.sym) {
+			case ';':
+				getsym();
+				break;
+			case T_PROCEDURE:
+			case T_FUNCTION:
+			case T_BEGIN:
+				missing(';');
+				break;
+			default:
+				error(';');
+			}
 		} while (tok.sym == IDENT);
 	} CATCH
 }
@@ -340,9 +367,33 @@ static vector<unique_ptr<Block>> sub_list()
 			if (tok.sym == T_PROCEDURE || isfunc) {
 				getsym();
 				ProcHeader header(proc_header(isfunc));
-				check(';'); getsym();
+				switch (tok.sym) {
+				case ';':
+					getsym();
+					break;
+				case T_CONST:
+				case T_VAR:
+				case T_PROCEDURE:
+				case T_FUNCTION:
+				case T_BEGIN:
+					missing(';');
+					break;
+				default:
+					error(';');
+				}
 				ret.emplace_back(block(move(header)));
-				check(';'); getsym();
+				switch (tok.sym) {
+				case ';':
+					getsym();
+					break;
+				case T_PROCEDURE:
+				case T_FUNCTION:
+				case T_BEGIN:
+					missing(';');
+					break;
+				default:
+					error(';');
+				}
 			} else {
 				return ret;
 			}
@@ -415,9 +466,24 @@ static unique_ptr<CompStmt> comp_stmt()
 		check(T_BEGIN); getsym();
 		for (;;) {
 			stmts.emplace_back(stmt());
-			if (tok.sym != ';')
+			if (tok.sym == T_END)
 				break;
-			getsym();
+			switch (tok.sym) {
+			case ';':
+				getsym();
+				break;
+			case IDENT:
+			case T_BEGIN:
+			case T_IF:
+			case T_DO:
+			case T_FOR:
+			case T_READ:
+			case T_WRITE:
+				missing(';');
+				break;
+			default:
+				error(';');
+			}
 		}
 		check(T_END); getsym();
 		return make_unique<CompStmt>(move(stmts));

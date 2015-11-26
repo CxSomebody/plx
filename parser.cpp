@@ -51,7 +51,6 @@ enum class nterm {
 	lvalue,
 	cond,
 	rel_op,
-	lvalue_list,
 	comp_stmt,
 	assign_stmt,
 	if_stmt,
@@ -182,7 +181,6 @@ static unique_ptr<Expr> factor();
 static unique_ptr<Expr> term();
 static unique_ptr<Expr> expr();
 static vector<unique_ptr<Expr>> expr_list();
-static vector<unique_ptr<Expr>> lvalue_list();
 static unique_ptr<Cond> cond();
 
 void parse()
@@ -478,6 +476,8 @@ static unique_ptr<Stmt> stmt()
 			    ntok.sym == '[')
 				return assign_stmt();
 			return call_stmt();
+		case T_BEGIN:
+			return comp_stmt();
 		case T_IF:
 			return if_stmt();
 		case T_DO:
@@ -511,9 +511,12 @@ static unique_ptr<CallStmt> call_stmt()
 		check(IDENT);
 		Symbol *proc = lookup(tok.s);
 		getsym();
-		check('('); getsym();
-		vector<unique_ptr<Expr>> args(expr_list());
-		check(')'); getsym();
+		vector<unique_ptr<Expr>> args;
+		if (tok.sym == '(') {
+			check('('); getsym();
+			args = expr_list();
+			check(')'); getsym();
+		}
 		return make_unique<CallStmt>(proc, move(args));
 	} CATCH_R(nullptr)
 }
@@ -537,25 +540,75 @@ static unique_ptr<IfStmt> if_stmt()
 static unique_ptr<DoWhileStmt> do_while_stmt()
 {
 	X _{';', T_END, T_ELSE, T_WHILE};
-	return nullptr;
+	try {
+		check(T_DO); getsym();
+		unique_ptr<Stmt> body(stmt());
+		check(T_WHILE); getsym();
+		unique_ptr<Cond> c(cond());
+		return make_unique<DoWhileStmt>(move(c), move(body));
+	} CATCH_R(nullptr)
 }
 
 static unique_ptr<ForStmt> for_stmt()
 {
 	X _{';', T_END, T_ELSE, T_WHILE};
-	return nullptr;
+	try {
+		bool down = false;
+		check(T_FOR); getsym();
+		unique_ptr<Expr> ind(lvalue());
+		check(BECOMES); getsym();
+		unique_ptr<Expr> from(expr());
+		switch (tok.sym) {
+		case T_DOWNTO:
+			down = true;
+			// fallthrough
+		case T_TO:
+			break;
+		default:
+			// TODO report error
+			recover();
+		}
+		getsym();
+		unique_ptr<Expr> to(expr());
+		check(T_DO); getsym();
+		unique_ptr<Stmt> body(stmt());
+		return make_unique<ForStmt>(move(ind), move(from), move(to), move(body), down);
+	} CATCH_R(nullptr)
 }
 
 static unique_ptr<ReadStmt> read_stmt()
 {
 	X _{';', T_END, T_ELSE, T_WHILE};
-	return nullptr;
+	try {
+		check(T_READ); getsym();
+		check('('); getsym();
+		vector<unique_ptr<Expr>> args(expr_list());
+		check(')'); getsym();
+		return make_unique<ReadStmt>(move(args));
+	} CATCH_R(nullptr)
 }
 
 static unique_ptr<WriteStmt> write_stmt()
 {
 	X _{';', T_END, T_ELSE, T_WHILE};
-	return nullptr;
+	try {
+		string str;
+		unique_ptr<Expr> val;
+		check(T_WRITE); getsym();
+		check('('); getsym();
+		if (tok.sym == STRING) {
+			str = move(tok.s);
+			getsym();
+			if (tok.sym == ',') {
+				getsym();
+				val = expr();
+			}
+		} else {
+			val = expr();
+		}
+		check(')'); getsym();
+		return make_unique<WriteStmt>(move(str), move(val));
+	} CATCH_R(nullptr)
 }
 
 static unique_ptr<Expr> lvalue()

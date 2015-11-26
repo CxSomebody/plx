@@ -242,7 +242,7 @@ struct WriteStmt: Stmt
 {
 	std::string str;
 	std::unique_ptr<Expr> val;
-	WriteStmt(const std::string &str, std::unique_ptr<Expr> &&val);
+	WriteStmt(std::string &&str, std::unique_ptr<Expr> &&val);
 	void print() override;
 };
 

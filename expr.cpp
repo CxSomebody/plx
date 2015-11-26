@@ -106,7 +106,7 @@ IfStmt::IfStmt(unique_ptr<Cond> &&cond, unique_ptr<Stmt> &&st, unique_ptr<Stmt> 
 DoWhileStmt::DoWhileStmt(unique_ptr<Cond> &&cond, unique_ptr<Stmt> &&body): Stmt(DO_WHILE), cond(move(cond)), body(move(body)) {}
 ForStmt::ForStmt(unique_ptr<Expr> &&indvar, unique_ptr<Expr> &&from, unique_ptr<Expr> &&to, unique_ptr<Stmt> &&body, bool down): Stmt(FOR), indvar(move(indvar)), from(move(from)), to(move(to)), body(move(body)), down(down) {}
 ReadStmt::ReadStmt(vector<unique_ptr<Expr>> &&vars): Stmt(READ), vars(move(vars)) {}
-WriteStmt::WriteStmt(const string &str, unique_ptr<Expr> &&val): Stmt(WRITE), str(str), val(move(val)) {}
+WriteStmt::WriteStmt(string &&str, unique_ptr<Expr> &&val): Stmt(WRITE), str(move(str)), val(move(val)) {}
 
 void EmptyStmt::print()
 {

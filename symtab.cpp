@@ -57,11 +57,10 @@ void def_const(const string &name, int val)
 	}
 }
 
-void def_vars(const vector<string> &names, Type *type)
+void def_var(const string &name, Type *type)
 {
-	for (const string &name: names)
-		if (check_redef(name))
-			symtab->map[name] = new VarSymbol(name, type);
+	if (check_redef(name))
+		symtab->map[name] = new VarSymbol(name, type);
 }
 
 void def_func(const ProcHeader &header, Type *rettype)
@@ -150,11 +149,6 @@ SymbolTable *pop_symtab()
 	SymbolTable *savedst = symtab;
 	symtab = symtab->up;
 	return savedst;
-}
-
-Block::Block(string &&name, vector<unique_ptr<Block>> &&subs, vector<unique_ptr<Stmt>> &&stmts, SymbolTable *symtab):
-	name(move(name)), subs(move(subs)), stmts(move(stmts)), symtab(symtab)
-{
 }
 
 void print_stmt(Stmt *s);

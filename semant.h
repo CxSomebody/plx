@@ -79,12 +79,19 @@ struct SymbolTable {
 struct Block {
 	std::string name;
 	std::vector<std::unique_ptr<Block>> subs;
+	std::vector<std::pair<std::string, Type*>> vars;
 	std::vector<std::unique_ptr<Stmt>> stmts;
 	SymbolTable *symtab;
 	Block(std::string &&name,
-	      std::vector<std::unique_ptr<Block>> &&subs,
-	      std::vector<std::unique_ptr<Stmt>> &&stmts,
-	      SymbolTable *symtab);
+	      decltype(subs) &&subs,
+	      decltype(vars) &&vars,
+	      decltype(stmts)&&stmts,
+	      SymbolTable *symtab):
+		name(move(name)),
+		subs(move(subs)),
+		vars(move(vars)),
+		stmts(move(stmts)),
+		symtab(symtab) {}
 	void print(int level);
 };
 
@@ -100,7 +107,7 @@ typedef std::pair<std::string, std::vector<Param>> ProcHeader;
 extern SymbolTable *symtab;
 
 void def_const(const std::string &name, int val);
-void def_vars(const std::vector<std::string> &names, Type *type);
+void def_var(const std::string &name, Type *type);
 void def_func(const ProcHeader &header, Type *rettype);
 void def_params(const std::vector<Param> &params);
 Type *int_type();
@@ -113,7 +120,7 @@ SymbolTable *pop_symtab();
 void translate(std::unique_ptr<Block> &&blk);
 Symbol *lookup(const std::string &name);
 
-struct QuadOperand;
+struct Operand;
 struct Quad {
 	enum Op {
 		ADD,
@@ -125,8 +132,8 @@ struct Quad {
 		MOV,
 		MOV_INDEX,
 	} op;
-	QuadOperand *a, *b, *c; // src1, src2, dst
-	Quad(Op op, QuadOperand *a, QuadOperand *b, QuadOperand *c):
+	Operand *a, *b, *c; // src1, src2, dst
+	Quad(Op op, Operand *a, Operand *b, Operand *c):
 		op(op), a(a), b(b), c(c) {}
 	void print();
 };
@@ -135,7 +142,7 @@ class TranslateEnv {
 	int tempid;
 public:
 	std::vector<Quad> quads;
-	QuadOperand *newtemp();
+	Operand *newtemp();
 };
 
 struct Expr {
@@ -147,7 +154,7 @@ struct Expr {
 		APPLY,
 	} kind;
 	virtual void print() = 0;
-	virtual QuadOperand *translate(TranslateEnv &env) = 0;
+	virtual Operand *translate(TranslateEnv &env) = 0;
 	virtual ~Expr();
 protected:
 	Expr(Kind kind);
@@ -158,7 +165,7 @@ struct SymExpr: Expr
 	Symbol *sym;
 	SymExpr(Symbol *sym);
 	void print() override;
-	QuadOperand *translate(TranslateEnv &env) override;
+	Operand *translate(TranslateEnv &env) override;
 };
 
 struct LitExpr: Expr
@@ -166,7 +173,7 @@ struct LitExpr: Expr
 	int lit;
 	LitExpr(int lit);
 	void print() override;
-	QuadOperand *translate(TranslateEnv &env) override;
+	Operand *translate(TranslateEnv &env) override;
 };
 
 struct BinaryExpr: Expr
@@ -181,7 +188,7 @@ struct BinaryExpr: Expr
 	std::unique_ptr<Expr> left, right;
 	BinaryExpr(Op op, std::unique_ptr<Expr> &&left, std::unique_ptr<Expr> &&right);
 	void print() override;
-	QuadOperand *translate(TranslateEnv &env) override;
+	Operand *translate(TranslateEnv &env) override;
 };
 
 struct UnaryExpr: Expr
@@ -192,7 +199,7 @@ struct UnaryExpr: Expr
 	std::unique_ptr<Expr> sub;
 	UnaryExpr(Op op, std::unique_ptr<Expr> &&sub);
 	void print() override;
-	QuadOperand *translate(TranslateEnv &env) override;
+	Operand *translate(TranslateEnv &env) override;
 };
 
 struct ApplyExpr: Expr
@@ -201,7 +208,7 @@ struct ApplyExpr: Expr
 	std::vector<std::unique_ptr<Expr>> args;
 	ApplyExpr(std::unique_ptr<Expr> &&func, decltype(args) &&args);
 	void print() override;
-	QuadOperand *translate(TranslateEnv &env) override;
+	Operand *translate(TranslateEnv &env) override;
 };
 
 struct Cond {

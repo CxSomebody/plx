@@ -129,8 +129,8 @@ static void const_part();
 static void const_def();
 static int constant();
 static bool opt_sign();
-static void var_part();
-static void var_decl();
+static vector<pair<string, Type*>> var_part();
+static void var_decl(vector<pair<string, Type*>> &list);
 static vector<string> id_list();
 static Type *type();
 static Type *basic_type();
@@ -191,16 +191,16 @@ static unique_ptr<Block> block(ProcHeader &&header)
 {
 	X _{';', '.'};
 	try {
-		//const vector<Param> &params = header.second;
 		push_symtab();
-		//def_params(params);
+		def_params(header.second);
 		if (tok.sym == T_CONST) {
 			getsym();
 			const_part();
 		}
+		vector<pair<string, Type*>> vars;
 		if (tok.sym == T_VAR) {
 			getsym();
-			var_part();
+			vars = var_part();
 		}
 		vector<unique_ptr<Block>> subs(sub_list());
 		unique_ptr<CompStmt> body(comp_stmt());
@@ -208,6 +208,7 @@ static unique_ptr<Block> block(ProcHeader &&header)
 		return make_unique<Block>
 			(move(header.first),
 			 move(subs),
+			 move(vars),
 			 move(body->body),
 			 symtab);
 	} CATCH_R(nullptr)
@@ -284,12 +285,13 @@ static bool opt_sign()
 	return false;
 }
 
-static void var_part()
+static vector<pair<string, Type*>> var_part()
 {
 	X _{T_PROCEDURE, T_FUNCTION, T_BEGIN};
 	try {
+		vector<pair<string, Type*>> ret;
 		do {
-			var_decl();
+			var_decl(ret);
 			switch (tok.sym) {
 			case ';':
 				getsym();
@@ -303,17 +305,21 @@ static void var_part()
 				error(';');
 			}
 		} while (tok.sym == IDENT);
-	} CATCH
+		return ret;
+	} CATCH_R((vector<pair<string, Type*>>()))
 }
 
-static void var_decl()
+static void var_decl(vector<pair<string, Type*>> &list)
 {
 	X _{';'};
 	try {
 		vector<string> names(id_list());
 		check(':'); getsym();
 		Type *ty = type();
-		def_vars(names, ty);
+		for (const string &name: names) {
+			def_var(name, ty);
+			list.emplace_back(name, ty);
+		}
 	} CATCH
 }
 

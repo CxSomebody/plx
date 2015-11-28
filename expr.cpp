@@ -114,7 +114,7 @@ void EmptyStmt::print()
 
 void CompStmt::print()
 {
-	bool sep;
+	bool sep = false;
 	printf("begin ");
 	for (auto &s: body) {
 		if (sep)

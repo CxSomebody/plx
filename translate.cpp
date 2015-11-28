@@ -7,44 +7,78 @@
 
 using namespace std;
 
-struct QuadOperand {
+struct Operand {
 	enum Kind {
-		SYM,
+		//SYM,
 		IMM,
 		TEMP,
+		ADDR,
+		LIST, // for function calls
 	} kind;
 	virtual void print() = 0;
 protected:
-	QuadOperand(Kind kind): kind(kind) {}
+	Operand(Kind kind): kind(kind) {}
 };
 
-struct SymQuadOperand: QuadOperand
+#if 0
+struct SymOperand: Operand
 {
 	Symbol *sym;
-	SymQuadOperand(Symbol *sym): QuadOperand(SYM), sym(sym) {}
+	SymOperand(Symbol *sym): Operand(SYM), sym(sym) {}
 	void print() override
 	{
 		sym->print();
 	}
 };
+#endif
 
-struct ImmQuadOperand: QuadOperand
+struct ImmOperand: Operand
 {
 	int val;
-	ImmQuadOperand(int val): QuadOperand(IMM), val(val) {}
+	ImmOperand(int val): Operand(IMM), val(val) {}
 	void print() override
 	{
 		printf("%d", val);
 	}
 };
 
-struct TempQuadOperand: QuadOperand
+struct TempOperand: Operand
 {
 	int id;
-	TempQuadOperand(int id): QuadOperand(TEMP), id(id) {}
+	TempOperand(int id): Operand(TEMP), id(id) {}
 	void print() override
 	{
-		printf("$%d", id);
+		if (id >= 0) printf("$%d", id);
+		else printf("%%%d", ~id); // physical register
+	}
+};
+
+struct AddrOperand: Operand
+{
+	TempOperand *base;
+	int offset;
+	AddrOperand(TempOperand *base, int offset):
+		Operand(ADDR), base(base), offset(offset) {}
+	void print() override
+	{
+		base->print();
+		printf("%+d", offset);
+	}
+};
+
+struct ListOperand: Operand
+{
+	vector<Operand*> list;
+	ListOperand(): Operand(LIST) {}
+	void print() override
+	{
+		bool sep = false;
+		for (Operand *o: list) {
+			if (sep)
+				printf(", ");
+			o->print();
+			sep = true;
+		}
 	}
 };
 
@@ -99,22 +133,23 @@ void Quad::print()
 	}
 }
 
-QuadOperand *TranslateEnv::newtemp()
+Operand *TranslateEnv::newtemp()
 {
-	return new TempQuadOperand(tempid++);
+	return new TempOperand(tempid++);
 }
 
-QuadOperand *SymExpr::translate(TranslateEnv &env)
+Operand *SymExpr::translate(TranslateEnv &env)
 {
-	return new SymQuadOperand(sym);
+	//return new SymOperand(sym);
+	return nullptr;
 }
 
-QuadOperand *LitExpr::translate(TranslateEnv &env)
+Operand *LitExpr::translate(TranslateEnv &env)
 {
-	return new ImmQuadOperand(lit);
+	return new ImmOperand(lit);
 }
 
-QuadOperand *BinaryExpr::translate(TranslateEnv &env)
+Operand *BinaryExpr::translate(TranslateEnv &env)
 {
 	Quad::Op qop;
 	switch (op) {
@@ -125,24 +160,24 @@ QuadOperand *BinaryExpr::translate(TranslateEnv &env)
 	case INDEX: qop = Quad::INDEX; break;
 	default: assert(0);
 	}
-	QuadOperand *c = env.newtemp();
+	Operand *c = env.newtemp();
 	env.quads.emplace_back(qop, left->translate(env), right->translate(env), c);
 	return c;
 }
 
-QuadOperand *UnaryExpr::translate(TranslateEnv &env)
+Operand *UnaryExpr::translate(TranslateEnv &env)
 {
 	Quad::Op qop;
 	switch (op) {
 	case NEG: qop = Quad::NEG; break;
 	default: assert(0);
 	}
-	QuadOperand *c = env.newtemp();
+	Operand *c = env.newtemp();
 	env.quads.emplace_back(qop, sub->translate(env), nullptr, c);
 	return c;
 }
 
-QuadOperand *ApplyExpr::translate(TranslateEnv &env)
+Operand *ApplyExpr::translate(TranslateEnv &env)
 {
 	// TODO
 	return nullptr;

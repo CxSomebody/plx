@@ -8,7 +8,7 @@
 
 using namespace std;
 
-Symbol::Symbol(SymbolKind kind, const string &name): kind(kind), name(name) {}
+Symbol::Symbol(Kind kind, const string &name): kind(kind), name(name) {}
 
 void Symbol::print()
 {
@@ -37,26 +37,9 @@ Symbol *lookup(const string &name)
 	return symtab->lookup(name);
 }
 
-Symbol *var_symbol(const string &name, Type *type)
-{
-	Symbol *s = new Symbol(Symbol::VAR, name);
-	s->type = type;
-	return s;
-}
-
-Symbol *const_symbol(const string &name, int val)
-{
-	Symbol *s = new Symbol(Symbol::CONST, name);
-	s->val = val;
-	return s;
-}
-
-Symbol *proc_symbol(const string &name, Type *rettype)
-{
-	Symbol *s = new Symbol(Symbol::PROC, name);
-	s->rettype = rettype;
-	return s;
-}
+VarSymbol::VarSymbol(const string &name, Type *type): Symbol(Symbol::VAR, name), type(type) {}
+ConstSymbol::ConstSymbol(const string &name, int val): Symbol(Symbol::CONST, name), val(val) {}
+ProcSymbol::ProcSymbol(const string &name, Type *rettype): Symbol(Symbol::PROC, name), rettype(rettype) {}
 
 bool check_redef(const string &name)
 {
@@ -70,7 +53,7 @@ bool check_redef(const string &name)
 void def_const(const string &name, int val)
 {
 	if (check_redef(name)) {
-		symtab->map[name] = const_symbol(name, val);
+		symtab->map[name] = new ConstSymbol(name, val);
 	}
 }
 
@@ -78,14 +61,14 @@ void def_vars(const vector<string> &names, Type *type)
 {
 	for (const string &name: names)
 		if (check_redef(name))
-			symtab->map[name] = var_symbol(name, type);
+			symtab->map[name] = new VarSymbol(name, type);
 }
 
 void def_func(const ProcHeader &header, Type *rettype)
 {
 	const string &name = header.first;
 	if (check_redef(name)) {
-		symtab->map[name] = proc_symbol(name, rettype);
+		symtab->map[name] = new ProcSymbol(name, rettype);
 	}
 }
 
@@ -94,7 +77,7 @@ void def_params(const vector<Param> &params)
 	for (const Param &p: params) {
 		const string &name = p.name;
 		if (check_redef(name)) {
-			symtab->map[name] = var_symbol(name, p.type);
+			symtab->map[name] = new VarSymbol(name, p.type);
 		}
 	}
 }
@@ -115,12 +98,6 @@ Type *array_type(Type *elty, int n)
 {
 	// TODO memory leak
 	return new ArrayType(elty, n);
-}
-
-bool is_proc(const string &name)
-{
-	Symbol *s = lookup(name);
-	return s && s->kind == Symbol::PROC && !s->rettype;
 }
 
 vector<Param> param_group(vector<string> &&names, Type *type, bool byref)
@@ -153,9 +130,9 @@ void print_symtab(SymbolTable *symtab)
 		printf("%s %s", s->name.c_str(), kindstr);
 		if (s->kind == Symbol::VAR) {
 			putchar(' ');
-			s->type->print();
+			static_cast<VarSymbol*>(s)->type->print();
 		} else if (s->kind == Symbol::CONST) {
-			printf(" %d", s->val);
+			printf(" %d", static_cast<ConstSymbol*>(s)->val);
 		}
 		putchar('\n');
 	}

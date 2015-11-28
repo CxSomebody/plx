@@ -39,24 +39,36 @@ struct ArrayType: Type
 };
 
 struct Symbol {
-	enum SymbolKind {
+	enum Kind {
 		VAR,
 		CONST,
 		PROC,
 	} kind;
 	std::string name;
-	Type *type; // VAR
-	int val; // CONST
-	Type *rettype; // PROC
-	Symbol(SymbolKind kind, const std::string &name);
 	void print();
+protected:
+	Symbol(Kind kind, const std::string &name);
+};
+
+struct VarSymbol: Symbol
+{
+	Type *type;
+	VarSymbol(const std::string &name, Type *type);
+};
+
+struct ConstSymbol: Symbol
+{
+	int val;
+	ConstSymbol(const std::string &name, int val);
+};
+
+struct ProcSymbol: Symbol
+{
+	Type *rettype;
+	ProcSymbol(const std::string &name, Type *rettype);
 };
 
 struct Stmt;
-
-Symbol *var_symbol(const std::string &name, Type *type);
-Symbol *const_symbol(const std::string &name, int val);
-Symbol *proc_symbol(const std::string &name, Type *rettype);
 
 struct SymbolTable {
 	std::map<std::string, Symbol*> map;

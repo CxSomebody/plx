@@ -182,3 +182,8 @@ void Block::print(int level)
 	indent(level);
 	printf("}\n");
 }
+
+unique_ptr<Expr> ident_expr(const string &name)
+{
+	return make_unique<SymExpr>(symtab->lookup(name));
+}

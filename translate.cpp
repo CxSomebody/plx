@@ -219,10 +219,10 @@ void WriteStmt::translate(TranslateEnv &env)
 {
 }
 
-void allocaddr(Block *blk)
+void Block::allocaddr()
 {
 	int offset = 0;
-	for (VarSymbol *vs: blk->vars) {
+	for (VarSymbol *vs: vars) {
 		int size = vs->type->size();
 		int align = vs->type->align();
 		offset = (offset-size) & ~(align-1);
@@ -230,8 +230,15 @@ void allocaddr(Block *blk)
 	}
 }
 
-void translate(unique_ptr<Block> &&blk)
+void Block::translate()
 {
-	allocaddr(blk.get());
+	allocaddr();
+	for (const unique_ptr<Block> &sub: subs)
+		sub->translate();
+}
+
+void translate_all(unique_ptr<Block> &&blk)
+{
+	blk->translate();
 	blk->print(0);
 }

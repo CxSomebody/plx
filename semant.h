@@ -101,6 +101,8 @@ struct Block {
 		stmts(move(stmts)),
 		symtab(symtab) {}
 	void print(int level);
+	void translate();
+	void allocaddr();
 };
 
 struct Param {
@@ -111,8 +113,6 @@ struct Param {
 };
 
 typedef std::pair<std::string, std::vector<Param>> ProcHeader;
-
-extern SymbolTable *symtab;
 
 void def_const(const std::string &name, int val);
 VarSymbol *def_var(const std::string &name, Type *type);
@@ -125,7 +125,7 @@ bool is_proc(const std::string &ident);
 std::vector<Param> param_group(std::vector<std::string> &&names, Type *type, bool byref);
 void push_symtab();
 SymbolTable *pop_symtab();
-void translate(std::unique_ptr<Block> &&blk);
+void translate_all(std::unique_ptr<Block> &&blk);
 Symbol *lookup(const std::string &name);
 
 struct Operand;
@@ -147,10 +147,12 @@ struct Quad {
 };
 
 class TranslateEnv {
+	SymbolTable *symtab;
 	int tempid;
 public:
 	std::vector<Quad> quads;
 	Operand *newtemp();
+	TranslateEnv(SymbolTable *symtab): symtab(symtab), tempid(0) {}
 };
 
 struct Expr {

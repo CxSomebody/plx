@@ -90,11 +90,6 @@ void ApplyExpr::print()
 	print_expr_list(args);
 }
 
-unique_ptr<Expr> ident_expr(const string &name)
-{
-	return make_unique<SymExpr>(symtab->lookup(name));
-}
-
 Stmt::~Stmt() {}
 Stmt::Stmt(Kind kind): kind(kind) {}
 EmptyStmt::EmptyStmt(): Stmt(EMPTY) {}

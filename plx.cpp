@@ -30,7 +30,7 @@ int main(int argc, char **argv)
 	unique_ptr<Block> blk = parse();
 	if (syntax_errors)
 		return 1;
-	translate(move(blk));
+	translate_all(move(blk));
 	lexer_close();
 	return 0;
 }

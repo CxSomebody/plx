@@ -129,8 +129,8 @@ static void const_part();
 static void const_def();
 static int constant();
 static bool opt_sign();
-static vector<pair<string, Type*>> var_part();
-static void var_decl(vector<pair<string, Type*>> &list);
+static vector<VarSymbol*> var_part();
+static void var_decl(vector<VarSymbol*> &list);
 static vector<string> id_list();
 static Type *type();
 static Type *basic_type();
@@ -197,7 +197,7 @@ static unique_ptr<Block> block(ProcHeader &&header)
 			getsym();
 			const_part();
 		}
-		vector<pair<string, Type*>> vars;
+		vector<VarSymbol*> vars;
 		if (tok.sym == T_VAR) {
 			getsym();
 			vars = var_part();
@@ -285,11 +285,11 @@ static bool opt_sign()
 	return false;
 }
 
-static vector<pair<string, Type*>> var_part()
+static vector<VarSymbol*> var_part()
 {
 	X _{T_PROCEDURE, T_FUNCTION, T_BEGIN};
 	try {
-		vector<pair<string, Type*>> ret;
+		vector<VarSymbol*> ret;
 		do {
 			var_decl(ret);
 			switch (tok.sym) {
@@ -306,10 +306,10 @@ static vector<pair<string, Type*>> var_part()
 			}
 		} while (tok.sym == IDENT);
 		return ret;
-	} CATCH_R((vector<pair<string, Type*>>()))
+	} CATCH_R((vector<VarSymbol*>()))
 }
 
-static void var_decl(vector<pair<string, Type*>> &list)
+static void var_decl(vector<VarSymbol*> &list)
 {
 	X _{';'};
 	try {
@@ -317,8 +317,7 @@ static void var_decl(vector<pair<string, Type*>> &list)
 		check(':'); getsym();
 		Type *ty = type();
 		for (const string &name: names) {
-			def_var(name, ty);
-			list.emplace_back(name, ty);
+			list.emplace_back(def_var(name, ty));
 		}
 	} CATCH
 }

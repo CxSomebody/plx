@@ -53,10 +53,14 @@ void def_const(const string &name, int val)
 	}
 }
 
-void def_var(const string &name, Type *type)
+VarSymbol *def_var(const string &name, Type *type)
 {
-	if (check_redef(name))
-		symtab->map[name] = new VarSymbol(name, type, symtab->level, 0);
+	if (check_redef(name)) {
+		VarSymbol *vs = new VarSymbol(name, type, symtab->level, 0);
+		symtab->map[name] = vs;
+		return vs;
+	}
+	return nullptr;
 }
 
 void def_func(const ProcHeader &header, Type *rettype)
@@ -105,10 +109,14 @@ vector<Param> param_group(vector<string> &&names, Type *type, bool byref)
 	return params;
 }
 
-void print_symtab(SymbolTable *symtab)
+static void indent(int level) {
+	for (int i=0; i<level; i++)
+		printf("  ");
+};
+
+void SymbolTable::print(int level)
 {
-	assert(symtab);
-	for (auto &pair: symtab->map) {
+	for (auto &pair: map) {
 		Symbol *s = pair.second;
 		const char *kindstr;
 		switch (s->kind) {
@@ -124,10 +132,13 @@ void print_symtab(SymbolTable *symtab)
 		default:
 			assert(0);
 		}
+		indent(level);
 		printf("%s %s", s->name.c_str(), kindstr);
 		if (s->kind == Symbol::VAR) {
 			putchar(' ');
-			static_cast<VarSymbol*>(s)->type->print();
+			VarSymbol *vs = static_cast<VarSymbol*>(s);
+			vs->type->print();
+			printf(" %+d", vs->offset);
 		} else if (s->kind == Symbol::CONST) {
 			printf(" %d", static_cast<ConstSymbol*>(s)->val);
 		}
@@ -153,22 +164,21 @@ void print_stmt(Stmt *s);
 
 void Block::print(int level)
 {
-	auto indent = [&]() {
-		for (int i=0; i<level; i++)
-			printf("  ");
-	};
-	indent();
-	printf("%s {\n", name.c_str());
+	indent(level);
+	printf("%s\n", name.c_str());
+	symtab->print(level);
+	indent(level);
+	printf("{\n");
 	level++;
 	for (auto &sub: subs) {
 		sub->print(level);
 	}
 	for (auto &s: stmts) {
-		indent();
+		indent(level);
 		s->print();
 		putchar('\n');
 	}
 	level--;
-	indent();
+	indent(level);
 	printf("}\n");
 }

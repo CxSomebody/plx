@@ -81,12 +81,13 @@ struct SymbolTable {
 	int level;
 	SymbolTable(SymbolTable *up, int level): up(up), level(level) {}
 	Symbol *lookup(const std::string &name);
+	void print(int level);
 };
 
 struct Block {
 	std::string name;
 	std::vector<std::unique_ptr<Block>> subs;
-	std::vector<std::pair<std::string, Type*>> vars;
+	std::vector<VarSymbol*> vars;
 	std::vector<std::unique_ptr<Stmt>> stmts;
 	SymbolTable *symtab;
 	Block(std::string &&name,
@@ -114,7 +115,7 @@ typedef std::pair<std::string, std::vector<Param>> ProcHeader;
 extern SymbolTable *symtab;
 
 void def_const(const std::string &name, int val);
-void def_var(const std::string &name, Type *type);
+VarSymbol *def_var(const std::string &name, Type *type);
 void def_func(const ProcHeader &header, Type *rettype);
 void def_params(const std::vector<Param> &params);
 Type *int_type();

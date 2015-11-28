@@ -219,7 +219,19 @@ void WriteStmt::translate(TranslateEnv &env)
 {
 }
 
+void allocaddr(Block *blk)
+{
+	int offset = 0;
+	for (VarSymbol *vs: blk->vars) {
+		int size = vs->type->size();
+		int align = vs->type->align();
+		offset = (offset-size) & ~(align-1);
+		vs->offset = offset;
+	}
+}
+
 void translate(unique_ptr<Block> &&blk)
 {
+	allocaddr(blk.get());
 	blk->print(0);
 }

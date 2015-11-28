@@ -113,6 +113,31 @@ SymbolTable *pop_symtab();
 void translate(std::unique_ptr<Block> &&blk);
 Symbol *lookup(const std::string &name);
 
+struct QuadOperand;
+struct Quad {
+	enum Op {
+		ADD,
+		SUB,
+		MUL,
+		DIV,
+		INDEX,
+		NEG,
+		MOV,
+		MOV_INDEX,
+	} op;
+	QuadOperand *a, *b, *c; // src1, src2, dst
+	Quad(Op op, QuadOperand *a, QuadOperand *b, QuadOperand *c):
+		op(op), a(a), b(b), c(c) {}
+	void print();
+};
+
+class TranslateEnv {
+	int tempid;
+public:
+	std::vector<Quad> quads;
+	QuadOperand *newtemp();
+};
+
 struct Expr {
 	enum Kind {
 		SYM,
@@ -122,6 +147,7 @@ struct Expr {
 		APPLY,
 	} kind;
 	virtual void print() = 0;
+	virtual QuadOperand *translate(TranslateEnv &env) = 0;
 	virtual ~Expr();
 protected:
 	Expr(Kind kind);
@@ -132,6 +158,7 @@ struct SymExpr: Expr
 	Symbol *sym;
 	SymExpr(Symbol *sym);
 	void print() override;
+	QuadOperand *translate(TranslateEnv &env) override;
 };
 
 struct LitExpr: Expr
@@ -139,6 +166,7 @@ struct LitExpr: Expr
 	int lit;
 	LitExpr(int lit);
 	void print() override;
+	QuadOperand *translate(TranslateEnv &env) override;
 };
 
 struct BinaryExpr: Expr
@@ -153,6 +181,7 @@ struct BinaryExpr: Expr
 	std::unique_ptr<Expr> left, right;
 	BinaryExpr(Op op, std::unique_ptr<Expr> &&left, std::unique_ptr<Expr> &&right);
 	void print() override;
+	QuadOperand *translate(TranslateEnv &env) override;
 };
 
 struct UnaryExpr: Expr
@@ -163,6 +192,7 @@ struct UnaryExpr: Expr
 	std::unique_ptr<Expr> sub;
 	UnaryExpr(Op op, std::unique_ptr<Expr> &&sub);
 	void print() override;
+	QuadOperand *translate(TranslateEnv &env) override;
 };
 
 struct ApplyExpr: Expr
@@ -171,6 +201,7 @@ struct ApplyExpr: Expr
 	std::vector<std::unique_ptr<Expr>> args;
 	ApplyExpr(std::unique_ptr<Expr> &&func, decltype(args) &&args);
 	void print() override;
+	QuadOperand *translate(TranslateEnv &env) override;
 };
 
 struct Cond {
@@ -196,6 +227,7 @@ struct Stmt {
 	} kind;
 	virtual ~Stmt();
 	virtual void print() = 0;
+	virtual void translate(TranslateEnv &env) = 0;
 protected:
 	Stmt(Kind kind);
 };
@@ -204,6 +236,7 @@ struct EmptyStmt: Stmt
 {
 	EmptyStmt();
 	void print() override;
+	void translate(TranslateEnv &env) override;
 };
 
 struct CompStmt: Stmt
@@ -211,6 +244,7 @@ struct CompStmt: Stmt
 	std::vector<std::unique_ptr<Stmt>> body;
 	CompStmt(decltype(body) &&body);
 	void print() override;
+	void translate(TranslateEnv &env) override;
 };
 
 struct AssignStmt: Stmt
@@ -218,6 +252,7 @@ struct AssignStmt: Stmt
 	std::unique_ptr<Expr> var, val;
 	AssignStmt(std::unique_ptr<Expr> &&var, std::unique_ptr<Expr> &&val);
 	void print() override;
+	void translate(TranslateEnv &env) override;
 };
 
 struct CallStmt: Stmt
@@ -226,6 +261,7 @@ struct CallStmt: Stmt
 	std::vector<std::unique_ptr<Expr>> args;
 	CallStmt(Symbol *proc, decltype(args) &&args);
 	void print() override;
+	void translate(TranslateEnv &env) override;
 };
 
 struct IfStmt: Stmt
@@ -235,6 +271,7 @@ struct IfStmt: Stmt
 	IfStmt(std::unique_ptr<Cond> &&cond, std::unique_ptr<Stmt> &&st);
 	IfStmt(std::unique_ptr<Cond> &&cond, std::unique_ptr<Stmt> &&st, std::unique_ptr<Stmt> &&sf);
 	void print() override;
+	void translate(TranslateEnv &env) override;
 };
 
 struct DoWhileStmt: Stmt
@@ -243,6 +280,7 @@ struct DoWhileStmt: Stmt
 	std::unique_ptr<Stmt> body;
 	DoWhileStmt(std::unique_ptr<Cond> &&cond, std::unique_ptr<Stmt> &&body);
 	void print() override;
+	void translate(TranslateEnv &env) override;
 };
 
 struct ForStmt: Stmt
@@ -252,6 +290,7 @@ struct ForStmt: Stmt
 	bool down;
 	ForStmt(std::unique_ptr<Expr> &&indvar, std::unique_ptr<Expr> &&from, std::unique_ptr<Expr> &&to, std::unique_ptr<Stmt> &&body, bool down);
 	void print() override;
+	void translate(TranslateEnv &env) override;
 };
 
 struct ReadStmt: Stmt
@@ -259,6 +298,7 @@ struct ReadStmt: Stmt
 	std::vector<std::unique_ptr<Expr>> vars;
 	ReadStmt(decltype(vars) &&vars);
 	void print() override;
+	void translate(TranslateEnv &env) override;
 };
 
 struct WriteStmt: Stmt
@@ -267,6 +307,7 @@ struct WriteStmt: Stmt
 	std::unique_ptr<Expr> val;
 	WriteStmt(std::string &&str, std::unique_ptr<Expr> &&val);
 	void print() override;
+	void translate(TranslateEnv &env) override;
 };
 
 std::unique_ptr<Expr> ident_expr(const std::string &name);

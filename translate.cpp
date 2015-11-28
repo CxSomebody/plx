@@ -13,10 +13,8 @@ struct Quad {
 		SUB,
 		MUL,
 		DIV,
-		INDEX,
 		NEG,
 		MOV,
-		MOV_INDEX,
 	} op;
 	Operand *a, *b, *c; // src1, src2, dst
 	Quad(Op op, Operand *a, Operand *b, Operand *c):
@@ -109,6 +107,14 @@ public:
 	int level() const { return symtab->level; }
 };
 
+#define TODO todo(__FILE__, __LINE__)
+
+static void todo(const char *file, int line)
+{
+	fprintf(stderr, "%s: %d: TODO\n", file, line);
+	abort();
+}
+
 void Quad::print() const
 {
 	static char opchar[] = {
@@ -128,14 +134,6 @@ void Quad::print() const
 		printf(" %c ", opchar[op]);
 		b->print();
 		break;
-	case Quad::INDEX:
-		c->print();
-		printf(" = ");
-		a->print();
-		putchar('[');
-		b->print();
-		putchar(']');
-		break;
 	case Quad::NEG:
 		c->print();
 		printf(" = ");
@@ -146,14 +144,6 @@ void Quad::print() const
 		c->print();
 		printf(" = ");
 		a->print();
-		break;
-	case Quad::MOV_INDEX:
-		a->print();
-		putchar('[');
-		b->print();
-		putchar(']');
-		printf(" = ");
-		c->print();
 		break;
 	default:
 		assert(0);
@@ -167,8 +157,21 @@ Operand *TranslateEnv::newtemp()
 
 Operand *SymExpr::translate(TranslateEnv &env) const
 {
-	//return new SymOperand(sym);
-
+	if (sym->kind == Symbol::VAR) {
+		VarSymbol *vs = static_cast<VarSymbol*>(sym);
+		if (vs->level) {
+			// local var
+			if (vs->level == env.level()) {
+			} else {
+				TODO;
+			}
+		} else {
+			// global var
+			TODO;
+		}
+	} else {
+		TODO;
+	}
 	return nullptr;
 }
 
@@ -185,7 +188,7 @@ Operand *BinaryExpr::translate(TranslateEnv &env) const
 	case SUB: qop = Quad::SUB; break;
 	case MUL: qop = Quad::MUL; break;
 	case DIV: qop = Quad::DIV; break;
-	case INDEX: qop = Quad::INDEX; break;
+	case INDEX: TODO; break;
 	default: assert(0);
 	}
 	Operand *c = env.newtemp();

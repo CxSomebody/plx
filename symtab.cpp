@@ -37,10 +37,6 @@ Symbol *lookup(const string &name)
 	return symtab->lookup(name);
 }
 
-VarSymbol::VarSymbol(const string &name, Type *type): Symbol(Symbol::VAR, name), type(type) {}
-ConstSymbol::ConstSymbol(const string &name, int val): Symbol(Symbol::CONST, name), val(val) {}
-ProcSymbol::ProcSymbol(const string &name, Type *rettype): Symbol(Symbol::PROC, name), rettype(rettype) {}
-
 bool check_redef(const string &name)
 {
 	if (symtab->map.count(name)) {
@@ -60,7 +56,7 @@ void def_const(const string &name, int val)
 void def_var(const string &name, Type *type)
 {
 	if (check_redef(name))
-		symtab->map[name] = new VarSymbol(name, type);
+		symtab->map[name] = new VarSymbol(name, type, symtab->level, 0);
 }
 
 void def_func(const ProcHeader &header, Type *rettype)
@@ -73,10 +69,12 @@ void def_func(const ProcHeader &header, Type *rettype)
 
 void def_params(const vector<Param> &params)
 {
+	int offset = 8;
 	for (const Param &p: params) {
 		const string &name = p.name;
 		if (check_redef(name)) {
-			symtab->map[name] = new VarSymbol(name, p.type);
+			symtab->map[name] = new VarSymbol(name, p.type, symtab->level, offset);
+			offset += 4;
 		}
 	}
 }
@@ -139,8 +137,8 @@ void print_symtab(SymbolTable *symtab)
 
 void push_symtab()
 {
-	SymbolTable *newst = new SymbolTable();
-	newst->up = symtab;
+	int nextlevel = symtab ? symtab->level+1 : 0;
+	SymbolTable *newst = new SymbolTable(symtab, nextlevel);
 	symtab = newst;
 }
 

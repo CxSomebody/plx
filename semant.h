@@ -53,19 +53,24 @@ protected:
 struct VarSymbol: Symbol
 {
 	Type *type;
-	VarSymbol(const std::string &name, Type *type);
+	int level;
+	int offset; // relative to bp
+	VarSymbol(const std::string &name, Type *type, int level, int offset):
+		Symbol(VAR, name), type(type), level(level), offset(offset) {}
 };
 
 struct ConstSymbol: Symbol
 {
 	int val;
-	ConstSymbol(const std::string &name, int val);
+	ConstSymbol(const std::string &name, int val):
+		Symbol(CONST, name), val(val) {}
 };
 
 struct ProcSymbol: Symbol
 {
 	Type *rettype;
-	ProcSymbol(const std::string &name, Type *rettype);
+	ProcSymbol(const std::string &name, Type *rettype):
+		Symbol(PROC, name), rettype(rettype) {}
 };
 
 struct Stmt;
@@ -73,6 +78,8 @@ struct Stmt;
 struct SymbolTable {
 	std::map<std::string, Symbol*> map;
 	SymbolTable *up;
+	int level;
+	SymbolTable(SymbolTable *up, int level): up(up), level(level) {}
 	Symbol *lookup(const std::string &name);
 };
 

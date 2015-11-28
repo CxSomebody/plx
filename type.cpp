@@ -12,33 +12,33 @@ IntType::IntType(): Type(INT) {}
 CharType::CharType(): Type(CHAR) {}
 ArrayType::ArrayType(Type *elemtype, int nelem): Type(ARRAY), elemtype(elemtype), nelem(nelem) {}
 
-void IntType::print()
+void IntType::print() const
 {
 	printf("int");
 }
 
-int IntType::size() { return 4; }
-int IntType::align(){ return 4; }
+int IntType::size() const { return 4; }
+int IntType::align()const { return 4; }
 
-void CharType::print()
+void CharType::print() const
 {
 	printf("char");
 }
 
-int CharType::size() { return 1; }
-int CharType::align(){ return 1; }
+int CharType::size() const { return 1; }
+int CharType::align()const { return 1; }
 
-void ArrayType::print()
+void ArrayType::print() const
 {
 	printf("array[%d] of ", nelem);
 	elemtype->print();
 }
 
-int ArrayType::size()
+int ArrayType::size() const
 {
 	return elemtype->size()*nelem;
 }
-int ArrayType::align()
+int ArrayType::align() const
 {
 	return elemtype->align();
 }

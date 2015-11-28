@@ -5,9 +5,9 @@ struct Type {
 		ARRAY,
 	} kind;
 	virtual ~Type();
-	virtual void print() = 0;
-	virtual int size() = 0;
-	virtual int align() = 0;
+	virtual void print() const = 0;
+	virtual int size() const = 0;
+	virtual int align() const = 0;
 protected:
 	Type(Kind kind);
 };
@@ -15,17 +15,17 @@ protected:
 struct IntType: Type
 {
 	IntType();
-	void print() override;
-	int size() override;
-	int align() override;
+	void print() const override;
+	int size() const override;
+	int align() const override;
 };
 
 struct CharType: Type
 {
 	CharType();
-	void print() override;
-	int size() override;
-	int align() override;
+	void print() const override;
+	int size() const override;
+	int align() const override;
 };
 
 struct ArrayType: Type
@@ -33,9 +33,9 @@ struct ArrayType: Type
 	Type *elemtype;
 	int nelem;
 	ArrayType(Type *elemtype, int nelem);
-	void print() override;
-	int size() override;
-	int align() override;
+	void print() const override;
+	int size() const override;
+	int align() const override;
 };
 
 struct Symbol {
@@ -45,7 +45,7 @@ struct Symbol {
 		PROC,
 	} kind;
 	std::string name;
-	void print();
+	void print() const;
 protected:
 	Symbol(Kind kind, const std::string &name);
 };
@@ -81,7 +81,7 @@ struct SymbolTable {
 	int level;
 	SymbolTable(SymbolTable *up, int level): up(up), level(level) {}
 	Symbol *lookup(const std::string &name);
-	void print(int level);
+	void print(int level) const;
 };
 
 struct Block {
@@ -100,7 +100,7 @@ struct Block {
 		vars(move(vars)),
 		stmts(move(stmts)),
 		symtab(symtab) {}
-	void print(int level);
+	void print(int level) const;
 	void translate();
 	void allocaddr();
 };
@@ -143,7 +143,7 @@ struct Quad {
 	Operand *a, *b, *c; // src1, src2, dst
 	Quad(Op op, Operand *a, Operand *b, Operand *c):
 		op(op), a(a), b(b), c(c) {}
-	void print();
+	void print() const;
 };
 
 class TranslateEnv {
@@ -163,8 +163,8 @@ struct Expr {
 		UNARY,
 		APPLY,
 	} kind;
-	virtual void print() = 0;
-	virtual Operand *translate(TranslateEnv &env) = 0;
+	virtual void print() const = 0;
+	virtual Operand *translate(TranslateEnv &env) const = 0;
 	virtual ~Expr();
 protected:
 	Expr(Kind kind);
@@ -174,16 +174,16 @@ struct SymExpr: Expr
 {
 	Symbol *sym;
 	SymExpr(Symbol *sym);
-	void print() override;
-	Operand *translate(TranslateEnv &env) override;
+	void print() const override;
+	Operand *translate(TranslateEnv &env) const override;
 };
 
 struct LitExpr: Expr
 {
 	int lit;
 	LitExpr(int lit);
-	void print() override;
-	Operand *translate(TranslateEnv &env) override;
+	void print() const override;
+	Operand *translate(TranslateEnv &env) const override;
 };
 
 struct BinaryExpr: Expr
@@ -197,8 +197,8 @@ struct BinaryExpr: Expr
 	} op;
 	std::unique_ptr<Expr> left, right;
 	BinaryExpr(Op op, std::unique_ptr<Expr> &&left, std::unique_ptr<Expr> &&right);
-	void print() override;
-	Operand *translate(TranslateEnv &env) override;
+	void print() const override;
+	Operand *translate(TranslateEnv &env) const override;
 };
 
 struct UnaryExpr: Expr
@@ -208,8 +208,8 @@ struct UnaryExpr: Expr
 	} op;
 	std::unique_ptr<Expr> sub;
 	UnaryExpr(Op op, std::unique_ptr<Expr> &&sub);
-	void print() override;
-	Operand *translate(TranslateEnv &env) override;
+	void print() const override;
+	Operand *translate(TranslateEnv &env) const override;
 };
 
 struct ApplyExpr: Expr
@@ -217,8 +217,8 @@ struct ApplyExpr: Expr
 	std::unique_ptr<Expr> func;
 	std::vector<std::unique_ptr<Expr>> args;
 	ApplyExpr(std::unique_ptr<Expr> &&func, decltype(args) &&args);
-	void print() override;
-	Operand *translate(TranslateEnv &env) override;
+	void print() const override;
+	Operand *translate(TranslateEnv &env) const override;
 };
 
 struct Cond {
@@ -227,7 +227,7 @@ struct Cond {
 	} op;
 	std::unique_ptr<Expr> left, right;
 	Cond(Op op, std::unique_ptr<Expr> &&left, std::unique_ptr<Expr> &&right);
-	void print();
+	void print() const;
 };
 
 struct Stmt {
@@ -243,8 +243,8 @@ struct Stmt {
 		WRITE,
 	} kind;
 	virtual ~Stmt();
-	virtual void print() = 0;
-	virtual void translate(TranslateEnv &env) = 0;
+	virtual void print() const = 0;
+	virtual void translate(TranslateEnv &env) const = 0;
 protected:
 	Stmt(Kind kind);
 };
@@ -252,24 +252,24 @@ protected:
 struct EmptyStmt: Stmt
 {
 	EmptyStmt();
-	void print() override;
-	void translate(TranslateEnv &env) override;
+	void print() const override;
+	void translate(TranslateEnv &env) const override;
 };
 
 struct CompStmt: Stmt
 {
 	std::vector<std::unique_ptr<Stmt>> body;
 	CompStmt(decltype(body) &&body);
-	void print() override;
-	void translate(TranslateEnv &env) override;
+	void print() const override;
+	void translate(TranslateEnv &env) const override;
 };
 
 struct AssignStmt: Stmt
 {
 	std::unique_ptr<Expr> var, val;
 	AssignStmt(std::unique_ptr<Expr> &&var, std::unique_ptr<Expr> &&val);
-	void print() override;
-	void translate(TranslateEnv &env) override;
+	void print() const override;
+	void translate(TranslateEnv &env) const override;
 };
 
 struct CallStmt: Stmt
@@ -277,8 +277,8 @@ struct CallStmt: Stmt
 	Symbol *proc;
 	std::vector<std::unique_ptr<Expr>> args;
 	CallStmt(Symbol *proc, decltype(args) &&args);
-	void print() override;
-	void translate(TranslateEnv &env) override;
+	void print() const override;
+	void translate(TranslateEnv &env) const override;
 };
 
 struct IfStmt: Stmt
@@ -287,8 +287,8 @@ struct IfStmt: Stmt
 	std::unique_ptr<Stmt> st, sf;
 	IfStmt(std::unique_ptr<Cond> &&cond, std::unique_ptr<Stmt> &&st);
 	IfStmt(std::unique_ptr<Cond> &&cond, std::unique_ptr<Stmt> &&st, std::unique_ptr<Stmt> &&sf);
-	void print() override;
-	void translate(TranslateEnv &env) override;
+	void print() const override;
+	void translate(TranslateEnv &env) const override;
 };
 
 struct DoWhileStmt: Stmt
@@ -296,8 +296,8 @@ struct DoWhileStmt: Stmt
 	std::unique_ptr<Cond> cond;
 	std::unique_ptr<Stmt> body;
 	DoWhileStmt(std::unique_ptr<Cond> &&cond, std::unique_ptr<Stmt> &&body);
-	void print() override;
-	void translate(TranslateEnv &env) override;
+	void print() const override;
+	void translate(TranslateEnv &env) const override;
 };
 
 struct ForStmt: Stmt
@@ -306,16 +306,16 @@ struct ForStmt: Stmt
 	std::unique_ptr<Stmt> body;
 	bool down;
 	ForStmt(std::unique_ptr<Expr> &&indvar, std::unique_ptr<Expr> &&from, std::unique_ptr<Expr> &&to, std::unique_ptr<Stmt> &&body, bool down);
-	void print() override;
-	void translate(TranslateEnv &env) override;
+	void print() const override;
+	void translate(TranslateEnv &env) const override;
 };
 
 struct ReadStmt: Stmt
 {
 	std::vector<std::unique_ptr<Expr>> vars;
 	ReadStmt(decltype(vars) &&vars);
-	void print() override;
-	void translate(TranslateEnv &env) override;
+	void print() const override;
+	void translate(TranslateEnv &env) const override;
 };
 
 struct WriteStmt: Stmt
@@ -323,8 +323,8 @@ struct WriteStmt: Stmt
 	std::string str;
 	std::unique_ptr<Expr> val;
 	WriteStmt(std::string &&str, std::unique_ptr<Expr> &&val);
-	void print() override;
-	void translate(TranslateEnv &env) override;
+	void print() const override;
+	void translate(TranslateEnv &env) const override;
 };
 
 std::unique_ptr<Expr> ident_expr(const std::string &name);

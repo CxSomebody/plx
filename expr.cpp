@@ -19,17 +19,17 @@ BinaryExpr::BinaryExpr(Op op, unique_ptr<Expr> &&left, unique_ptr<Expr> &&right)
 UnaryExpr::UnaryExpr(Op op, unique_ptr<Expr> &&sub): Expr(UNARY), op(op), sub(move(sub)) {}
 ApplyExpr::ApplyExpr(unique_ptr<Expr> &&func, vector<unique_ptr<Expr>> &&args): Expr(APPLY), func(move(func)), args(move(args)) {}
 
-void SymExpr::print()
+void SymExpr::print() const
 {
 	sym->print();
 }
 
-void LitExpr::print()
+void LitExpr::print() const
 {
 	printf("%d", lit);
 }
 
-void BinaryExpr::print()
+void BinaryExpr::print() const
 {
 	if (op == BinaryExpr::INDEX) {
 		left->print();
@@ -56,7 +56,7 @@ void BinaryExpr::print()
 	}
 }
 
-void UnaryExpr::print()
+void UnaryExpr::print() const
 {
 	const char *opstr;
 	switch (op) {
@@ -84,7 +84,7 @@ void print_expr_list(const vector<unique_ptr<Expr>> &list)
 	putchar(')');
 }
 
-void ApplyExpr::print()
+void ApplyExpr::print() const
 {
 	func->print();
 	print_expr_list(args);
@@ -103,11 +103,11 @@ ForStmt::ForStmt(unique_ptr<Expr> &&indvar, unique_ptr<Expr> &&from, unique_ptr<
 ReadStmt::ReadStmt(vector<unique_ptr<Expr>> &&vars): Stmt(READ), vars(move(vars)) {}
 WriteStmt::WriteStmt(string &&str, unique_ptr<Expr> &&val): Stmt(WRITE), str(move(str)), val(move(val)) {}
 
-void EmptyStmt::print()
+void EmptyStmt::print() const
 {
 }
 
-void CompStmt::print()
+void CompStmt::print() const
 {
 	bool sep = false;
 	printf("begin ");
@@ -120,20 +120,20 @@ void CompStmt::print()
 	printf(" end");
 }
 
-void AssignStmt::print()
+void AssignStmt::print() const
 {
 	var->print();
 	printf(" := ");
 	val->print();
 }
 
-void CallStmt::print()
+void CallStmt::print() const
 {
 	proc->print();
 	print_expr_list(args);
 }
 
-void IfStmt::print()
+void IfStmt::print() const
 {
 	printf("if ");
 	cond->print();
@@ -145,7 +145,7 @@ void IfStmt::print()
 	}
 }
 
-void DoWhileStmt::print()
+void DoWhileStmt::print() const
 {
 	printf("do ");
 	body->print();
@@ -153,7 +153,7 @@ void DoWhileStmt::print()
 	cond->print();
 }
 
-void ForStmt::print()
+void ForStmt::print() const
 {
 	printf("for ");
 	indvar->print();
@@ -165,13 +165,13 @@ void ForStmt::print()
 	body->print();
 }
 
-void ReadStmt::print()
+void ReadStmt::print() const
 {
 	printf("read");
 	print_expr_list(vars);
 }
 
-void WriteStmt::print()
+void WriteStmt::print() const
 {
 	printf("write");
 	putchar('(');
@@ -183,7 +183,7 @@ void WriteStmt::print()
 	putchar(')');
 }
 
-void Cond::print()
+void Cond::print() const
 {
 	const char *opstr;
 	switch (op) {

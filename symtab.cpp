@@ -10,7 +10,7 @@ using namespace std;
 
 Symbol::Symbol(Kind kind, const string &name): kind(kind), name(name) {}
 
-void Symbol::print()
+void Symbol::print() const
 {
 	if (this) printf("%s", name.c_str());
 	else printf("<error>");
@@ -109,12 +109,13 @@ vector<Param> param_group(vector<string> &&names, Type *type, bool byref)
 	return params;
 }
 
-static void indent(int level) {
+static void indent(int level)
+{
 	for (int i=0; i<level; i++)
 		printf("  ");
 };
 
-void SymbolTable::print(int level)
+void SymbolTable::print(int level) const
 {
 	for (auto &pair: map) {
 		Symbol *s = pair.second;
@@ -162,7 +163,7 @@ SymbolTable *pop_symtab()
 
 void print_stmt(Stmt *s);
 
-void Block::print(int level)
+void Block::print(int level) const
 {
 	indent(level);
 	printf("%s\n", name.c_str());

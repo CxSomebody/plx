@@ -82,7 +82,7 @@ struct ListOperand: Operand
 	}
 };
 
-void Quad::print()
+void Quad::print() const
 {
 	static char opchar[] = {
 		[Quad::ADD] = '+',
@@ -138,18 +138,18 @@ Operand *TranslateEnv::newtemp()
 	return new TempOperand(tempid++);
 }
 
-Operand *SymExpr::translate(TranslateEnv &env)
+Operand *SymExpr::translate(TranslateEnv &env) const
 {
 	//return new SymOperand(sym);
 	return nullptr;
 }
 
-Operand *LitExpr::translate(TranslateEnv &env)
+Operand *LitExpr::translate(TranslateEnv &env) const
 {
 	return new ImmOperand(lit);
 }
 
-Operand *BinaryExpr::translate(TranslateEnv &env)
+Operand *BinaryExpr::translate(TranslateEnv &env) const
 {
 	Quad::Op qop;
 	switch (op) {
@@ -165,7 +165,7 @@ Operand *BinaryExpr::translate(TranslateEnv &env)
 	return c;
 }
 
-Operand *UnaryExpr::translate(TranslateEnv &env)
+Operand *UnaryExpr::translate(TranslateEnv &env) const
 {
 	Quad::Op qop;
 	switch (op) {
@@ -177,45 +177,45 @@ Operand *UnaryExpr::translate(TranslateEnv &env)
 	return c;
 }
 
-Operand *ApplyExpr::translate(TranslateEnv &env)
+Operand *ApplyExpr::translate(TranslateEnv &env) const
 {
 	// TODO
 	return nullptr;
 }
 
-void EmptyStmt::translate(TranslateEnv &env)
+void EmptyStmt::translate(TranslateEnv &env) const
 {
 }
 
-void CompStmt::translate(TranslateEnv &env)
+void CompStmt::translate(TranslateEnv &env) const
 {
 }
 
-void AssignStmt::translate(TranslateEnv &env)
+void AssignStmt::translate(TranslateEnv &env) const
 {
 }
 
-void CallStmt::translate(TranslateEnv &env)
+void CallStmt::translate(TranslateEnv &env) const
 {
 }
 
-void IfStmt::translate(TranslateEnv &env)
+void IfStmt::translate(TranslateEnv &env) const
 {
 }
 
-void DoWhileStmt::translate(TranslateEnv &env)
+void DoWhileStmt::translate(TranslateEnv &env) const
 {
 }
 
-void ForStmt::translate(TranslateEnv &env)
+void ForStmt::translate(TranslateEnv &env) const
 {
 }
 
-void ReadStmt::translate(TranslateEnv &env)
+void ReadStmt::translate(TranslateEnv &env) const
 {
 }
 
-void WriteStmt::translate(TranslateEnv &env)
+void WriteStmt::translate(TranslateEnv &env) const
 {
 }
 
@@ -232,9 +232,18 @@ void Block::allocaddr()
 
 void Block::translate()
 {
+	printf("begin %s\n", name.c_str());
+	TranslateEnv env(symtab);
 	allocaddr();
 	for (const unique_ptr<Block> &sub: subs)
 		sub->translate();
+	for (const unique_ptr<Stmt> &stmt: stmts)
+		stmt->translate(env);
+	for (const Quad &q: env.quads) {
+		q.print();
+		putchar('\n');
+	}
+	printf("end %s\n", name.c_str());
 }
 
 void translate_all(unique_ptr<Block> &&blk)

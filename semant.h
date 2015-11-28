@@ -117,7 +117,7 @@ typedef std::pair<std::string, std::vector<Param>> ProcHeader;
 void def_const(const std::string &name, int val);
 VarSymbol *def_var(const std::string &name, Type *type);
 void def_func(const ProcHeader &header, Type *rettype);
-void def_params(const std::vector<Param> &params);
+void def_params(const std::vector<Param> &params, int level);
 Type *int_type();
 Type *char_type();
 Type *array_type(Type *elty, int n);
@@ -129,31 +129,7 @@ void translate_all(std::unique_ptr<Block> &&blk);
 Symbol *lookup(const std::string &name);
 
 struct Operand;
-struct Quad {
-	enum Op {
-		ADD,
-		SUB,
-		MUL,
-		DIV,
-		INDEX,
-		NEG,
-		MOV,
-		MOV_INDEX,
-	} op;
-	Operand *a, *b, *c; // src1, src2, dst
-	Quad(Op op, Operand *a, Operand *b, Operand *c):
-		op(op), a(a), b(b), c(c) {}
-	void print() const;
-};
-
-class TranslateEnv {
-	SymbolTable *symtab;
-	int tempid;
-public:
-	std::vector<Quad> quads;
-	Operand *newtemp();
-	TranslateEnv(SymbolTable *symtab): symtab(symtab), tempid(0) {}
-};
+class TranslateEnv;
 
 struct Expr {
 	enum Kind {

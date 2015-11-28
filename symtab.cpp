@@ -71,9 +71,9 @@ void def_func(const ProcHeader &header, Type *rettype)
 	}
 }
 
-void def_params(const vector<Param> &params)
+void def_params(const vector<Param> &params, int level)
 {
-	int offset = 8;
+	int offset = 8+level*4;
 	for (const Param &p: params) {
 		const string &name = p.name;
 		if (check_redef(name)) {

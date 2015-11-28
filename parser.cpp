@@ -124,7 +124,7 @@ static void skip()
 }
 
 static unique_ptr<Block> program();
-static unique_ptr<Block> block(ProcHeader &&header);
+static unique_ptr<Block> block(ProcHeader &&header, int level);
 static void const_part();
 static void const_def();
 static int constant();
@@ -134,7 +134,7 @@ static void var_decl(vector<VarSymbol*> &list);
 static vector<string> id_list();
 static Type *type();
 static Type *basic_type();
-static vector<unique_ptr<Block>> sub_list();
+static vector<unique_ptr<Block>> sub_list(int level);
 static ProcHeader proc_header(bool isfunc);
 static vector<Param> param_list();
 static vector<Param> param_group();
@@ -180,19 +180,19 @@ static unique_ptr<Block> program()
 {
 	X _{0};
 	try {
-		unique_ptr<Block> blk(block(ProcHeader("main", vector<Param>{})));
+		unique_ptr<Block> blk(block(ProcHeader("main", vector<Param>{}), 0));
 		check('.'); getsym();
 		check(0);
 		return blk;
 	} CATCH_R(nullptr)
 }
 
-static unique_ptr<Block> block(ProcHeader &&header)
+static unique_ptr<Block> block(ProcHeader &&header, int level)
 {
 	X _{';', '.'};
 	try {
 		push_symtab();
-		def_params(header.second);
+		def_params(header.second, level-1);
 		if (tok.sym == T_CONST) {
 			getsym();
 			const_part();
@@ -202,7 +202,7 @@ static unique_ptr<Block> block(ProcHeader &&header)
 			getsym();
 			vars = var_part();
 		}
-		vector<unique_ptr<Block>> subs(sub_list());
+		vector<unique_ptr<Block>> subs(sub_list(level));
 		unique_ptr<CompStmt> body(comp_stmt());
 		SymbolTable *symtab = pop_symtab();
 		return make_unique<Block>
@@ -370,7 +370,7 @@ static Type *basic_type()
 	} CATCH_R(nullptr)
 }
 
-static vector<unique_ptr<Block>> sub_list()
+static vector<unique_ptr<Block>> sub_list(int level)
 {
 	X _{T_BEGIN};
 	try {
@@ -394,7 +394,7 @@ static vector<unique_ptr<Block>> sub_list()
 				default:
 					error(';');
 				}
-				ret.emplace_back(block(move(header)));
+				ret.emplace_back(block(move(header), level+1));
 				switch (tok.sym) {
 				case ';':
 					getsym();

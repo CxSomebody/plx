@@ -7,6 +7,23 @@
 
 using namespace std;
 
+struct Quad {
+	enum Op {
+		ADD,
+		SUB,
+		MUL,
+		DIV,
+		INDEX,
+		NEG,
+		MOV,
+		MOV_INDEX,
+	} op;
+	Operand *a, *b, *c; // src1, src2, dst
+	Quad(Op op, Operand *a, Operand *b, Operand *c):
+		op(op), a(a), b(b), c(c) {}
+	void print() const;
+};
+
 struct Operand {
 	enum Kind {
 		//SYM,
@@ -82,6 +99,16 @@ struct ListOperand: Operand
 	}
 };
 
+class TranslateEnv {
+	SymbolTable *symtab;
+	int tempid;
+public:
+	std::vector<Quad> quads;
+	Operand *newtemp();
+	TranslateEnv(SymbolTable *symtab): symtab(symtab), tempid(0) {}
+	int level() const { return symtab->level; }
+};
+
 void Quad::print() const
 {
 	static char opchar[] = {
@@ -141,6 +168,7 @@ Operand *TranslateEnv::newtemp()
 Operand *SymExpr::translate(TranslateEnv &env) const
 {
 	//return new SymOperand(sym);
+
 	return nullptr;
 }
 

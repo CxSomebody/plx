@@ -212,7 +212,7 @@ struct Cond {
 	std::unique_ptr<Expr> left, right;
 	Cond(Op op, std::unique_ptr<Expr> &&left, std::unique_ptr<Expr> &&right);
 	void print() const;
-	LabelOperand *translate(TranslateEnv &env, bool negate) const;
+	void translate(TranslateEnv &env, LabelOperand *label, bool negate) const;
 };
 
 struct Stmt {

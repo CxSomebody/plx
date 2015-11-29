@@ -397,7 +397,8 @@ void CallStmt::translate(TranslateEnv &env) const
 void IfStmt::translate(TranslateEnv &env) const
 {
 	LabelOperand *lfalse, *ljoin;
-	lfalse = cond->translate(env, true);
+	lfalse = env.newlabel();
+	cond->translate(env, lfalse, true);
 	if (sf)
 		ljoin = env.newlabel();
 	st->translate(env);
@@ -411,6 +412,10 @@ void IfStmt::translate(TranslateEnv &env) const
 
 void DoWhileStmt::translate(TranslateEnv &env) const
 {
+	LabelOperand *l = env.newlabel();
+	env.quads.emplace_back(Quad::LABEL, l);
+	body->translate(env);
+	cond->translate(env, l, false);
 }
 
 void ForStmt::translate(TranslateEnv &env) const
@@ -425,9 +430,8 @@ void WriteStmt::translate(TranslateEnv &env) const
 {
 }
 
-LabelOperand *Cond::translate(TranslateEnv &env, bool negate) const
+void Cond::translate(TranslateEnv &env, LabelOperand *label, bool negate) const
 {
-	LabelOperand *label = env.newlabel();
 	Quad::Op qop;
 	switch (op^negate) {
 	case Cond::EQ: qop = Quad::BEQ; break;
@@ -439,7 +443,6 @@ LabelOperand *Cond::translate(TranslateEnv &env, bool negate) const
 	default: assert(0);
 	}
 	env.quads.emplace_back(qop, label, left->translate(env), right->translate(env));
-	return label;
 }
 
 void Block::allocaddr()

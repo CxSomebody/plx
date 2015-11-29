@@ -136,6 +136,7 @@ void translate_all(std::unique_ptr<Block> &&blk);
 Symbol *lookup(const std::string &name);
 
 struct Operand;
+struct LabelOperand;
 class TranslateEnv;
 
 struct Expr {
@@ -197,9 +198,9 @@ struct UnaryExpr: Expr
 
 struct ApplyExpr: Expr
 {
-	std::unique_ptr<Expr> func;
+	Symbol *func;
 	std::vector<std::unique_ptr<Expr>> args;
-	ApplyExpr(std::unique_ptr<Expr> &&func, decltype(args) &&args);
+	ApplyExpr(Symbol *func, decltype(args) &&args);
 	void print() const override;
 	Operand *translate(TranslateEnv &env) const override;
 };
@@ -211,6 +212,7 @@ struct Cond {
 	std::unique_ptr<Expr> left, right;
 	Cond(Op op, std::unique_ptr<Expr> &&left, std::unique_ptr<Expr> &&right);
 	void print() const;
+	LabelOperand *translate(TranslateEnv &env, bool negate) const;
 };
 
 struct Stmt {

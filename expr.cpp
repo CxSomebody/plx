@@ -17,7 +17,7 @@ SymExpr::SymExpr(Symbol *sym): Expr(SYM), sym(sym) {}
 LitExpr::LitExpr(int lit): Expr(LIT), lit(lit) {}
 BinaryExpr::BinaryExpr(Op op, unique_ptr<Expr> &&left, unique_ptr<Expr> &&right): Expr(BINARY), op(op), left(move(left)), right(move(right)) {}
 UnaryExpr::UnaryExpr(Op op, unique_ptr<Expr> &&sub): Expr(UNARY), op(op), sub(move(sub)) {}
-ApplyExpr::ApplyExpr(unique_ptr<Expr> &&func, vector<unique_ptr<Expr>> &&args): Expr(APPLY), func(move(func)), args(move(args)) {}
+ApplyExpr::ApplyExpr(Symbol *func, vector<unique_ptr<Expr>> &&args): Expr(APPLY), func(func), args(move(args)) {}
 
 void SymExpr::print() const
 {

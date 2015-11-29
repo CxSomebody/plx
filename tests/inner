@@ -1,0 +1,12 @@
+procedure x;
+var
+  a: integer;
+  procedure y;
+  begin
+    a := 0;
+  end;
+begin
+end;
+begin
+  x;
+end.

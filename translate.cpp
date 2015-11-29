@@ -13,16 +13,17 @@ struct Quad {
 		SUB,
 		MUL,
 		DIV,
-		NEG,
-		MOV,
-		JMP,
 		BEQ,
 		BNE,
 		BLT,
 		BGE,
 		BGT,
 		BLE,
+		NEG,
+		MOV,
+		JMP,
 		CALL,
+		LABEL,
 	} op;
 	Operand *c, *a, *b;
 	Quad(Op op, Operand *c, Operand *a, Operand *b):
@@ -30,6 +31,19 @@ struct Quad {
 	Quad(Op op, Operand *c, Operand *a): Quad(op, c, a, nullptr) {}
 	Quad(Op op, Operand *c): Quad(op, c, nullptr, nullptr) {}
 	void print() const;
+};
+
+static const char *opstr[10] = {
+	"+",
+	"-",
+	"*",
+	"/",
+	"=",
+	"<>",
+	"<",
+	">=",
+	">",
+	"<=",
 };
 
 struct Operand {
@@ -161,9 +175,11 @@ TempOperand *getphysreg(int id)
 class TranslateEnv {
 	SymbolTable *symtab;
 	int tempid;
+	int labelid;
 public:
 	std::vector<Quad> quads;
-	TempOperand *gettemp();
+	TempOperand *newtemp();
+	LabelOperand *newlabel();
 	TranslateEnv(SymbolTable *symtab): symtab(symtab), tempid(0) {}
 	int level() const { return symtab->level; }
 };
@@ -178,12 +194,6 @@ static void todo(const char *file, int line, const char *msg)
 
 void Quad::print() const
 {
-	static char opchar[] = {
-		[Quad::ADD] = '+',
-		[Quad::SUB] = '-',
-		[Quad::MUL] = '*',
-		[Quad::DIV] = '/',
-	};
 	switch (op) {
 	case Quad::ADD:
 	case Quad::SUB:
@@ -192,7 +202,7 @@ void Quad::print() const
 		c->print();
 		printf(" = ");
 		a->print();
-		printf(" %c ", opchar[op]);
+		printf(" %s ", opstr[op]);
 		b->print();
 		break;
 	case Quad::NEG:
@@ -206,6 +216,19 @@ void Quad::print() const
 		printf(" = ");
 		a->print();
 		break;
+	case Quad::BEQ:
+	case Quad::BNE:
+	case Quad::BLT:
+	case Quad::BGE:
+	case Quad::BGT:
+	case Quad::BLE:
+		printf("goto ");
+		c->print();
+		printf(" if ");
+		a->print();
+		printf(" %s ", opstr[op]);
+		b->print();
+		break;
 	case Quad::CALL:
 		printf("call ");
 		c->print();
@@ -213,17 +236,32 @@ void Quad::print() const
 		a->print();
 		putchar(')');
 		break;
+	case Quad::LABEL:
+		c->print();
+		putchar(':');
+		break;
+	case Quad::JMP:
+		printf("goto ");
+		c->print();
+		break;
 	default:
 		assert(0);
 	}
 }
 
-TempOperand *TranslateEnv::gettemp()
+TempOperand *TranslateEnv::newtemp()
 {
 	return new TempOperand(tempid++);
 }
 
-Operand *SymExpr::translate(TranslateEnv &env) const
+LabelOperand *TranslateEnv::newlabel()
+{
+	char tmp[16];
+	sprintf(tmp, ".l%d", labelid++);
+	return new LabelOperand(tmp);
+}
+
+Operand *translate_sym(Symbol *sym, TranslateEnv &env)
 {
 	if (sym->kind == Symbol::VAR) {
 		VarSymbol *vs = static_cast<VarSymbol*>(sym);
@@ -234,7 +272,7 @@ Operand *SymExpr::translate(TranslateEnv &env) const
 				bp = getphysreg(5);
 			} else {
 				int leveldiff = env.level()-vs->level;
-				bp = env.gettemp();
+				bp = env.newtemp();
 				env.quads.emplace_back(Quad::MOV, bp, new MemOperand(getphysreg(5), 8+4*(leveldiff-1)));
 			}
 			return new MemOperand(bp, vs->offset);
@@ -249,6 +287,11 @@ Operand *SymExpr::translate(TranslateEnv &env) const
 	}
 	assert(sym->kind == Symbol::CONST);
 	return new ImmOperand(static_cast<ConstSymbol*>(sym)->val);
+}
+
+Operand *SymExpr::translate(TranslateEnv &env) const
+{
+	return translate_sym(sym, env);
 }
 
 Operand *LitExpr::translate(TranslateEnv &env) const
@@ -276,13 +319,18 @@ Operand *BinaryExpr::translate(TranslateEnv &env) const
 		MemOperand *moleft = static_cast<MemOperand*>(c);
 		assert(!moleft->index);
 		Operand *oright = right->translate(env);
+		if (oright->kind == Operand::MEM) {
+			TempOperand *tmp = env.newtemp();
+			env.quads.emplace_back(Quad::MOV, tmp, oright);
+			oright = tmp;
+		}
 		if (oright->kind == Operand::IMM) {
 			moleft->offset += static_cast<ImmOperand*>(oright)->val * scale;
 		} else if (oright->kind == Operand::TEMP) {
 			moleft->index = static_cast<TempOperand*>(oright);
 			moleft->scale = scale;
 		} else {
-			TODO("non-IMM-or-TEMP subscript");
+			assert(0);
 		}
 	} else {
 		Quad::Op qop;
@@ -293,7 +341,7 @@ Operand *BinaryExpr::translate(TranslateEnv &env) const
 		case DIV: qop = Quad::DIV; break;
 		default: assert(0);
 		}
-		c = env.gettemp();
+		c = env.newtemp();
 		env.quads.emplace_back(qop, c, left->translate(env), right->translate(env));
 	}
 	return c;
@@ -306,7 +354,7 @@ Operand *UnaryExpr::translate(TranslateEnv &env) const
 	case NEG: qop = Quad::NEG; break;
 	default: assert(0);
 	}
-	Operand *c = env.gettemp();
+	Operand *c = env.newtemp();
 	env.quads.emplace_back(qop, c, sub->translate(env));
 	return c;
 }
@@ -316,16 +364,19 @@ Operand *ApplyExpr::translate(TranslateEnv &env) const
 	ListOperand *list = new ListOperand();
 	for (const unique_ptr<Expr> &arg: args)
 		list->list.push_back(arg->translate(env));
-	env.quads.emplace_back(Quad::CALL, func->translate(env), list);
+	env.quads.emplace_back(Quad::CALL, translate_sym(func, env), list);
 	return getphysreg(0);
 }
 
 void EmptyStmt::translate(TranslateEnv &env) const
 {
+	// do nothing
 }
 
 void CompStmt::translate(TranslateEnv &env) const
 {
+	for (const unique_ptr<Stmt> &s: body)
+		s->translate(env);
 }
 
 void AssignStmt::translate(TranslateEnv &env) const
@@ -337,10 +388,25 @@ void AssignStmt::translate(TranslateEnv &env) const
 
 void CallStmt::translate(TranslateEnv &env) const
 {
+	ListOperand *list = new ListOperand();
+	for (const unique_ptr<Expr> &arg: args)
+		list->list.push_back(arg->translate(env));
+	env.quads.emplace_back(Quad::CALL, translate_sym(proc, env), list);
 }
 
 void IfStmt::translate(TranslateEnv &env) const
 {
+	LabelOperand *lfalse, *ljoin;
+	lfalse = cond->translate(env, true);
+	if (sf)
+		ljoin = env.newlabel();
+	st->translate(env);
+	if (sf) {
+		env.quads.emplace_back(Quad::JMP, ljoin);
+		env.quads.emplace_back(Quad::LABEL, lfalse);
+		sf->translate(env);
+		env.quads.emplace_back(Quad::LABEL, ljoin);
+	}
 }
 
 void DoWhileStmt::translate(TranslateEnv &env) const
@@ -357,6 +423,23 @@ void ReadStmt::translate(TranslateEnv &env) const
 
 void WriteStmt::translate(TranslateEnv &env) const
 {
+}
+
+LabelOperand *Cond::translate(TranslateEnv &env, bool negate) const
+{
+	LabelOperand *label = env.newlabel();
+	Quad::Op qop;
+	switch (op^negate) {
+	case Cond::EQ: qop = Quad::BEQ; break;
+	case Cond::NE: qop = Quad::BNE; break;
+	case Cond::LT: qop = Quad::BLT; break;
+	case Cond::GE: qop = Quad::BGE; break;
+	case Cond::GT: qop = Quad::BGT; break;
+	case Cond::LE: qop = Quad::BLE; break;
+	default: assert(0);
+	}
+	env.quads.emplace_back(qop, label, left->translate(env), right->translate(env));
+	return label;
 }
 
 void Block::allocaddr()

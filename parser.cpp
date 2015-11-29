@@ -790,7 +790,7 @@ static unique_ptr<Expr> factor()
 		switch (tok.sym) {
 		case '(':
 			getsym();
-			e = make_unique<ApplyExpr>(move(e), expr_list());
+			e = make_unique<ApplyExpr>(static_cast<SymExpr*>(e.get())->sym, expr_list());
 			check(')'); getsym();
 			return e;
 		case '[':

@@ -708,7 +708,7 @@ static unique_ptr<Expr> lvalue()
 			getsym();
 			unique_ptr<Expr> index(expr());
 			check(']'); getsym();
-			e = make_unique<BinaryExpr>(BinaryExpr::INDEX, move(e), move(index));
+			e = make_unique<IndexExpr>(move(e), move(index));
 		}
 		return e;
 	} CATCH_R(nullptr)
@@ -829,7 +829,7 @@ static unique_ptr<Expr> factor()
 			e = ident_expr(tok.s);
 			getsym();
 			getsym();
-			e = make_unique<BinaryExpr>(BinaryExpr::INDEX, move(e), expr());
+			e = make_unique<IndexExpr>(move(e), expr());
 			check(']'); getsym();
 			return e;
 		}

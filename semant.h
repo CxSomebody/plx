@@ -16,6 +16,7 @@ protected:
 Type *char_type();
 Type *int_type();
 Type *binexprtype(Type *a, Type *b);
+Type *elemtype(Type *ty);
 
 #if 0
 struct ErrorType: Type
@@ -172,6 +173,7 @@ struct Expr {
 		BINARY,
 		UNARY,
 		APPLY,
+		INDEX,
 	} kind;
 	Type *type;
 	virtual void print() const = 0;
@@ -204,10 +206,18 @@ struct BinaryExpr: Expr
 		SUB,
 		MUL,
 		DIV,
-		INDEX,
 	} op;
 	std::unique_ptr<Expr> left, right;
 	BinaryExpr(Op op, std::unique_ptr<Expr> &&left, std::unique_ptr<Expr> &&right);
+	void print() const override;
+	Operand *translate(TranslateEnv &env) const override;
+};
+
+struct IndexExpr: Expr
+{
+	std::unique_ptr<Expr> array, index;
+	IndexExpr(std::unique_ptr<Expr> array, std::unique_ptr<Expr> index):
+		Expr(INDEX, elemtype(array->type)), array(std::move(array)), index(std::move(index)) {}
 	void print() const override;
 	Operand *translate(TranslateEnv &env) const override;
 };

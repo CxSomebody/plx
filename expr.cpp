@@ -31,29 +31,30 @@ void LitExpr::print() const
 
 void BinaryExpr::print() const
 {
-	if (op == BinaryExpr::INDEX) {
-		left->print();
-		putchar('[');
-		right->print();
-		putchar(']');
-	} else {
-		char opchar;
-		switch (op) {
+	char opchar;
+	switch (op) {
 #define CASE(x,y) case BinaryExpr::x: opchar = y; break
-			CASE(ADD,'+');
-			CASE(SUB,'-');
-			CASE(MUL,'*');
-			CASE(DIV,'/');
+		CASE(ADD,'+');
+		CASE(SUB,'-');
+		CASE(MUL,'*');
+		CASE(DIV,'/');
 #undef CASE
-		default:
-			assert(0);
-		}
-		putchar('(');
-		left->print();
-		putchar(opchar);
-		right->print();
-		putchar(')');
+	default:
+		assert(0);
 	}
+	putchar('(');
+	left->print();
+	putchar(opchar);
+	right->print();
+	putchar(')');
+}
+
+void IndexExpr::print() const
+{
+	array->print();
+	putchar('[');
+	index->print();
+	putchar(']');
 }
 
 void UnaryExpr::print() const

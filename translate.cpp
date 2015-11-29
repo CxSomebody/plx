@@ -93,37 +93,43 @@ struct LabelOperand: Operand
 
 struct MemOperand: Operand
 {
+	int size;
 	TempOperand *baset;
 	LabelOperand *basel;
 	int offset;
 	TempOperand *index;
 	int scale;
-	MemOperand(TempOperand *baset,
+	MemOperand(int size,
+		   TempOperand *baset,
 		   int offset,
 		   TempOperand *index,
 		   int scale):
 		Operand(MEM),
+		size(size),
 		baset(baset),
 		basel(nullptr),
 		offset(offset),
 		index(index),
 		scale(scale) {}
-	MemOperand(TempOperand *baset, int offset):
-		MemOperand(baset, offset, nullptr, 0) {}
-	MemOperand(LabelOperand *basel,
+	MemOperand(int size, TempOperand *baset, int offset):
+		MemOperand(size, baset, offset, nullptr, 0) {}
+	MemOperand(int size,
+		   LabelOperand *basel,
 		   int offset,
 		   TempOperand *index,
 		   int scale):
 		Operand(MEM),
+		size(size),
 		baset(nullptr),
 		basel(basel),
 		offset(offset),
 		index(index),
 		scale(scale) {}
-	MemOperand(LabelOperand *basel):
-		MemOperand(basel, 0, nullptr, 0) {}
+	MemOperand(int size, LabelOperand *basel):
+		MemOperand(size, basel, 0, nullptr, 0) {}
 	void print() const override
 	{
+		printf("%d", size);
 		putchar('[');
 		bool sep = false;
 		if (baset) {
@@ -289,9 +295,9 @@ Operand *translate_sym(Symbol *sym, TranslateEnv &env)
 		} else {
 			int leveldiff = env.level()-vs->level;
 			bp = env.newtemp();
-			env.quads.emplace_back(Quad::MOV, bp, new MemOperand(getphysreg(5), 8+4*(leveldiff-1)));
+			env.quads.emplace_back(Quad::MOV, bp, new MemOperand(4, getphysreg(5), 8+4*(leveldiff-1)));
 		}
-		return new MemOperand(bp, vs->offset);
+		return new MemOperand(vs->type->size(), bp, vs->offset);
 	}
 	if (sym->kind == Symbol::PROC) {
 		// address of function
@@ -315,47 +321,51 @@ Operand *LitExpr::translate(TranslateEnv &env) const
 Operand *BinaryExpr::translate(TranslateEnv &env) const
 {
 	Operand *c;
-	if (op == INDEX) {
-		if (left->kind != SYM)
-			TODO("non-SYM subscripted value");
-		Symbol *arraysym = static_cast<SymExpr*>(left.get())->sym;
-		if (arraysym->kind != Symbol::VAR)
-			TODO("non-VAR subscripted value");
-		Type *arrayty = static_cast<VarSymbol*>(arraysym)->type;
-		if (arrayty->kind != Type::ARRAY)
-			TODO("non-ARRAY subscripted value");
-		int scale = static_cast<ArrayType*>(arrayty)->elemtype->size();
-		c = left->translate(env);
-		if (c->kind != Operand::MEM) {
-			TODO("non-MEM subscripted value");
-		}
-		MemOperand *moleft = static_cast<MemOperand*>(c);
-		assert(!moleft->index);
-		Operand *oright = right->translate(env);
-		if (oright->kind == Operand::MEM) {
-			TempOperand *tmp = env.newtemp();
-			env.quads.emplace_back(Quad::MOV, tmp, oright);
-			oright = tmp;
-		}
-		if (oright->kind == Operand::IMM) {
-			moleft->offset += static_cast<ImmOperand*>(oright)->val * scale;
-		} else if (oright->kind == Operand::TEMP) {
-			moleft->index = static_cast<TempOperand*>(oright);
-			moleft->scale = scale;
-		} else {
-			assert(0);
-		}
+	Quad::Op qop;
+	switch (op) {
+	case ADD: qop = Quad::ADD; break;
+	case SUB: qop = Quad::SUB; break;
+	case MUL: qop = Quad::MUL; break;
+	case DIV: qop = Quad::DIV; break;
+	default: assert(0);
+	}
+	c = env.newtemp();
+	env.quads.emplace_back(qop, c, left->translate(env), right->translate(env));
+	return c;
+}
+
+Operand *IndexExpr::translate(TranslateEnv &env) const
+{
+	Operand *c;
+	if (array->kind != SYM)
+		TODO("non-SYM subscripted value");
+	Symbol *arraysym = static_cast<SymExpr*>(array.get())->sym;
+	if (arraysym->kind != Symbol::VAR)
+		TODO("non-VAR subscripted value");
+	Type *arrayty = static_cast<VarSymbol*>(arraysym)->type;
+	if (arrayty->kind != Type::ARRAY)
+		TODO("non-ARRAY subscripted value");
+	int scale = static_cast<ArrayType*>(arrayty)->elemtype->size();
+	c = array->translate(env);
+	if (c->kind != Operand::MEM) {
+		TODO("non-MEM subscripted value");
+	}
+	MemOperand *moleft = static_cast<MemOperand*>(c);
+	assert(!moleft->index);
+	moleft->size = type->size();
+	Operand *oright = index->translate(env);
+	if (oright->kind == Operand::MEM) {
+		TempOperand *tmp = env.newtemp();
+		env.quads.emplace_back(Quad::MOV, tmp, oright);
+		oright = tmp;
+	}
+	if (oright->kind == Operand::IMM) {
+		moleft->offset += static_cast<ImmOperand*>(oright)->val * scale;
+	} else if (oright->kind == Operand::TEMP) {
+		moleft->index = static_cast<TempOperand*>(oright);
+		moleft->scale = scale;
 	} else {
-		Quad::Op qop;
-		switch (op) {
-		case ADD: qop = Quad::ADD; break;
-		case SUB: qop = Quad::SUB; break;
-		case MUL: qop = Quad::MUL; break;
-		case DIV: qop = Quad::DIV; break;
-		default: assert(0);
-		}
-		c = env.newtemp();
-		env.quads.emplace_back(qop, c, left->translate(env), right->translate(env));
+		assert(0);
 	}
 	return c;
 }
@@ -483,8 +493,14 @@ void ReadStmt::translate(TranslateEnv &env) const
 		Operand *addr = env.newtemp();
 		env.quads.emplace_back(Quad::LEA, addr, o);
 		ListOperand *args = new ListOperand();
-		// TODO handle char type
-		args->list.push_back(new LabelOperand("$fmtd"));
+		Operand *fmtstr;
+		if (var->type == int_type())
+			fmtstr = new LabelOperand("$fmtd");
+		else if (var->type == char_type())
+			fmtstr = new LabelOperand("$fmtc");
+		else
+			assert(0);
+		args->list.push_back(fmtstr);
 		args->list.push_back(addr);
 		env.quads.emplace_back(Quad::CALL, &o_printf, args);
 	}

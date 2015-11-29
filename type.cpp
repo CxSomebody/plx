@@ -52,3 +52,10 @@ Type *binexprtype(Type *a, Type *b)
 		return int_type();
 	return nullptr;//error_type();
 }
+
+Type *elemtype(Type *ty)
+{
+	if (ty->kind == Type::ARRAY)
+		return static_cast<ArrayType*>(ty)->elemtype;
+	return nullptr;
+}

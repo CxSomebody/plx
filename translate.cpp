@@ -484,7 +484,7 @@ void ForStmt::translate(TranslateEnv &env) const
 
 void ReadStmt::translate(TranslateEnv &env) const
 {
-	static LabelOperand o_printf("printf");
+	static LabelOperand o_scanf("scanf");
 	for (const unique_ptr<Expr> &var: vars) {
 		Operand *o = var->translate(env);
 		if (o->kind != Operand::MEM) {
@@ -492,7 +492,6 @@ void ReadStmt::translate(TranslateEnv &env) const
 		}
 		Operand *addr = env.newtemp();
 		env.quads.emplace_back(Quad::LEA, addr, o);
-		ListOperand *args = new ListOperand();
 		Operand *fmtstr;
 		if (var->type == int_type())
 			fmtstr = new LabelOperand("$fmtd");
@@ -500,14 +499,39 @@ void ReadStmt::translate(TranslateEnv &env) const
 			fmtstr = new LabelOperand("$fmtc");
 		else
 			assert(0);
+		ListOperand *args = new ListOperand();
 		args->list.push_back(fmtstr);
 		args->list.push_back(addr);
-		env.quads.emplace_back(Quad::CALL, &o_printf, args);
+		env.quads.emplace_back(Quad::CALL, &o_scanf, args);
 	}
 }
 
 void WriteStmt::translate(TranslateEnv &env) const
 {
+	static LabelOperand o_printf("printf");
+	Operand *fmtstr;
+	ListOperand *args;
+#if 0
+	if (!str.empty()) {
+		fmtstr = new LabelOperand("$fmts_");
+		args = new ListOperand();
+		args->list.push_back(fmtstr);
+		args->list.push_back(new LabelOperand(/*TODO*/));
+		env.quads.emplace_back(Quad::CALL, &o_printf, args);
+	}
+#endif
+	if (val) {
+		if (val->type == int_type())
+			fmtstr = new LabelOperand("$fmtd");
+		else if (val->type == char_type())
+			fmtstr = new LabelOperand("$fmtc");
+		else
+			assert(0);
+		args = new ListOperand();
+		args->list.push_back(fmtstr);
+		args->list.push_back(val->translate(env));
+		env.quads.emplace_back(Quad::CALL, &o_printf, args);
+	}
 }
 
 void Cond::translate(TranslateEnv &env, LabelOperand *label, bool negate) const

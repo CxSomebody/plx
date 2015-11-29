@@ -416,12 +416,12 @@ void IfStmt::translate(TranslateEnv &env) const
 void WhileStmt::translate(TranslateEnv &env) const
 {
 	LabelOperand *lstart = env.newlabel();
-	LabelOperand *lfalse = env.newlabel();
+	LabelOperand *lend = env.newlabel();
 	env.quads.emplace_back(Quad::LABEL, lstart);
-	cond->translate(env, lfalse, true);
+	cond->translate(env, lend, true);
 	body->translate(env);
 	env.quads.emplace_back(Quad::JMP, lstart);
-	env.quads.emplace_back(Quad::LABEL, lfalse);
+	env.quads.emplace_back(Quad::LABEL, lend);
 }
 
 void DoWhileStmt::translate(TranslateEnv &env) const
@@ -434,6 +434,24 @@ void DoWhileStmt::translate(TranslateEnv &env) const
 
 void ForStmt::translate(TranslateEnv &env) const
 {
+	// indvar = from;
+	Operand *o_indvar = indvar->translate(env);
+	env.quads.emplace_back(Quad::MOV, o_indvar, from->translate(env));
+	// lim = to;
+	TempOperand *lim = env.newtemp();
+	env.quads.emplace_back(Quad::MOV, lim, to->translate(env));
+	// while (indvar <= lim) {
+	// 	<stmt>;
+	// 	indvar++;
+	// }
+	LabelOperand *lstart = env.newlabel();
+	LabelOperand *lend = env.newlabel();
+	env.quads.emplace_back(Quad::LABEL, lstart);
+	env.quads.emplace_back(Quad::BGT, lend, o_indvar, lim);
+	// <cond>
+	body->translate(env);
+	env.quads.emplace_back(Quad::JMP, lstart);
+	env.quads.emplace_back(Quad::LABEL, lend);
 }
 
 void ReadStmt::translate(TranslateEnv &env) const

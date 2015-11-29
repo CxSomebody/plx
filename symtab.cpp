@@ -65,7 +65,7 @@ VarSymbol *def_var(const string &name, Type *type)
 
 void def_func(const ProcHeader &header, Type *rettype)
 {
-	const string &name = header.first;
+	const string &name = header.name;
 	if (check_redef(name)) {
 		symtab->map[name] = new ProcSymbol(name, rettype);
 	}

@@ -112,7 +112,14 @@ struct Param {
 	Param(const std::string &name, Type *type, bool byref);
 };
 
-typedef std::pair<std::string, std::vector<Param>> ProcHeader;
+struct ProcHeader {
+	std::string name;
+	std::vector<Param> params;
+	Type *rettype;
+	ProcHeader() = default;
+	ProcHeader(const std::string &name, std::vector<Param> &&params, Type *rettype):
+		name(name), params(std::move(params)), rettype(rettype) {}
+};
 
 void def_const(const std::string &name, int val);
 VarSymbol *def_var(const std::string &name, Type *type);

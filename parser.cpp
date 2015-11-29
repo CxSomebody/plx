@@ -180,7 +180,7 @@ static unique_ptr<Block> program()
 {
 	X _{0};
 	try {
-		unique_ptr<Block> blk(block(ProcHeader("main", vector<Param>{}), 0));
+		unique_ptr<Block> blk(block(ProcHeader("main", vector<Param>{}, nullptr), 0));
 		check('.'); getsym();
 		check(0);
 		return blk;
@@ -192,7 +192,11 @@ static unique_ptr<Block> block(ProcHeader &&header, int level)
 	X _{';', '.'};
 	try {
 		push_symtab();
-		def_params(header.second, level-1);
+		def_params(header.params, level-1);
+		if (header.rettype) {
+			// local var for function return value
+			def_var(header.name, header.rettype);
+		}
 		if (tok.sym == T_CONST) {
 			getsym();
 			const_part();
@@ -206,7 +210,7 @@ static unique_ptr<Block> block(ProcHeader &&header, int level)
 		unique_ptr<CompStmt> body(comp_stmt());
 		SymbolTable *symtab = pop_symtab();
 		return make_unique<Block>
-			(move(header.first),
+			(move(header.name),
 			 move(subs),
 			 move(vars),
 			 move(body->body),
@@ -420,16 +424,17 @@ static ProcHeader proc_header(bool isfunc)
 	try {
 		ProcHeader header;
 		check(IDENT);
-		header.first = move(tok.s);
+		header.name = move(tok.s);
 		getsym();
 		if (tok.sym == '(') {
 			getsym();
-			header.second = param_list();
+			header.params = param_list();
 			check(')'); getsym();
 		}
 		if (isfunc) {
 			check(':'); getsym();
 			Type *retty = basic_type();
+			header.rettype = retty;
 			def_func(header, retty);
 		} else {
 			def_func(header, nullptr);

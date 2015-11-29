@@ -15,43 +15,41 @@ struct Quad {
 		DIV,
 		NEG,
 		MOV,
+		JMP,
+		BEQ,
+		BNE,
+		BLT,
+		BGE,
+		BGT,
+		BLE,
+		CALL,
 	} op;
-	Operand *a, *b, *c; // src1, src2, dst
-	Quad(Op op, Operand *a, Operand *b, Operand *c):
-		op(op), a(a), b(b), c(c) {}
+	Operand *c, *a, *b;
+	Quad(Op op, Operand *c, Operand *a, Operand *b):
+		op(op), c(c), a(a), b(b) {}
+	Quad(Op op, Operand *c, Operand *a): Quad(op, c, a, nullptr) {}
+	Quad(Op op, Operand *c): Quad(op, c, nullptr, nullptr) {}
 	void print() const;
 };
 
 struct Operand {
 	enum Kind {
-		//SYM,
 		IMM,
 		TEMP,
-		ADDR,
+		MEM,
+		LABEL,
 		LIST, // for function calls
 	} kind;
-	virtual void print() = 0;
+	virtual void print() const = 0;
 protected:
 	Operand(Kind kind): kind(kind) {}
 };
-
-#if 0
-struct SymOperand: Operand
-{
-	Symbol *sym;
-	SymOperand(Symbol *sym): Operand(SYM), sym(sym) {}
-	void print() override
-	{
-		sym->print();
-	}
-};
-#endif
 
 struct ImmOperand: Operand
 {
 	int val;
 	ImmOperand(int val): Operand(IMM), val(val) {}
-	void print() override
+	void print() const override
 	{
 		printf("%d", val);
 	}
@@ -61,23 +59,79 @@ struct TempOperand: Operand
 {
 	int id;
 	TempOperand(int id): Operand(TEMP), id(id) {}
-	void print() override
+	void print() const override
 	{
 		if (id >= 0) printf("$%d", id);
 		else printf("%%%d", ~id); // physical register
 	}
 };
 
-struct AddrOperand: Operand
+struct LabelOperand: Operand
 {
-	TempOperand *base;
-	int offset;
-	AddrOperand(TempOperand *base, int offset):
-		Operand(ADDR), base(base), offset(offset) {}
-	void print() override
+	string label;
+	LabelOperand(const string &label): Operand(LABEL), label(label) {}
+	void print() const override
 	{
-		base->print();
-		printf("%+d", offset);
+		printf("%s", label.c_str());
+	}
+};
+
+struct MemOperand: Operand
+{
+	TempOperand *baset;
+	LabelOperand *basel;
+	int offset;
+	TempOperand *index;
+	int scale;
+	MemOperand(TempOperand *baset,
+		   int offset,
+		   TempOperand *index,
+		   int scale):
+		Operand(MEM),
+		baset(baset),
+		basel(nullptr),
+		offset(offset),
+		index(index),
+		scale(scale) {}
+	MemOperand(TempOperand *baset, int offset):
+		MemOperand(baset, offset, nullptr, 0) {}
+	MemOperand(LabelOperand *basel,
+		   int offset,
+		   TempOperand *index,
+		   int scale):
+		Operand(MEM),
+		baset(nullptr),
+		basel(basel),
+		offset(offset),
+		index(index),
+		scale(scale) {}
+	MemOperand(LabelOperand *basel):
+		MemOperand(basel, 0, nullptr, 0) {}
+	void print() const override
+	{
+		putchar('[');
+		bool sep = false;
+		if (baset) {
+			baset->print();
+			sep = true;
+		}
+		if (basel) {
+			if (sep)
+				putchar('+');
+			basel->print();
+			sep = true;
+		}
+		if (offset) {
+			printf(sep?"%+d":"%d", offset);
+			sep = true;
+		}
+		if (index) {
+			if (sep)
+				putchar('+');
+			index->print();
+			printf("*%d", scale);
+		}
+		putchar(']');
 	}
 };
 
@@ -85,7 +139,7 @@ struct ListOperand: Operand
 {
 	vector<Operand*> list;
 	ListOperand(): Operand(LIST) {}
-	void print() override
+	void print() const override
 	{
 		bool sep = false;
 		for (Operand *o: list) {
@@ -97,21 +151,28 @@ struct ListOperand: Operand
 	}
 };
 
+TempOperand *getphysreg(int id)
+{
+	static TempOperand physreg[8] =
+	{{~0}, {~1}, {~2}, {~3}, {~4}, {~5}, {~6}, {~7}};
+	return &physreg[id];
+}
+
 class TranslateEnv {
 	SymbolTable *symtab;
 	int tempid;
 public:
 	std::vector<Quad> quads;
-	Operand *newtemp();
+	TempOperand *gettemp();
 	TranslateEnv(SymbolTable *symtab): symtab(symtab), tempid(0) {}
 	int level() const { return symtab->level; }
 };
 
-#define TODO todo(__FILE__, __LINE__)
+#define TODO(msg) todo(__FILE__, __LINE__, msg)
 
-static void todo(const char *file, int line)
+static void todo(const char *file, int line, const char *msg)
 {
-	fprintf(stderr, "%s: %d: TODO\n", file, line);
+	fprintf(stderr, "%s: %d: TODO: %s\n", file, line, msg);
 	abort();
 }
 
@@ -145,12 +206,19 @@ void Quad::print() const
 		printf(" = ");
 		a->print();
 		break;
+	case Quad::CALL:
+		printf("call ");
+		c->print();
+		putchar('(');
+		a->print();
+		putchar(')');
+		break;
 	default:
 		assert(0);
 	}
 }
 
-Operand *TranslateEnv::newtemp()
+TempOperand *TranslateEnv::gettemp()
 {
 	return new TempOperand(tempid++);
 }
@@ -161,18 +229,26 @@ Operand *SymExpr::translate(TranslateEnv &env) const
 		VarSymbol *vs = static_cast<VarSymbol*>(sym);
 		if (vs->level) {
 			// local var
+			TempOperand *bp;
 			if (vs->level == env.level()) {
+				bp = getphysreg(5);
 			} else {
-				TODO;
+				int leveldiff = env.level()-vs->level;
+				bp = env.gettemp();
+				env.quads.emplace_back(Quad::MOV, bp, new MemOperand(getphysreg(5), 8+4*(leveldiff-1)));
 			}
-		} else {
-			// global var
-			TODO;
+			return new MemOperand(bp, vs->offset);
 		}
-	} else {
-		TODO;
+		// global var
+		return new MemOperand(new LabelOperand(vs->name));
 	}
-	return nullptr;
+	if (sym->kind == Symbol::PROC) {
+		// address of function
+		// TODO decorate inner function names
+		return new LabelOperand(sym->name);
+	}
+	assert(sym->kind == Symbol::CONST);
+	return new ImmOperand(static_cast<ConstSymbol*>(sym)->val);
 }
 
 Operand *LitExpr::translate(TranslateEnv &env) const
@@ -182,17 +258,44 @@ Operand *LitExpr::translate(TranslateEnv &env) const
 
 Operand *BinaryExpr::translate(TranslateEnv &env) const
 {
-	Quad::Op qop;
-	switch (op) {
-	case ADD: qop = Quad::ADD; break;
-	case SUB: qop = Quad::SUB; break;
-	case MUL: qop = Quad::MUL; break;
-	case DIV: qop = Quad::DIV; break;
-	case INDEX: TODO; break;
-	default: assert(0);
+	Operand *c;
+	if (op == INDEX) {
+		if (left->kind != SYM)
+			TODO("non-SYM subscripted value");
+		Symbol *arraysym = static_cast<SymExpr*>(left.get())->sym;
+		if (arraysym->kind != Symbol::VAR)
+			TODO("non-VAR subscripted value");
+		Type *arrayty = static_cast<VarSymbol*>(arraysym)->type;
+		if (arrayty->kind != Type::ARRAY)
+			TODO("non-ARRAY subscripted value");
+		int scale = static_cast<ArrayType*>(arrayty)->elemtype->size();
+		c = left->translate(env);
+		if (c->kind != Operand::MEM) {
+			TODO("non-MEM subscripted value");
+		}
+		MemOperand *moleft = static_cast<MemOperand*>(c);
+		assert(!moleft->index);
+		Operand *oright = right->translate(env);
+		if (oright->kind == Operand::IMM) {
+			moleft->offset += static_cast<ImmOperand*>(oright)->val * scale;
+		} else if (oright->kind == Operand::TEMP) {
+			moleft->index = static_cast<TempOperand*>(oright);
+			moleft->scale = scale;
+		} else {
+			TODO("non-IMM-or-TEMP subscript");
+		}
+	} else {
+		Quad::Op qop;
+		switch (op) {
+		case ADD: qop = Quad::ADD; break;
+		case SUB: qop = Quad::SUB; break;
+		case MUL: qop = Quad::MUL; break;
+		case DIV: qop = Quad::DIV; break;
+		default: assert(0);
+		}
+		c = env.gettemp();
+		env.quads.emplace_back(qop, c, left->translate(env), right->translate(env));
 	}
-	Operand *c = env.newtemp();
-	env.quads.emplace_back(qop, left->translate(env), right->translate(env), c);
 	return c;
 }
 
@@ -203,15 +306,18 @@ Operand *UnaryExpr::translate(TranslateEnv &env) const
 	case NEG: qop = Quad::NEG; break;
 	default: assert(0);
 	}
-	Operand *c = env.newtemp();
-	env.quads.emplace_back(qop, sub->translate(env), nullptr, c);
+	Operand *c = env.gettemp();
+	env.quads.emplace_back(qop, c, sub->translate(env));
 	return c;
 }
 
 Operand *ApplyExpr::translate(TranslateEnv &env) const
 {
-	// TODO
-	return nullptr;
+	ListOperand *list = new ListOperand();
+	for (const unique_ptr<Expr> &arg: args)
+		list->list.push_back(arg->translate(env));
+	env.quads.emplace_back(Quad::CALL, func->translate(env), list);
+	return getphysreg(0);
 }
 
 void EmptyStmt::translate(TranslateEnv &env) const
@@ -224,6 +330,9 @@ void CompStmt::translate(TranslateEnv &env) const
 
 void AssignStmt::translate(TranslateEnv &env) const
 {
+	Operand *ovar = var->translate(env);
+	Operand *oval = val->translate(env);
+	env.quads.emplace_back(Quad::MOV, ovar, oval);
 }
 
 void CallStmt::translate(TranslateEnv &env) const

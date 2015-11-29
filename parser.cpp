@@ -143,6 +143,7 @@ static unique_ptr<CompStmt> comp_stmt();
 static unique_ptr<AssignStmt> assign_stmt();
 static unique_ptr<CallStmt> call_stmt();
 static unique_ptr<IfStmt> if_stmt();
+static unique_ptr<WhileStmt> while_stmt();
 static unique_ptr<DoWhileStmt> do_while_stmt();
 static unique_ptr<ForStmt> for_stmt();
 static unique_ptr<ReadStmt> read_stmt();
@@ -524,6 +525,8 @@ static unique_ptr<Stmt> stmt()
 			return comp_stmt();
 		case T_IF:
 			return if_stmt();
+		case T_WHILE:
+			return while_stmt();
 		case T_DO:
 			return do_while_stmt();
 		case T_FOR:
@@ -583,6 +586,18 @@ else_part:
 			return make_unique<IfStmt>(move(c), move(st), stmt());
 		}
 		return make_unique<IfStmt>(move(c), move(st), nullptr);
+	} CATCH_R(nullptr)
+}
+
+static unique_ptr<WhileStmt> while_stmt()
+{
+	X _{';', T_END, T_ELSE, T_WHILE};
+	try {
+		check(T_WHILE); getsym();
+		unique_ptr<Cond> c(cond());
+		check(T_DO); getsym();
+		unique_ptr<Stmt> body(stmt());
+		return make_unique<WhileStmt>(move(c), move(body));
 	} CATCH_R(nullptr)
 }
 

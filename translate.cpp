@@ -174,13 +174,13 @@ TempOperand *getphysreg(int id)
 
 class TranslateEnv {
 	SymbolTable *symtab;
-	int tempid;
-	int labelid;
+	int tempid = 0;
+	int labelid = 0;
 public:
 	std::vector<Quad> quads;
 	TempOperand *newtemp();
 	LabelOperand *newlabel();
-	TranslateEnv(SymbolTable *symtab): symtab(symtab), tempid(0) {}
+	TranslateEnv(SymbolTable *symtab): symtab(symtab) {}
 	int level() const { return symtab->level; }
 };
 
@@ -265,20 +265,22 @@ Operand *translate_sym(Symbol *sym, TranslateEnv &env)
 {
 	if (sym->kind == Symbol::VAR) {
 		VarSymbol *vs = static_cast<VarSymbol*>(sym);
-		if (vs->level) {
-			// local var
-			TempOperand *bp;
-			if (vs->level == env.level()) {
-				bp = getphysreg(5);
-			} else {
-				int leveldiff = env.level()-vs->level;
-				bp = env.newtemp();
-				env.quads.emplace_back(Quad::MOV, bp, new MemOperand(getphysreg(5), 8+4*(leveldiff-1)));
-			}
-			return new MemOperand(bp, vs->offset);
+#if 0
+		if (!vs->level) {
+			// global var
+			return new MemOperand(new LabelOperand(vs->name));
 		}
-		// global var
-		return new MemOperand(new LabelOperand(vs->name));
+#endif
+		// local var
+		TempOperand *bp;
+		if (vs->level == env.level()) {
+			bp = getphysreg(5);
+		} else {
+			int leveldiff = env.level()-vs->level;
+			bp = env.newtemp();
+			env.quads.emplace_back(Quad::MOV, bp, new MemOperand(getphysreg(5), 8+4*(leveldiff-1)));
+		}
+		return new MemOperand(bp, vs->offset);
 	}
 	if (sym->kind == Symbol::PROC) {
 		// address of function
@@ -402,20 +404,32 @@ void IfStmt::translate(TranslateEnv &env) const
 	if (sf)
 		ljoin = env.newlabel();
 	st->translate(env);
-	if (sf) {
+	if (sf)
 		env.quads.emplace_back(Quad::JMP, ljoin);
-		env.quads.emplace_back(Quad::LABEL, lfalse);
+	env.quads.emplace_back(Quad::LABEL, lfalse);
+	if (sf) {
 		sf->translate(env);
 		env.quads.emplace_back(Quad::LABEL, ljoin);
 	}
 }
 
+void WhileStmt::translate(TranslateEnv &env) const
+{
+	LabelOperand *lstart = env.newlabel();
+	LabelOperand *lfalse = env.newlabel();
+	env.quads.emplace_back(Quad::LABEL, lstart);
+	cond->translate(env, lfalse, true);
+	body->translate(env);
+	env.quads.emplace_back(Quad::JMP, lstart);
+	env.quads.emplace_back(Quad::LABEL, lfalse);
+}
+
 void DoWhileStmt::translate(TranslateEnv &env) const
 {
-	LabelOperand *l = env.newlabel();
-	env.quads.emplace_back(Quad::LABEL, l);
+	LabelOperand *lstart = env.newlabel();
+	env.quads.emplace_back(Quad::LABEL, lstart);
 	body->translate(env);
-	cond->translate(env, l, false);
+	cond->translate(env, lstart, false);
 }
 
 void ForStmt::translate(TranslateEnv &env) const

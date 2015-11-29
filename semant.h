@@ -276,6 +276,15 @@ struct IfStmt: Stmt
 	void translate(TranslateEnv &env) const override;
 };
 
+struct WhileStmt: Stmt
+{
+	std::unique_ptr<Cond> cond;
+	std::unique_ptr<Stmt> body;
+	WhileStmt(std::unique_ptr<Cond> &&cond, std::unique_ptr<Stmt> &&body);
+	void print() const override;
+	void translate(TranslateEnv &env) const override;
+};
+
 struct DoWhileStmt: Stmt
 {
 	std::unique_ptr<Cond> cond;

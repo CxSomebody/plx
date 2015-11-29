@@ -6,10 +6,10 @@ FIRST: { ',' }
 FOLLOW: { ')' }
 { <add_op> <term> }
 FIRST: { '+' '-' }
-FOLLOW: { ',' ';' '=' ']' ')' T_END T_THEN T_ELSE '<' GE '>' LE NE T_DO T_WHILE T_DOWNTO T_TO }
+FOLLOW: { ',' ';' '=' ']' ')' T_END T_THEN T_ELSE '<' GE '>' LE NE T_WHILE T_DO T_DOWNTO T_TO }
 { <mul_op> <factor> }
 FIRST: { '*' '/' }
-FOLLOW: { ',' ';' '=' '+' '-' ']' ')' T_END T_THEN T_ELSE '<' GE '>' LE NE T_DO T_WHILE T_DOWNTO T_TO }
+FOLLOW: { ',' ';' '=' '+' '-' ']' ')' T_END T_THEN T_ELSE '<' GE '>' LE NE T_WHILE T_DO T_DOWNTO T_TO }
 { ',' <lvalue> }
 FIRST: { ',' }
 FOLLOW: { ')' }
@@ -39,7 +39,7 @@ FIRST: { '(' }
 FOLLOW: { ';' T_END T_ELSE T_WHILE }
 [ '[' <expr> ']' | '(' <expr_list> ')' ]
 FIRST: { '[' '(' }
-FOLLOW: { ',' ';' '=' '+' '-' ']' ')' T_END '*' '/' T_THEN T_ELSE '<' GE '>' LE NE T_DO T_WHILE T_DOWNTO T_TO }
+FOLLOW: { ',' ';' '=' '+' '-' ']' ')' T_END '*' '/' T_THEN T_ELSE '<' GE '>' LE NE T_WHILE T_DO T_DOWNTO T_TO }
 [ '[' <expr> ']' ]
 FIRST: { '[' }
 FOLLOW: { ',' ')' BECOMES }
@@ -60,7 +60,7 @@ FIRST: { T_VAR }
 FOLLOW: { IDENT }
 ( IDENT [ '[' <expr> ']' | '(' <expr_list> ')' ] | INT | '(' <expr> ')' )
 FIRST: { IDENT INT '(' }
-FOLLOW: { ',' ';' '=' '+' '-' ']' ')' T_END '*' '/' T_THEN T_ELSE '<' GE '>' LE NE T_DO T_WHILE T_DOWNTO T_TO }
+FOLLOW: { ',' ';' '=' '+' '-' ']' ')' T_END '*' '/' T_THEN T_ELSE '<' GE '>' LE NE T_WHILE T_DO T_DOWNTO T_TO }
 ( STRING [ ',' <expr> ] | <expr> )
 FIRST: { IDENT INT '+' '-' '(' STRING }
 FOLLOW: { ')' }
@@ -87,7 +87,7 @@ FIRST: { T_BEGIN }
 FOLLOW: { '.' ';' T_END T_ELSE T_WHILE }
 <cond>
 FIRST: { IDENT INT '+' '-' '(' }
-FOLLOW: { ';' T_END T_THEN T_ELSE T_WHILE }
+FOLLOW: { ';' T_END T_THEN T_ELSE T_WHILE T_DO }
 <const_def>
 FIRST: { IDENT }
 FOLLOW: { ',' ';' }
@@ -102,13 +102,13 @@ FIRST: { T_DO }
 FOLLOW: { ';' T_END T_ELSE T_WHILE }
 <expr>
 FIRST: { IDENT INT '+' '-' '(' }
-FOLLOW: { ',' ';' '=' ']' ')' T_END T_THEN T_ELSE '<' GE '>' LE NE T_DO T_WHILE T_DOWNTO T_TO }
+FOLLOW: { ',' ';' '=' ']' ')' T_END T_THEN T_ELSE '<' GE '>' LE NE T_WHILE T_DO T_DOWNTO T_TO }
 <expr_list>
 FIRST: { IDENT INT '+' '-' '(' }
 FOLLOW: { ')' }
 <factor>
 FIRST: { IDENT INT '(' }
-FOLLOW: { ',' ';' '=' '+' '-' ']' ')' T_END '*' '/' T_THEN T_ELSE '<' GE '>' LE NE T_DO T_WHILE T_DOWNTO T_TO }
+FOLLOW: { ',' ';' '=' '+' '-' ']' ')' T_END '*' '/' T_THEN T_ELSE '<' GE '>' LE NE T_WHILE T_DO T_DOWNTO T_TO }
 <for_stmt>
 FIRST: { T_FOR }
 FOLLOW: { ';' T_END T_ELSE T_WHILE }
@@ -158,17 +158,17 @@ FOLLOW: { ';' T_END T_ELSE T_WHILE }
 FIRST: { '=' '<' GE '>' LE NE }
 FOLLOW: { IDENT INT '+' '-' '(' }
 <stmt>
-FIRST: { IDENT T_BEGIN T_IF T_DO T_READ T_WRITE T_FOR }
+FIRST: { IDENT T_BEGIN T_IF T_WHILE T_DO T_READ T_WRITE T_FOR }
 FOLLOW: { ';' T_END T_ELSE T_WHILE }
 <stmt_list>
-FIRST: { ';' IDENT T_BEGIN T_IF T_DO T_READ T_WRITE T_FOR }
+FIRST: { ';' IDENT T_BEGIN T_IF T_WHILE T_DO T_READ T_WRITE T_FOR }
 FOLLOW: { T_END }
 <sub_list>
 FIRST: { T_PROCEDURE T_FUNCTION }
 FOLLOW: { T_BEGIN }
 <term>
 FIRST: { IDENT INT '(' }
-FOLLOW: { ',' ';' '=' '+' '-' ']' ')' T_END T_THEN T_ELSE '<' GE '>' LE NE T_DO T_WHILE T_DOWNTO T_TO }
+FOLLOW: { ',' ';' '=' '+' '-' ']' ')' T_END T_THEN T_ELSE '<' GE '>' LE NE T_WHILE T_DO T_DOWNTO T_TO }
 <type>
 FIRST: { T_ARRAY T_INTEGER T_CHAR }
 FOLLOW: { ';' }
@@ -178,6 +178,9 @@ FOLLOW: { ';' }
 <var_part>
 FIRST: { IDENT }
 FOLLOW: { T_PROCEDURE T_FUNCTION T_BEGIN }
+<while_stmt>
+FIRST: { T_WHILE }
+FOLLOW: { ';' T_END T_ELSE T_WHILE }
 <write_stmt>
 FIRST: { T_WRITE }
 FOLLOW: { ';' T_END T_ELSE T_WHILE }

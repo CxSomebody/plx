@@ -98,6 +98,7 @@ AssignStmt::AssignStmt(unique_ptr<Expr> &&var, unique_ptr<Expr> &&val): Stmt(ASS
 CallStmt::CallStmt(Symbol *proc, vector<unique_ptr<Expr>> &&args): Stmt(CALL), proc(proc), args(move(args)) {}
 IfStmt::IfStmt(unique_ptr<Cond> &&cond, unique_ptr<Stmt> &&st): Stmt(IF), cond(move(cond)), st(move(st)) {}
 IfStmt::IfStmt(unique_ptr<Cond> &&cond, unique_ptr<Stmt> &&st, unique_ptr<Stmt> &&sf): Stmt(IF), cond(move(cond)), st(move(st)), sf(move(sf)) {}
+WhileStmt::WhileStmt(unique_ptr<Cond> &&cond, unique_ptr<Stmt> &&body): Stmt(DO_WHILE), cond(move(cond)), body(move(body)) {}
 DoWhileStmt::DoWhileStmt(unique_ptr<Cond> &&cond, unique_ptr<Stmt> &&body): Stmt(DO_WHILE), cond(move(cond)), body(move(body)) {}
 ForStmt::ForStmt(unique_ptr<Expr> &&indvar, unique_ptr<Expr> &&from, unique_ptr<Expr> &&to, unique_ptr<Stmt> &&body, bool down): Stmt(FOR), indvar(move(indvar)), from(move(from)), to(move(to)), body(move(body)), down(down) {}
 ReadStmt::ReadStmt(vector<unique_ptr<Expr>> &&vars): Stmt(READ), vars(move(vars)) {}
@@ -143,6 +144,14 @@ void IfStmt::print() const
 		printf(" else ");
 		sf->print();
 	}
+}
+
+void WhileStmt::print() const
+{
+	printf("while ");
+	cond->print();
+	printf(" do ");
+	body->print();
 }
 
 void DoWhileStmt::print() const

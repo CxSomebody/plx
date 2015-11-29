@@ -43,7 +43,8 @@ struct X {
 	}
 };
 
-int syntax_errors;
+// both syntactic and semantic
+int parser_errors;
 
 static void savetok(int s, Token *t)
 {
@@ -96,7 +97,7 @@ static void error(int s)
 	}
 	fprintf(stderr, "%d:%d: expected %s, found ‘%s’\n",
 		tok.line, tok.col, sname, tok.spell.c_str());
-	syntax_errors++;
+	parser_errors++;
 }
 
 // returns true upon ERROR
@@ -112,14 +113,14 @@ static void missing(int s)
 {
 	fprintf(stderr, "%d:%d: missing '%c' before ‘%s’\n",
 		tok.line, tok.col, s, tok.spell.c_str());
-	syntax_errors++;
+	parser_errors++;
 }
 
 static void skip()
 {
 	fprintf(stderr, "%d:%d: ignoring extra token ‘%s’\n",
 		tok.line, tok.col, tok.spell.c_str());
-	syntax_errors++;
+	parser_errors++;
 	getsym();
 }
 
@@ -154,6 +155,19 @@ static unique_ptr<Expr> term();
 static unique_ptr<Expr> expr();
 static vector<unique_ptr<Expr>> expr_list();
 static unique_ptr<Cond> cond();
+
+unique_ptr<Expr> ident_expr(const string &name)
+{
+	return make_unique<SymExpr>(lookup(name));
+}
+
+static void checkprocsym(Symbol *s)
+{
+	if (!(s && s->kind == Symbol::PROC)) {
+		fprintf(stderr, "%d:%d: ‘%s’ is not a proc symbol\n", tok.line, tok.col, tok.s.c_str());
+		parser_errors++;
+	}
+}
 
 unique_ptr<Block> parse()
 {
@@ -194,10 +208,6 @@ static unique_ptr<Block> block(ProcHeader &&header, int level)
 	try {
 		push_symtab();
 		def_params(header.params, level-1);
-		if (header.rettype) {
-			// local var for function return value
-			def_var(header.name, header.rettype);
-		}
 		if (tok.sym == T_CONST) {
 			getsym();
 			const_part();
@@ -206,6 +216,10 @@ static unique_ptr<Block> block(ProcHeader &&header, int level)
 		if (tok.sym == T_VAR) {
 			getsym();
 			vars = var_part();
+		}
+		if (header.rettype) {
+			// local var for function return value
+			vars.push_back(def_var(header.name+'$', header.rettype));
 		}
 		vector<unique_ptr<Block>> subs(sub_list(level));
 		unique_ptr<CompStmt> body(comp_stmt());
@@ -557,6 +571,7 @@ static unique_ptr<CallStmt> call_stmt()
 	try {
 		check(IDENT);
 		Symbol *proc = lookup(tok.s);
+		checkprocsym(proc);
 		getsym();
 		vector<unique_ptr<Expr>> args;
 		if (tok.sym == '(') {
@@ -564,7 +579,7 @@ static unique_ptr<CallStmt> call_stmt()
 			args = expr_list();
 			check(')'); getsym();
 		}
-		return make_unique<CallStmt>(proc, move(args));
+		return make_unique<CallStmt>(static_cast<ProcSymbol*>(proc), move(args));
 	} CATCH_R(nullptr)
 }
 
@@ -800,20 +815,26 @@ static unique_ptr<Expr> factor()
 	unique_ptr<Expr> e;
 	switch (tok.sym) {
 	case IDENT:
-		e = ident_expr(tok.s);
-		getsym();
-		switch (tok.sym) {
+		switch (ntok.sym) {
+			Symbol *s;
 		case '(':
+			s = lookup(tok.s);
+			checkprocsym(s);
 			getsym();
-			e = make_unique<ApplyExpr>(static_cast<SymExpr*>(e.get())->sym, expr_list());
+			getsym();
+			e = make_unique<ApplyExpr>(static_cast<ProcSymbol*>(s), expr_list());
 			check(')'); getsym();
 			return e;
 		case '[':
+			e = ident_expr(tok.s);
+			getsym();
 			getsym();
 			e = make_unique<BinaryExpr>(BinaryExpr::INDEX, move(e), expr());
 			check(']'); getsym();
 			return e;
 		}
+		e = ident_expr(tok.s);
+		getsym();
 		return e;
 	case INT:
 		e = make_unique<LitExpr>(tok.i);

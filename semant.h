@@ -1,5 +1,6 @@
 struct Type {
 	enum Kind {
+		//ERROR,
 		INT,
 		CHAR,
 		ARRAY,
@@ -11,6 +12,29 @@ struct Type {
 protected:
 	Type(Kind kind);
 };
+
+Type *char_type();
+Type *int_type();
+Type *binexprtype(Type *a, Type *b);
+
+#if 0
+struct ErrorType: Type
+{
+	ErrorType(): Type(ERROR) {}
+	void print() const override
+	{
+		printf("<error-type>");
+	}
+	int size() const override
+	{
+		return 0;
+	}
+	int align() const override
+	{
+		return 0;
+	}
+};
+#endif
 
 struct IntType: Type
 {
@@ -45,9 +69,10 @@ struct Symbol {
 		PROC,
 	} kind;
 	std::string name;
+	Type *type;
 	void print() const;
 protected:
-	Symbol(Kind kind, const std::string &name);
+	Symbol(Kind kind, const std::string &name, Type *type);
 };
 
 struct VarSymbol: Symbol
@@ -56,21 +81,21 @@ struct VarSymbol: Symbol
 	int level;
 	int offset; // relative to bp
 	VarSymbol(const std::string &name, Type *type, int level, int offset):
-		Symbol(VAR, name), type(type), level(level), offset(offset) {}
+		Symbol(VAR, name, type), type(type), level(level), offset(offset) {}
 };
 
 struct ConstSymbol: Symbol
 {
 	int val;
 	ConstSymbol(const std::string &name, int val):
-		Symbol(CONST, name), val(val) {}
+		Symbol(CONST, name, int_type()), val(val) {}
 };
 
 struct ProcSymbol: Symbol
 {
 	Type *rettype;
 	ProcSymbol(const std::string &name, Type *rettype):
-		Symbol(PROC, name), rettype(rettype) {}
+		Symbol(PROC, name, nullptr), rettype(rettype) {}
 };
 
 struct Stmt;
@@ -125,6 +150,7 @@ void def_const(const std::string &name, int val);
 VarSymbol *def_var(const std::string &name, Type *type);
 void def_func(const ProcHeader &header, Type *rettype);
 void def_params(const std::vector<Param> &params, int level);
+Type *error_type();
 Type *int_type();
 Type *char_type();
 Type *array_type(Type *elty, int n);
@@ -147,11 +173,12 @@ struct Expr {
 		UNARY,
 		APPLY,
 	} kind;
+	Type *type;
 	virtual void print() const = 0;
 	virtual Operand *translate(TranslateEnv &env) const = 0;
 	virtual ~Expr();
 protected:
-	Expr(Kind kind);
+	Expr(Kind kind, Type *type);
 };
 
 struct SymExpr: Expr
@@ -198,9 +225,9 @@ struct UnaryExpr: Expr
 
 struct ApplyExpr: Expr
 {
-	Symbol *func;
+	ProcSymbol *func;
 	std::vector<std::unique_ptr<Expr>> args;
-	ApplyExpr(Symbol *func, decltype(args) &&args);
+	ApplyExpr(ProcSymbol *func, decltype(args) &&args);
 	void print() const override;
 	Operand *translate(TranslateEnv &env) const override;
 };
@@ -259,9 +286,9 @@ struct AssignStmt: Stmt
 
 struct CallStmt: Stmt
 {
-	Symbol *proc;
+	ProcSymbol *proc;
 	std::vector<std::unique_ptr<Expr>> args;
-	CallStmt(Symbol *proc, decltype(args) &&args);
+	CallStmt(ProcSymbol *proc, decltype(args) &&args);
 	void print() const override;
 	void translate(TranslateEnv &env) const override;
 };
@@ -320,5 +347,3 @@ struct WriteStmt: Stmt
 	void print() const override;
 	void translate(TranslateEnv &env) const override;
 };
-
-std::unique_ptr<Expr> ident_expr(const std::string &name);

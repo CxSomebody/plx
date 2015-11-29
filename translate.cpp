@@ -24,6 +24,7 @@ struct Quad {
 		JMP,
 		CALL,
 		LABEL,
+		LEA,
 	} op;
 	Operand *c, *a, *b;
 	Quad(Op op, Operand *c, Operand *a, Operand *b):
@@ -33,7 +34,7 @@ struct Quad {
 	void print() const;
 };
 
-static const char *opstr[10] = {
+static const char *opstr[] = {
 	"+",
 	"-",
 	"*",
@@ -180,6 +181,10 @@ public:
 	std::vector<Quad> quads;
 	TempOperand *newtemp();
 	LabelOperand *newlabel();
+	Symbol *lookup(const string &name) const
+	{
+		return symtab->lookup(name);
+	}
 	TranslateEnv(SymbolTable *symtab): symtab(symtab) {}
 	int level() const { return symtab->level; }
 };
@@ -243,6 +248,12 @@ void Quad::print() const
 	case Quad::JMP:
 		printf("goto ");
 		c->print();
+		break;
+	case Quad::LEA:
+		c->print();
+		printf(" = ");
+		putchar('&');
+		a->print();
 		break;
 	default:
 		assert(0);
@@ -383,7 +394,14 @@ void CompStmt::translate(TranslateEnv &env) const
 
 void AssignStmt::translate(TranslateEnv &env) const
 {
-	Operand *ovar = var->translate(env);
+	Operand *ovar;
+	Symbol *varsym;
+	if (var->kind == Expr::SYM &&
+	    (varsym = static_cast<SymExpr*>(var.get())->sym)->kind == Symbol::PROC) {
+		ovar = translate_sym(env.lookup(varsym->name+'$'), env);
+	} else {
+		ovar = var->translate(env);
+	}
 	Operand *oval = val->translate(env);
 	env.quads.emplace_back(Quad::MOV, ovar, oval);
 }
@@ -456,6 +474,20 @@ void ForStmt::translate(TranslateEnv &env) const
 
 void ReadStmt::translate(TranslateEnv &env) const
 {
+	static LabelOperand o_printf("printf");
+	for (const unique_ptr<Expr> &var: vars) {
+		Operand *o = var->translate(env);
+		if (o->kind != Operand::MEM) {
+			TODO("expected lvalue in read stmt");
+		}
+		Operand *addr = env.newtemp();
+		env.quads.emplace_back(Quad::LEA, addr, o);
+		ListOperand *args = new ListOperand();
+		// TODO handle char type
+		args->list.push_back(new LabelOperand("$fmtd"));
+		args->list.push_back(addr);
+		env.quads.emplace_back(Quad::CALL, &o_printf, args);
+	}
 }
 
 void WriteStmt::translate(TranslateEnv &env) const

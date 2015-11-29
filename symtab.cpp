@@ -8,7 +8,7 @@
 
 using namespace std;
 
-Symbol::Symbol(Kind kind, const string &name): kind(kind), name(name) {}
+Symbol::Symbol(Kind kind, const string &name, Type *type): kind(kind), name(name), type(type) {}
 
 void Symbol::print() const
 {
@@ -82,6 +82,14 @@ void def_params(const vector<Param> &params, int level)
 		}
 	}
 }
+
+#if 0
+Type *error_type()
+{
+	static ErrorType type;
+	return &type;
+}
+#endif
 
 Type *int_type()
 {
@@ -182,9 +190,4 @@ void Block::print(int level) const
 	level--;
 	indent(level);
 	printf("}\n");
-}
-
-unique_ptr<Expr> ident_expr(const string &name)
-{
-	return make_unique<SymExpr>(symtab->lookup(name));
 }

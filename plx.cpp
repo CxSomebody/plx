@@ -20,7 +20,7 @@ void usage()
 }
 
 unique_ptr<Block> parse();
-extern int syntax_errors;
+extern int parser_errors;
 
 int main(int argc, char **argv)
 {
@@ -28,7 +28,7 @@ int main(int argc, char **argv)
 		usage();
 	lexer_open(argv[1]);
 	unique_ptr<Block> blk = parse();
-	if (syntax_errors)
+	if (parser_errors)
 		return 1;
 	translate_all(move(blk));
 	lexer_close();

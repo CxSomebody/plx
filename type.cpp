@@ -42,3 +42,13 @@ int ArrayType::align() const
 {
 	return elemtype->align();
 }
+
+Type *binexprtype(Type *a, Type *b)
+{
+	if (a == char_type() && b == char_type())
+		return char_type();
+	if ((a == char_type() || a == int_type()) &&
+	    (b == char_type() || b == int_type()))
+		return int_type();
+	return nullptr;//error_type();
+}

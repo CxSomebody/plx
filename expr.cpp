@@ -12,12 +12,12 @@
 using namespace std;
 
 Expr::~Expr() {}
-Expr::Expr(Expr::Kind kind): kind(kind) {}
-SymExpr::SymExpr(Symbol *sym): Expr(SYM), sym(sym) {}
-LitExpr::LitExpr(int lit): Expr(LIT), lit(lit) {}
-BinaryExpr::BinaryExpr(Op op, unique_ptr<Expr> &&left, unique_ptr<Expr> &&right): Expr(BINARY), op(op), left(move(left)), right(move(right)) {}
-UnaryExpr::UnaryExpr(Op op, unique_ptr<Expr> &&sub): Expr(UNARY), op(op), sub(move(sub)) {}
-ApplyExpr::ApplyExpr(Symbol *func, vector<unique_ptr<Expr>> &&args): Expr(APPLY), func(func), args(move(args)) {}
+Expr::Expr(Kind kind, Type *type): kind(kind), type(type) {}
+SymExpr::SymExpr(Symbol *sym): Expr(SYM, sym->type), sym(sym) {}
+LitExpr::LitExpr(int lit): Expr(LIT, int_type()), lit(lit) {}
+BinaryExpr::BinaryExpr(Op op, unique_ptr<Expr> &&left, unique_ptr<Expr> &&right): Expr(BINARY, binexprtype(left->type, right->type)), op(op), left(move(left)), right(move(right)) {}
+UnaryExpr::UnaryExpr(Op op, unique_ptr<Expr> &&sub): Expr(UNARY, sub->type), op(op), sub(move(sub)) {}
+ApplyExpr::ApplyExpr(ProcSymbol *func, vector<unique_ptr<Expr>> &&args): Expr(APPLY, func->rettype), func(func), args(move(args)) {}
 
 void SymExpr::print() const
 {
@@ -95,7 +95,7 @@ Stmt::Stmt(Kind kind): kind(kind) {}
 EmptyStmt::EmptyStmt(): Stmt(EMPTY) {}
 CompStmt::CompStmt(vector<unique_ptr<Stmt>> &&body): Stmt(COMP), body(move(body)) {}
 AssignStmt::AssignStmt(unique_ptr<Expr> &&var, unique_ptr<Expr> &&val): Stmt(ASSIGN), var(move(var)), val(move(val)) {}
-CallStmt::CallStmt(Symbol *proc, vector<unique_ptr<Expr>> &&args): Stmt(CALL), proc(proc), args(move(args)) {}
+CallStmt::CallStmt(ProcSymbol *proc, vector<unique_ptr<Expr>> &&args): Stmt(CALL), proc(proc), args(move(args)) {}
 IfStmt::IfStmt(unique_ptr<Cond> &&cond, unique_ptr<Stmt> &&st): Stmt(IF), cond(move(cond)), st(move(st)) {}
 IfStmt::IfStmt(unique_ptr<Cond> &&cond, unique_ptr<Stmt> &&st, unique_ptr<Stmt> &&sf): Stmt(IF), cond(move(cond)), st(move(st)), sf(move(sf)) {}
 WhileStmt::WhileStmt(unique_ptr<Cond> &&cond, unique_ptr<Stmt> &&body): Stmt(DO_WHILE), cond(move(cond)), body(move(body)) {}

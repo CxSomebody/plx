@@ -127,7 +127,7 @@ struct Block {
 		stmts(move(stmts)),
 		symtab(symtab) {}
 	void print(int level) const;
-	void translate();
+	void translate(FILE *outfp);
 	void allocaddr();
 };
 

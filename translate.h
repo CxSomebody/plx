@@ -1,3 +1,5 @@
+struct TranslateEnv;
+
 struct Operand {
 	enum Kind {
 		IMM,
@@ -7,7 +9,8 @@ struct Operand {
 		LIST, // for function calls
 	} kind;
 	virtual void print() const = 0;
-	virtual std::string gencode() const = 0;
+	virtual std::string gencode(TranslateEnv &env) const = 0;
+	virtual int size() const = 0;
 protected:
 	Operand(Kind kind): kind(kind) {}
 };
@@ -20,20 +23,28 @@ struct ImmOperand: Operand
 	{
 		printf("%d", val);
 	}
-	std::string gencode() const override;
+	int size() const override
+	{
+		return 4;
+	}
+	std::string gencode(TranslateEnv &env) const override;
 };
 
 struct TempOperand: Operand
 {
 	int id;
-	int size;
-	TempOperand(int id, int size): Operand(TEMP), id(id), size(size) {}
+	int _size;
+	TempOperand(int id, int size): Operand(TEMP), id(id), _size(size) {}
 	void print() const override
 	{
 		if (id >= 0) printf("$%d", id);
 		else printf("%%%d", ~id); // physical register
 	}
-	std::string gencode() const override;
+	int size() const override
+	{
+		return _size;
+	}
+	std::string gencode(TranslateEnv &env) const override;
 };
 
 struct LabelOperand: Operand
@@ -44,12 +55,16 @@ struct LabelOperand: Operand
 	{
 		printf("%s", label.c_str());
 	}
-	std::string gencode() const override;
+	int size() const override
+	{
+		return 4; // a label is a pointer
+	}
+	std::string gencode(TranslateEnv &env) const override;
 };
 
 struct MemOperand: Operand
 {
-	int size;
+	int _size;
 	TempOperand *baset;
 	LabelOperand *basel;
 	int offset;
@@ -61,7 +76,7 @@ struct MemOperand: Operand
 		   TempOperand *index,
 		   int scale):
 		Operand(MEM),
-		size(size),
+		_size(size),
 		baset(baset),
 		basel(nullptr),
 		offset(offset),
@@ -75,7 +90,7 @@ struct MemOperand: Operand
 		   TempOperand *index,
 		   int scale):
 		Operand(MEM),
-		size(size),
+		_size(size),
 		baset(nullptr),
 		basel(basel),
 		offset(offset),
@@ -85,7 +100,7 @@ struct MemOperand: Operand
 		MemOperand(size, basel, 0, nullptr, 0) {}
 	void print() const override
 	{
-		printf("%d", size);
+		printf("%d", _size);
 		putchar('[');
 		bool sep = false;
 		if (baset) {
@@ -110,7 +125,11 @@ struct MemOperand: Operand
 		}
 		putchar(']');
 	}
-	std::string gencode() const override;
+	int size() const override
+	{
+		return _size;
+	}
+	std::string gencode(TranslateEnv &env) const override;
 };
 
 struct ListOperand: Operand
@@ -127,7 +146,11 @@ struct ListOperand: Operand
 			sep = true;
 		}
 	}
-	std::string gencode() const override;
+	int size() const override
+	{
+		return 0;
+	}
+	std::string gencode(TranslateEnv &env) const override;
 };
 
 struct Quad {
@@ -155,20 +178,64 @@ struct Quad {
 	Quad(Op op, Operand *c, Operand *a): Quad(op, c, a, nullptr) {}
 	Quad(Op op, Operand *c): Quad(op, c, nullptr, nullptr) {}
 	void print() const;
+	bool isjump() const
+	{
+		return op == JMP;
+	}
+	bool isbranch() const
+	{
+		switch (op) {
+		case BEQ:
+		case BNE:
+		case BLT:
+		case BGE:
+		case BGT:
+		case BLE:
+			return true;
+		default:
+			return false;
+		}
+		return false;
+	}
+	bool is_jump_or_branch() const
+	{
+		switch (op) {
+		case JMP:
+		case BEQ:
+		case BNE:
+		case BLT:
+		case BGE:
+		case BGT:
+		case BLE:
+			return true;
+		default:
+			return false;
+		}
+	}
 };
 
 struct Symbol;
 struct SymbolTable;
+
 class TranslateEnv {
 	SymbolTable *symtab;
+	FILE *outfp;
 	int tempid = 0;
 	int labelid = 0;
+	int reg_temp[8];
+	void emit(const std::string &ins, const std::string &dst, const std::string &src);
+	void emit(const std::string &ins, const std::string &dst);
+	void allocreg(int t);
 public:
 	std::vector<Quad> quads;
+	std::vector<int> temp_reg;
 	TempOperand *newtemp(int size);
 	LabelOperand *newlabel();
 	Symbol *lookup(const std::string &name) const;
-	TranslateEnv(SymbolTable *symtab): symtab(symtab) {}
+	TranslateEnv(SymbolTable *symtab, FILE *outfp): symtab(symtab), outfp(outfp) {}
 	int level() const;
 	void gencode();
 };
+
+void todo(const char *file, int line, const char *msg);
+#define TODO(msg) todo(__FILE__, __LINE__, msg)

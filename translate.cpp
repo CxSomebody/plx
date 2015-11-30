@@ -38,9 +38,7 @@ TempOperand *getphysreg(int id)
 	return &physreg[id];
 }
 
-#define TODO(msg) todo(__FILE__, __LINE__, msg)
-
-static void todo(const char *file, int line, const char *msg)
+void todo(const char *file, int line, const char *msg)
 {
 	fprintf(stderr, "%s: %d: TODO: %s\n", file, line, msg);
 	abort();
@@ -151,6 +149,16 @@ Operand *translate_sym(Symbol *sym, TranslateEnv &env)
 	return new ImmOperand(static_cast<ConstSymbol*>(sym)->val);
 }
 
+TempOperand *astemp(Operand *o, TranslateEnv &env)
+{
+	if (o->kind != Operand::TEMP) {
+		TempOperand *t = env.newtemp(o->size());
+		env.quads.emplace_back(Quad::MOV, t, o);
+		return t;
+	}
+	return static_cast<TempOperand*>(o);
+}
+
 Operand *SymExpr::translate(TranslateEnv &env) const
 {
 	return translate_sym(sym, env);
@@ -173,7 +181,7 @@ Operand *BinaryExpr::translate(TranslateEnv &env) const
 	default: assert(0);
 	}
 	c = env.newtemp(type->size());
-	env.quads.emplace_back(qop, c, left->translate(env), right->translate(env));
+	env.quads.emplace_back(qop, c, astemp(left->translate(env), env), astemp(right->translate(env), env));
 	return c;
 }
 
@@ -195,7 +203,7 @@ Operand *IndexExpr::translate(TranslateEnv &env) const
 	}
 	MemOperand *moarray = static_cast<MemOperand*>(c);
 	assert(!moarray->index);
-	moarray->size = type->size();
+	moarray->_size = type->size();
 	Operand *oindex = index->translate(env);
 	if (oindex->kind == Operand::MEM) {
 		TempOperand *tmp = env.newtemp(index->type->size());
@@ -255,7 +263,7 @@ void AssignStmt::translate(TranslateEnv &env) const
 	} else {
 		ovar = var->translate(env);
 	}
-	Operand *oval = val->translate(env);
+	Operand *oval = astemp(val->translate(env), env);
 	env.quads.emplace_back(Quad::MOV, ovar, oval);
 }
 
@@ -403,25 +411,29 @@ void Block::allocaddr()
 	}
 }
 
-void Block::translate()
+void Block::translate(FILE *outfp)
 {
 	printf("begin %s\n", name.c_str());
-	TranslateEnv env(symtab);
+	TranslateEnv env(symtab, outfp);
 	allocaddr();
 	for (const unique_ptr<Block> &sub: subs)
-		sub->translate();
+		sub->translate(outfp);
 	for (const unique_ptr<Stmt> &stmt: stmts)
 		stmt->translate(env);
+#if 0
 	for (const Quad &q: env.quads) {
 		q.print();
 		putchar('\n');
 	}
+#endif
 	env.gencode();
 	printf("end %s\n", name.c_str());
 }
 
 void translate_all(unique_ptr<Block> &&blk)
 {
-	blk->translate();
+	FILE *outfp = fopen("out.s", "w");
+	blk->translate(outfp);
 	blk->print(0);
+	fclose(outfp);
 }

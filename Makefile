@@ -1,6 +1,6 @@
 CXXFLAGS += -std=c++14 -g -Wall
 
-plx: codegen.o expr.o keywords.o lexer.o parser.o plx.o symtab.o translate.o type.o
+plx: codegen.o dataflow.o expr.o keywords.o lexer.o parser.o plx.o symtab.o translate.o type.o
 	c++ -o $@ $^
 
 lexer_test: keywords.o lexer.o lexer_test.o
@@ -12,7 +12,8 @@ keywords.c: keywords.gperf
 tokens.h keywords.gperf keywords.gperf.h tokname.inc: tokens.in keywords.in
 	./gen
 
-codegen.o: codegen.cpp translate.h
+codegen.o: codegen.cpp dataflow.h translate.h
+dataflow.o: dataflow.cpp dataflow.h translate.h
 expr.o: expr.cpp semant.h
 lexer.o: lexer.c lexer.h tokens.h keywords.gperf.h tokname.inc
 symtab.o: symtab.cpp semant.h

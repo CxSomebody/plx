@@ -59,6 +59,48 @@ vector<unique_ptr<BB>> partition(const vector<Quad> &quads)
 	return blocks;
 }
 
-vector<vector<int>> livevar(const vector<unique_ptr<BB>> &blocks)
+constexpr size_t log2_r(size_t n, size_t a)
+{
+        return n == 1 ? a : log2_r(n>>1, a+1);
+}
+constexpr size_t log2(size_t n)
+{
+        return log2_r(n, 0);
+}
+
+class dynbitset {
+	typedef unsigned long word;
+	static const size_t wsize = sizeof(word)*8;
+	static const size_t lwsize = log2(wsize);
+	vector<word> data;
+public:
+	dynbitset(size_t size): data((size+wsize-1)>>lwsize) {}
+	bool get(int index) const
+	{
+		return data[index>>lwsize] & 1<<((index&lwsize)-1);
+	}
+	void set(int index)
+	{
+		data[index>>lwsize] |= 1<<((index&lwsize)-1);
+	}
+	dynbitset operator|(const dynbitset &that)
+	{
+		dynbitset result(*this);
+		for (size_t i=0; i<data.size(); i++)
+			result.data[i] |= that.data[i];
+		return result;
+	}
+	dynbitset operator-(const dynbitset &that)
+	{
+		dynbitset result(*this);
+		for (size_t i=0; i<data.size(); i++)
+			result.data[i] &= ~that.data[i];
+		return result;
+	}
+};
+
+#if 0
+vector<vector<int>> livevar(const vector<unique_ptr<BB>> &blocks, int n)
 {
 }
+#endif

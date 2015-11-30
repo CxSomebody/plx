@@ -34,7 +34,7 @@ Symbol *TranslateEnv::lookup(const std::string &name) const
 TempOperand *getphysreg(int id)
 {
 	static TempOperand physreg[8] =
-	{{~0}, {~1}, {~2}, {~3}, {~4}, {~5}, {~6}, {~7}};
+	{{~0,4}, {~1,4}, {~2,4}, {~3,4}, {~4,4}, {~5,4}, {~6,4}, {~7,4}};
 	return &physreg[id];
 }
 
@@ -109,9 +109,9 @@ void Quad::print() const
 	}
 }
 
-TempOperand *TranslateEnv::newtemp()
+TempOperand *TranslateEnv::newtemp(int size)
 {
-	return new TempOperand(tempid++);
+	return new TempOperand(tempid++, size);
 }
 
 LabelOperand *TranslateEnv::newlabel()
@@ -137,7 +137,7 @@ Operand *translate_sym(Symbol *sym, TranslateEnv &env)
 			bp = getphysreg(5);
 		} else {
 			int leveldiff = env.level()-vs->level;
-			bp = env.newtemp();
+			bp = env.newtemp(4);
 			env.quads.emplace_back(Quad::MOV, bp, new MemOperand(4, getphysreg(5), 8+4*(leveldiff-1)));
 		}
 		return new MemOperand(vs->type->size(), bp, vs->offset);
@@ -172,7 +172,7 @@ Operand *BinaryExpr::translate(TranslateEnv &env) const
 	case DIV: qop = Quad::DIV; break;
 	default: assert(0);
 	}
-	c = env.newtemp();
+	c = env.newtemp(type->size());
 	env.quads.emplace_back(qop, c, left->translate(env), right->translate(env));
 	return c;
 }
@@ -193,20 +193,20 @@ Operand *IndexExpr::translate(TranslateEnv &env) const
 	if (c->kind != Operand::MEM) {
 		TODO("non-MEM subscripted value");
 	}
-	MemOperand *moleft = static_cast<MemOperand*>(c);
-	assert(!moleft->index);
-	moleft->size = type->size();
-	Operand *oright = index->translate(env);
-	if (oright->kind == Operand::MEM) {
-		TempOperand *tmp = env.newtemp();
-		env.quads.emplace_back(Quad::MOV, tmp, oright);
-		oright = tmp;
+	MemOperand *moarray = static_cast<MemOperand*>(c);
+	assert(!moarray->index);
+	moarray->size = type->size();
+	Operand *oindex = index->translate(env);
+	if (oindex->kind == Operand::MEM) {
+		TempOperand *tmp = env.newtemp(index->type->size());
+		env.quads.emplace_back(Quad::MOV, tmp, oindex);
+		oindex = tmp;
 	}
-	if (oright->kind == Operand::IMM) {
-		moleft->offset += static_cast<ImmOperand*>(oright)->val * scale;
-	} else if (oright->kind == Operand::TEMP) {
-		moleft->index = static_cast<TempOperand*>(oright);
-		moleft->scale = scale;
+	if (oindex->kind == Operand::IMM) {
+		moarray->offset += static_cast<ImmOperand*>(oindex)->val * scale;
+	} else if (oindex->kind == Operand::TEMP) {
+		moarray->index = static_cast<TempOperand*>(oindex);
+		moarray->scale = scale;
 	} else {
 		assert(0);
 	}
@@ -220,7 +220,7 @@ Operand *UnaryExpr::translate(TranslateEnv &env) const
 	case NEG: qop = Quad::NEG; break;
 	default: assert(0);
 	}
-	Operand *c = env.newtemp();
+	Operand *c = env.newtemp(type->size());
 	env.quads.emplace_back(qop, c, sub->translate(env));
 	return c;
 }
@@ -309,7 +309,7 @@ void ForStmt::translate(TranslateEnv &env) const
 	Operand *o_indvar = indvar->translate(env);
 	env.quads.emplace_back(Quad::MOV, o_indvar, from->translate(env));
 	// lim = to;
-	TempOperand *lim = env.newtemp();
+	TempOperand *lim = env.newtemp(indvar->type->size());
 	env.quads.emplace_back(Quad::MOV, lim, to->translate(env));
 	// while (indvar <= lim) {
 	// 	<stmt>;
@@ -333,7 +333,7 @@ void ReadStmt::translate(TranslateEnv &env) const
 		if (o->kind != Operand::MEM) {
 			TODO("expected lvalue in read stmt");
 		}
-		Operand *addr = env.newtemp();
+		Operand *addr = env.newtemp(4);
 		env.quads.emplace_back(Quad::LEA, addr, o);
 		Operand *fmtstr;
 		if (var->type == int_type())

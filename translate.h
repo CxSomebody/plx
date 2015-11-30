@@ -7,6 +7,7 @@ struct Operand {
 		LIST, // for function calls
 	} kind;
 	virtual void print() const = 0;
+	virtual std::string gencode() const = 0;
 protected:
 	Operand(Kind kind): kind(kind) {}
 };
@@ -19,17 +20,20 @@ struct ImmOperand: Operand
 	{
 		printf("%d", val);
 	}
+	std::string gencode() const override;
 };
 
 struct TempOperand: Operand
 {
 	int id;
-	TempOperand(int id): Operand(TEMP), id(id) {}
+	int size;
+	TempOperand(int id, int size): Operand(TEMP), id(id), size(size) {}
 	void print() const override
 	{
 		if (id >= 0) printf("$%d", id);
 		else printf("%%%d", ~id); // physical register
 	}
+	std::string gencode() const override;
 };
 
 struct LabelOperand: Operand
@@ -40,6 +44,7 @@ struct LabelOperand: Operand
 	{
 		printf("%s", label.c_str());
 	}
+	std::string gencode() const override;
 };
 
 struct MemOperand: Operand
@@ -105,6 +110,7 @@ struct MemOperand: Operand
 		}
 		putchar(']');
 	}
+	std::string gencode() const override;
 };
 
 struct ListOperand: Operand
@@ -121,6 +127,7 @@ struct ListOperand: Operand
 			sep = true;
 		}
 	}
+	std::string gencode() const override;
 };
 
 struct Quad {
@@ -158,7 +165,7 @@ class TranslateEnv {
 	int labelid = 0;
 public:
 	std::vector<Quad> quads;
-	TempOperand *newtemp();
+	TempOperand *newtemp(int size);
 	LabelOperand *newlabel();
 	Symbol *lookup(const std::string &name) const;
 	TranslateEnv(SymbolTable *symtab): symtab(symtab) {}

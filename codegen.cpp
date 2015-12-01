@@ -52,10 +52,14 @@ void TranslateEnv::gencode()
 		printf("BLOCK %d pred=%s succ=%s\n", bb->id,
 		       bblisttostr(bb->pred).c_str(),
 		       bblisttostr(bb->succ).c_str());
+#if 0
 		for (const Quad &q: bb->quads) {
 			q.print();
 			putchar('\n');
 		}
+#endif
+		printf("tempid=%d\n", tempid);
+		local_livevar(*bb, tempid);
 	}
 #if 0
 	temp_reg.resize(tempid);

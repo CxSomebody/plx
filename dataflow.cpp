@@ -5,8 +5,16 @@
 #include <vector>
 #include "translate.h"
 #include "dataflow.h"
+#include "dynbitset.h"
+
+#define astemp static_cast<TempOperand*>
 
 using namespace std;
+
+bool istemp(Operand *o)
+{
+	return o->kind == Operand::TEMP;
+}
 
 vector<unique_ptr<BB>> partition(const vector<Quad> &quads)
 {
@@ -59,48 +67,115 @@ vector<unique_ptr<BB>> partition(const vector<Quad> &quads)
 	return blocks;
 }
 
-constexpr size_t log2_r(size_t n, size_t a)
-{
-        return n == 1 ? a : log2_r(n>>1, a+1);
-}
-constexpr size_t log2(size_t n)
-{
-        return log2_r(n, 0);
-}
-
-class dynbitset {
-	typedef unsigned long word;
-	static const size_t wsize = sizeof(word)*8;
-	static const size_t lwsize = log2(wsize);
-	vector<word> data;
-public:
-	dynbitset(size_t size): data((size+wsize-1)>>lwsize) {}
-	bool get(int index) const
-	{
-		return data[index>>lwsize] & 1<<((index&lwsize)-1);
-	}
-	void set(int index)
-	{
-		data[index>>lwsize] |= 1<<((index&lwsize)-1);
-	}
-	dynbitset operator|(const dynbitset &that)
-	{
-		dynbitset result(*this);
-		for (size_t i=0; i<data.size(); i++)
-			result.data[i] |= that.data[i];
-		return result;
-	}
-	dynbitset operator-(const dynbitset &that)
-	{
-		dynbitset result(*this);
-		for (size_t i=0; i<data.size(); i++)
-			result.data[i] &= ~that.data[i];
-		return result;
-	}
-};
-
 #if 0
 vector<vector<int>> livevar(const vector<unique_ptr<BB>> &blocks, int n)
 {
 }
 #endif
+
+void compute_def(const Quad &q, dynbitset &ret)
+{
+	auto def = [&](Operand *o) {
+		if (o->kind == Operand::TEMP && astemp(o)->id >= 0)
+			ret.set(astemp(o)->id);
+	};
+	switch (q.op) {
+	case Quad::ADD:
+	case Quad::SUB:
+	case Quad::MUL:
+	case Quad::DIV:
+	case Quad::NEG:
+	case Quad::MOV:
+	case Quad::LEA:
+		def(q.c);
+		/* fallthrough */
+	case Quad::BEQ:
+	case Quad::BNE:
+	case Quad::BLT:
+	case Quad::BGE:
+	case Quad::BGT:
+	case Quad::BLE:
+	case Quad::JMP:
+	case Quad::LABEL:
+		break;
+	case Quad::CALL:
+		// TODO defines eax, ecx, edx
+		break;
+	default:
+		assert(0);
+	}
+}
+
+void compute_use(const Quad &q, dynbitset &ret)
+{
+	auto use = [&](Operand *o) {
+		if (o->kind == Operand::TEMP && astemp(o)->id >= 0) {
+			ret.set(astemp(o)->id);
+		} else if (o->kind == Operand::MEM) {
+			MemOperand *mo = static_cast<MemOperand*>(o);
+			if (mo->baset && mo->baset->id >= 0)
+				ret.set(mo->baset->id);
+			if (mo->index && mo->baset->id >= 0)
+				ret.set(mo->index->id);
+		}
+	};
+	switch (q.op) {
+	case Quad::ADD:
+	case Quad::SUB:
+	case Quad::MUL:
+	case Quad::DIV:
+	case Quad::BEQ:
+	case Quad::BNE:
+	case Quad::BLT:
+	case Quad::BGE:
+	case Quad::BGT:
+	case Quad::BLE:
+		use(q.b);
+		/* fallthrough */
+	case Quad::NEG:
+	case Quad::MOV:
+	case Quad::LEA:
+		use(q.a);
+		/* fallthrough */
+	case Quad::JMP:
+	case Quad::LABEL:
+		break;
+	case Quad::CALL:
+		assert(q.a->kind == Operand::LIST);
+		for (Operand *arg: static_cast<ListOperand*>(q.a)->list)
+			use(arg);
+		break;
+	default:
+		assert(0);
+	}
+}
+
+// returns interference graph
+vector<vector<int>> local_livevar(const BB &bb, size_t ntemp)
+{
+	size_t n = bb.quads.size();
+	if (n) {
+		vector<dynbitset> def(n, dynbitset(ntemp));
+		vector<dynbitset> use(n, dynbitset(ntemp));
+		vector<dynbitset> out(n, dynbitset(ntemp));
+		for (size_t i=0; i<n; i++) {
+			compute_def(bb.quads[i], def[i]);
+			compute_use(bb.quads[i], use[i]);
+		}
+		for (size_t i=n-1; i; i--)
+			out[i-1] = use[i] | (out[i]-def[i]);
+		// print result
+		for (size_t i=0; i<n; i++) {
+			bb.quads[i].print();
+			printf(" def=");
+			def[i].print();
+			printf(" use=");
+			use[i].print();
+			printf(" live_out=");
+			out[i].print();
+			putchar('\n');
+		}
+	}
+	vector<vector<int>> ig;
+	return ig;
+}

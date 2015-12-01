@@ -397,7 +397,9 @@ void Cond::translate(TranslateEnv &env, LabelOperand *label, bool negate) const
 	case Cond::LE: qop = Quad::BLE; break;
 	default: assert(0);
 	}
-	env.quads.emplace_back(qop, label, left->translate(env), right->translate(env));
+	env.quads.emplace_back(qop, label,
+			       astemp(left ->translate(env), env),
+			       astemp(right->translate(env), env));
 }
 
 void Block::allocaddr()

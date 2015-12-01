@@ -15,3 +15,6 @@ $fmtc " %c" 注意空格
 prologue中需要stackframe大小
 
 若某过程名为eax，有趣。。
+
+temp活跃范围不跨基本块
+注意temp只能赋值一次

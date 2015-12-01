@@ -13,7 +13,7 @@ tokens.h keywords.gperf keywords.gperf.h tokname.inc: tokens.in keywords.in
 	./gen
 
 codegen.o: codegen.cpp dataflow.h translate.h
-dataflow.o: dataflow.cpp dataflow.h translate.h
+dataflow.o: dataflow.cpp dataflow.h translate.h dynbitset.h
 expr.o: expr.cpp semant.h
 lexer.o: lexer.c lexer.h tokens.h keywords.gperf.h tokname.inc
 symtab.o: symtab.cpp semant.h

@@ -77,14 +77,14 @@ vector<vector<int>> livevar(const vector<unique_ptr<BB>> &blocks, int n)
 void compute_def(const Quad &q, dynbitset &ret)
 {
 	auto def = [&](Operand *o) {
-		if (o->kind == Operand::TEMP && astemp(o)->id >= 0)
-			ret.set(astemp(o)->id);
+		if (o->kind == Operand::TEMP)
+			ret.set(8+astemp(o)->id);
 	};
 	switch (q.op) {
 	case Quad::ADD:
 	case Quad::SUB:
 	case Quad::MUL:
-	case Quad::DIV:
+	//case Quad::DIV:
 	case Quad::NEG:
 	case Quad::MOV:
 	case Quad::LEA:
@@ -100,7 +100,14 @@ void compute_def(const Quad &q, dynbitset &ret)
 	case Quad::LABEL:
 		break;
 	case Quad::CALL:
-		// TODO defines eax, ecx, edx
+		ret.set(8+~0); // eax
+		ret.set(8+~1); // ecx
+		ret.set(8+~2); // edx
+		break;
+	case Quad::DIV:
+		def(q.c);
+		ret.set(8+~0); // eax
+		ret.set(8+~2); // edx
 		break;
 	default:
 		assert(0);
@@ -110,14 +117,14 @@ void compute_def(const Quad &q, dynbitset &ret)
 void compute_use(const Quad &q, dynbitset &ret)
 {
 	auto use = [&](Operand *o) {
-		if (o->kind == Operand::TEMP && astemp(o)->id >= 0) {
-			ret.set(astemp(o)->id);
+		if (o->kind == Operand::TEMP) {
+			ret.set(8+astemp(o)->id);
 		} else if (o->kind == Operand::MEM) {
 			MemOperand *mo = static_cast<MemOperand*>(o);
-			if (mo->baset && mo->baset->id >= 0)
-				ret.set(mo->baset->id);
-			if (mo->index && mo->baset->id >= 0)
-				ret.set(mo->index->id);
+			if (mo->baset)
+				ret.set(8+mo->baset->id);
+			if (mo->index)
+				ret.set(8+mo->index->id);
 		}
 	};
 	switch (q.op) {
@@ -153,34 +160,60 @@ void compute_use(const Quad &q, dynbitset &ret)
 
 void Graph::connect(int a, int b)
 {
-	assert(a >= 0 && size_t(a) < _size);
-	assert(b >= 0 && size_t(b) < _size);
-	vector<int> &na = neighbors[a];
+	assert(a >= -8 && a < end);
+	assert(b >= -8 && b < end);
+	vector<int> &na = neighbors[8+a];
 	if (find(na.begin(), na.end(), b) == na.end()) {
 		na.push_back(b);
-		neighbors[b].push_back(a);
+		neighbors[8+b].push_back(a);
 	}
 }
 
+void printtemp(int t)
+{
+	if (t<0) {
+		printf("%s", regname[~t]);
+	} else {
+		printf("$%d", t);
+	}
+};
+
 void Graph::print() const
 {
-	for (size_t i=0; i<_size; i++) {
-		int index = i;
-		printf("[%d]", index);
-		for (int v: neighbors[i]) {
-			printf(" %d", v);
+	for (int i=-8; i<end; i++) {
+		printtemp(i);
+		putchar(':');
+		for (int v: neighbors[8+i]) {
+			putchar(' ');
+			printtemp(v);
 		}
 		putchar('\n');
 	}
+}
+
+void print_bitset(const dynbitset &bs)
+{
+	putchar('[');
+	bool sep = false;
+	for (size_t i=0; i<bs.size(); i++) {
+		int index = i;
+		if (bs.get(index)) {
+			if (sep)
+				putchar(',');
+			printtemp(index-8);
+			sep = true;
+		}
+	}
+	putchar(']');
 }
 
 // returns interference graph
 Graph local_livevar(const BB &bb, size_t ntemp)
 {
 	size_t n = bb.quads.size();
-	vector<dynbitset> def(n, dynbitset(ntemp));
-	vector<dynbitset> use(n, dynbitset(ntemp));
-	vector<dynbitset> out(n, dynbitset(ntemp));
+	vector<dynbitset> def(n, dynbitset(8+ntemp));
+	vector<dynbitset> use(n, dynbitset(8+ntemp));
+	vector<dynbitset> out(n, dynbitset(8+ntemp));
 	if (n) {
 		for (size_t i=0; i<n; i++) {
 			compute_def(bb.quads[i], def[i]);
@@ -191,12 +224,12 @@ Graph local_livevar(const BB &bb, size_t ntemp)
 		// print result
 		for (size_t i=0; i<n; i++) {
 			bb.quads[i].print();
-			printf(" def=");
-			def[i].print();
+			printf(" -- def=");
+			print_bitset(def[i]);
 			printf(" use=");
-			use[i].print();
+			print_bitset(use[i]);
 			printf(" live_out=");
-			out[i].print();
+			print_bitset(out[i]);
 			putchar('\n');
 		}
 	}
@@ -205,7 +238,7 @@ Graph local_livevar(const BB &bb, size_t ntemp)
 		def[i].foreach([&](int tdef) {
 			out[i].foreach([&](int tlive) {
 				if (tdef != tlive) {
-					ig.connect(tdef, tlive);
+					ig.connect(tdef-8, tlive-8);
 				}
 			});
 		});

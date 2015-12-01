@@ -41,20 +41,9 @@ public:
 			result.data[i] &= ~that.data[i];
 		return result;
 	}
-	void print() const
+	size_t size() const
 	{
-		putchar('[');
-		bool sep = false;
-		for (size_t i=0; i<_size; i++) {
-			int index = i;
-			if (get(index)) {
-				if (sep)
-					putchar(',');
-				printf("%d", index);
-				sep = true;
-			}
-		}
-		putchar(']');
+		return _size;
 	}
 	void foreach(std::function<void(int)> f) const
 	{

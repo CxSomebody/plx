@@ -9,6 +9,7 @@
 
 using namespace std;
 
+#if 0
 static const char *opins[] = {
 	"add",
 	"sub",
@@ -21,6 +22,7 @@ static const char *opins[] = {
 	"jg",
 	"jle",
 };
+#endif
 
 void TranslateEnv::emit(const string &ins, const string &dst, const string &src)
 {
@@ -49,7 +51,7 @@ void TranslateEnv::gencode()
 	};
 	vector<unique_ptr<BB>> bbs = partition(quads);
 	for (const unique_ptr<BB> &bb: bbs) {
-		printf("BLOCK %d pred=%s succ=%s\n", bb->id,
+		printf("=== BLOCK %d pred=%s succ=%s ===\n", bb->id,
 		       bblisttostr(bb->pred).c_str(),
 		       bblisttostr(bb->succ).c_str());
 #if 0
@@ -114,12 +116,13 @@ string ImmOperand::gencode(TranslateEnv &env) const
 	return string(tmp);
 }
 
+const char *regname[8] = {
+	"eax", "ecx", "edx", "ebx",
+	"esp", "ebp", "esi", "edi",
+};
+
 string TempOperand::gencode(TranslateEnv &env) const
 {
-	static const char *regname[8] = {
-		"eax", "ecx", "edx", "ebx",
-		"esp", "ebp", "esi", "edi",
-	};
 	int phy = id >= 0 ? env.temp_reg[id] : ~id;
 	assert(phy<8);
 	return regname[phy];

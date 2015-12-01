@@ -37,8 +37,8 @@ struct TempOperand: Operand
 	TempOperand(int id, int size): Operand(TEMP), id(id), _size(size) {}
 	void print() const override
 	{
-		if (id >= 0) printf("$%d", id);
-		else printf("%%%d", ~id); // physical register
+		void printtemp(int);
+		printtemp(id);
 	}
 	int size() const override
 	{
@@ -236,6 +236,8 @@ public:
 	int level() const;
 	void gencode();
 };
+
+extern const char *regname[8];
 
 void todo(const char *file, int line, const char *msg);
 #define TODO(msg) todo(__FILE__, __LINE__, msg)

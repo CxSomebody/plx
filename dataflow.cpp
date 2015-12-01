@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <cassert>
 #include <map>
 #include <memory>
@@ -150,14 +151,37 @@ void compute_use(const Quad &q, dynbitset &ret)
 	}
 }
 
+void Graph::connect(int a, int b)
+{
+	assert(a >= 0 && size_t(a) < _size);
+	assert(b >= 0 && size_t(b) < _size);
+	vector<int> &na = neighbors[a];
+	if (find(na.begin(), na.end(), b) == na.end()) {
+		na.push_back(b);
+		neighbors[b].push_back(a);
+	}
+}
+
+void Graph::print() const
+{
+	for (size_t i=0; i<_size; i++) {
+		int index = i;
+		printf("[%d]", index);
+		for (int v: neighbors[i]) {
+			printf(" %d", v);
+		}
+		putchar('\n');
+	}
+}
+
 // returns interference graph
-vector<vector<int>> local_livevar(const BB &bb, size_t ntemp)
+Graph local_livevar(const BB &bb, size_t ntemp)
 {
 	size_t n = bb.quads.size();
+	vector<dynbitset> def(n, dynbitset(ntemp));
+	vector<dynbitset> use(n, dynbitset(ntemp));
+	vector<dynbitset> out(n, dynbitset(ntemp));
 	if (n) {
-		vector<dynbitset> def(n, dynbitset(ntemp));
-		vector<dynbitset> use(n, dynbitset(ntemp));
-		vector<dynbitset> out(n, dynbitset(ntemp));
 		for (size_t i=0; i<n; i++) {
 			compute_def(bb.quads[i], def[i]);
 			compute_use(bb.quads[i], use[i]);
@@ -176,6 +200,16 @@ vector<vector<int>> local_livevar(const BB &bb, size_t ntemp)
 			putchar('\n');
 		}
 	}
-	vector<vector<int>> ig;
+	Graph ig(ntemp);
+	for (size_t i=0; i<n; i++) {
+		def[i].foreach([&](int tdef) {
+			out[i].foreach([&](int tlive) {
+				if (tdef != tlive) {
+					ig.connect(tdef, tlive);
+				}
+			});
+		});
+	}
+	ig.print();
 	return ig;
 }

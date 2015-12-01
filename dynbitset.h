@@ -1,0 +1,65 @@
+constexpr size_t log2_r(size_t n, size_t a)
+{
+        return n == 1 ? a : log2_r(n>>1, a+1);
+}
+constexpr size_t log2(size_t n)
+{
+        return log2_r(n, 0);
+}
+
+class dynbitset {
+	typedef unsigned long word;
+	static const size_t wsize = sizeof(word)*8;
+	static const size_t lwsize = log2(wsize);
+	std::vector<word> data;
+	size_t _size;
+public:
+	dynbitset(size_t size): data((size+wsize-1)>>lwsize), _size(size) {}
+	bool get(int index) const
+	{
+		assert(index >= 0 && size_t(index) < _size);
+		return data[index>>lwsize] & 1<<(index&(wsize-1));
+	}
+	void set(int index)
+	{
+		assert(index >= 0 && size_t(index) < _size);
+		data[index>>lwsize] |= 1<<(index&(wsize-1));
+	}
+	dynbitset operator|(const dynbitset &that)
+	{
+		assert(_size == that._size);
+		dynbitset result(*this);
+		for (size_t i=0; i<data.size(); i++)
+			result.data[i] |= that.data[i];
+		return result;
+	}
+	dynbitset operator-(const dynbitset &that)
+	{
+		assert(_size == that._size);
+		dynbitset result(*this);
+		for (size_t i=0; i<data.size(); i++)
+			result.data[i] &= ~that.data[i];
+		return result;
+	}
+	void print() const
+	{
+		putchar('[');
+		bool sep = false;
+		for (size_t i=0; i<_size; i++) {
+			int index = i;
+			if (get(index)) {
+				if (sep)
+					putchar(',');
+				printf("%d", index);
+				sep = true;
+			}
+		}
+		putchar(']');
+	}
+	void foreach(std::function<void(int)> f) const
+	{
+		for (size_t i=0; i<_size; i++)
+			if (get(i))
+				f(i);
+	}
+};

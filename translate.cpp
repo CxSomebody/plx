@@ -343,13 +343,15 @@ void ReadStmt::translate(TranslateEnv &env) const
 		if (o->kind != Operand::MEM) {
 			TODO("expected lvalue in read stmt");
 		}
+		// nasm does not allow size prefix here
+		static_cast<MemOperand*>(o)->_size = 0;
 		Operand *addr = env.newtemp(4);
 		env.quads.emplace_back(Quad::LEA, addr, o);
 		Operand *fmtstr;
 		if (var->type == int_type())
-			fmtstr = new LabelOperand("$fmtd");
+			fmtstr = new LabelOperand("_$fmtsd");
 		else if (var->type == char_type())
-			fmtstr = new LabelOperand("$fmtc");
+			fmtstr = new LabelOperand("_$fmtsc");
 		else
 			assert(0);
 		ListOperand *args = new ListOperand();
@@ -375,9 +377,9 @@ void WriteStmt::translate(TranslateEnv &env) const
 #endif
 	if (val) {
 		if (val->type == int_type())
-			fmtstr = new LabelOperand("$fmtd");
+			fmtstr = new LabelOperand("_$fmtpd");
 		else if (val->type == char_type())
-			fmtstr = new LabelOperand("$fmtc");
+			fmtstr = new LabelOperand("_$fmtpc");
 		else
 			assert(0);
 		args = new ListOperand();
@@ -432,7 +434,18 @@ void Block::translate(FILE *outfp)
 void translate_all(unique_ptr<Block> &&blk)
 {
 	FILE *outfp = fopen("out.s", "w");
-	fputs("\tglobal\tmain\n", outfp);
+	fputs("\tglobal\tmain\n"
+	      "\textern\tprintf, scanf\n"
+	      "\tsection\t.data\n"
+	      "_$fmtsd:\n"
+	      "\tdb\t'%d',0\n"
+	      "_$fmtsc:\n"
+	      "\tdb\t' %c',0\n"
+	      "_$fmtpd:\n"
+	      "\tdb\t'%d',10,0\n"
+	      "_$fmtpc:\n"
+	      "\tdb\t'%c',10,0\n"
+	      "\tsection\t.text\n", outfp);
 	blk->translate(outfp);
 	//blk->print(0);
 	fclose(outfp);

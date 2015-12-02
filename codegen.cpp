@@ -204,6 +204,8 @@ string MemOperand::gencode(TranslateEnv &env) const
 		ss << "dword ";
 	} else if (_size == 1) {
 		ss << "byte ";
+	} else if (_size == 0) {
+		/* do nothing */
 	} else {
 		assert(0);
 	}

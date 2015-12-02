@@ -97,7 +97,6 @@ void compute_def(const Quad &q, dynbitset &ret)
 	case Quad::BGT:
 	case Quad::BLE:
 	case Quad::JMP:
-	case Quad::LABEL:
 	case Quad::PUSH:
 		break;
 	case Quad::CALL:
@@ -146,7 +145,6 @@ void compute_use(const Quad &q, dynbitset &ret)
 		use(q.a);
 		/* fallthrough */
 	case Quad::JMP:
-	case Quad::LABEL:
 	case Quad::CALL:
 		break;
 	case Quad::PUSH:
@@ -221,32 +219,56 @@ void print_bitset(const dynbitset &bs)
 	putchar(']');
 }
 
-// returns interference graph
-void local_livevar(const BB &bb, size_t ntemp, Graph &ig)
+Graph global_livevar(const TranslateEnv &env, int ntemp)
 {
-	size_t n = bb.quads.size();
+	size_t n = env.quads.size();
+	map<string, int> labelmap;
 	vector<dynbitset> def(n, dynbitset(8+ntemp));
 	vector<dynbitset> use(n, dynbitset(8+ntemp));
 	vector<dynbitset> out(n, dynbitset(8+ntemp));
-	if (n) {
-		for (size_t i=0; i<n; i++) {
-			compute_def(bb.quads[i], def[i]);
-			compute_use(bb.quads[i], use[i]);
-		}
-		for (size_t i=n-1; i; i--)
-			out[i-1] = use[i] | (out[i]-def[i]);
-		// print result
-		for (size_t i=0; i<n; i++) {
-			bb.quads[i].print();
-			printf(" -- def=");
-			print_bitset(def[i]);
-			printf(" use=");
-			print_bitset(use[i]);
-			printf(" live_out=");
-			print_bitset(out[i]);
-			putchar('\n');
+	vector<dynbitset> in (n, dynbitset(8+ntemp));
+	vector<vector<int>> succ(n);
+	for (size_t i=0; i<n; i++) {
+		const Quad &q = env.quads[i];
+		if (q.op == Quad::LABEL) {
+			labelmap[static_cast<LabelOperand*>(q.c)->label] = i;
+		} else {
+			compute_def(q, def[i]);
+			compute_use(q, use[i]);
 		}
 	}
+	for (size_t i=0; i<n; i++) {
+		const Quad &q = env.quads[i];
+		if (q.is_jump_or_branch())
+			succ[i].push_back(labelmap[static_cast<LabelOperand*>(q.c)->label]);
+		if (!q.isjump() && i != n-1)
+			succ[i].push_back(i+1);
+	}
+	bool changed;
+	do {
+		changed = false;
+		for (size_t j=n; j; j--) {
+			size_t i = j-1;
+			in[i] = use[i] | (out[i]-def[i]);
+		}
+		for (size_t i=0; i<n; i++) {
+			for (int s: succ[i]) {
+				if (out[i].add_all(in[s]))
+					changed = true;
+			}
+		}
+	} while (changed);
+	for (size_t i=0; i<n; i++) {
+		env.quads[i].print();
+		printf(" -- def=");
+		print_bitset(def[i]);
+		printf(" use=");
+		print_bitset(use[i]);
+		printf(" live_out=");
+		print_bitset(out[i]);
+		putchar('\n');
+	}
+	Graph ig(ntemp);
 	for (size_t i=0; i<n; i++) {
 		def[i].foreach([&](int tdef) {
 			out[i].foreach([&](int tlive) {
@@ -256,4 +278,5 @@ void local_livevar(const BB &bb, size_t ntemp, Graph &ig)
 			});
 		});
 	}
+	return ig;
 }

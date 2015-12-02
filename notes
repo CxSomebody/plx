@@ -7,17 +7,7 @@ lexer出错如何处理？如引号不匹配
 
 现阶段，把read语句翻译为n个printf
 
-$fmtd "%d"
-$fmtc " %c" 注意空格
-
 不能用defvar处理函数返回值，会遮蔽函数符号！改名就好，f$
-
-prologue中需要stackframe大小
-
-若某过程名为eax，有趣。。
-
-temp活跃范围不跨基本块
-注意temp只能赋值一次
 
 对于call, idiv这种指令不用move保存eax, edx等寄存器，相当于aggressive coalescing
 可能导致spill

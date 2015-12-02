@@ -60,6 +60,7 @@ void TranslateEnv::emit_mov(Operand *dst, Operand *src)
 
 void TranslateEnv::gencode()
 {
+#if 0
 	auto bblisttostr = [](const vector<BB*> &list) {
 		stringstream ss;
 		ss << '[';
@@ -74,15 +75,14 @@ void TranslateEnv::gencode()
 		return ss.str();
 	};
 	vector<unique_ptr<BB>> bbs = partition(quads);
-	Graph ig(tempid);
 	for (const unique_ptr<BB> &bb: bbs) {
 		printf("=== BLOCK %d pred=%s succ=%s ===\n", bb->id,
 		       bblisttostr(bb->pred).c_str(),
 		       bblisttostr(bb->succ).c_str());
 		printf("tempid=%d\n", tempid);
-		local_livevar(*bb, tempid, ig);
 	}
-	temp_reg = color_graph(move(ig));
+#endif
+	temp_reg = color_graph(global_livevar(*this, tempid));
 	int maxphysreg = -1;
 	for (int i=0; i<tempid; i++) {
 		if (maxphysreg < temp_reg[i])

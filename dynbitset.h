@@ -33,6 +33,25 @@ public:
 			result.data[i] |= that.data[i];
 		return result;
 	}
+	dynbitset &operator|=(const dynbitset &that)
+	{
+		assert(_size == that._size);
+		for (size_t i=0; i<data.size(); i++)
+			data[i] |= that.data[i];
+		return *this;
+	}
+	bool add_all(const dynbitset &that)
+	{
+		assert(_size == that._size);
+		bool changed = false;
+		for (size_t i=0; i<data.size(); i++) {
+			word old = data[i];
+			data[i] |= that.data[i];
+			if (data[i] != old)
+				changed = true;
+		}
+		return changed;
+	}
 	dynbitset operator-(const dynbitset &that)
 	{
 		assert(_size == that._size);

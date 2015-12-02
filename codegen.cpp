@@ -80,16 +80,33 @@ void TranslateEnv::gencode()
 		local_livevar(*bb, tempid, ig);
 	}
 	temp_reg = color_graph(move(ig));
+	int maxphysreg = -1;
+	for (int i=0; i<tempid; i++) {
+		if (maxphysreg < temp_reg[i])
+			maxphysreg = temp_reg[i];
+	}
 	fprintf(outfp, "%s:\n", procname.c_str());
 	TempOperand *eax = getphysreg(0);
 	TempOperand *edx = getphysreg(2);
+	TempOperand *ebx = getphysreg(3);
 	TempOperand *esp = getphysreg(4);
 	TempOperand *ebp = getphysreg(5);
+	TempOperand *esi = getphysreg(6);
+	TempOperand *edi = getphysreg(7);
 	// prologue
 	ImmOperand fs(framesize);
 	emit("push", ebp);
 	emit("mov", ebp, esp);
 	emit("sub", esp, &fs);
+	if (maxphysreg >= 3) {
+		emit("push", ebx);
+		if (maxphysreg >= 6) {
+			emit("push", esi);
+			if (maxphysreg >= 7) {
+				emit("push", edi);
+			}
+		}
+	}
 	// body
 	for (const Quad &q: quads) {
 		switch (q.op) {
@@ -141,6 +158,12 @@ void TranslateEnv::gencode()
 		}
 	}
 	// epilogue
+	if (maxphysreg >= 7)
+		emit("pop", edi);
+	if (maxphysreg >= 6)
+		emit("pop", esi);
+	if (maxphysreg >= 3)
+		emit("pop", ebx);
 	emit("leave");
 	emit("ret");
 }

@@ -432,6 +432,7 @@ void Block::translate(FILE *outfp)
 void translate_all(unique_ptr<Block> &&blk)
 {
 	FILE *outfp = fopen("out.s", "w");
+	fputs("\tglobal\tmain\n", outfp);
 	blk->translate(outfp);
 	//blk->print(0);
 	fclose(outfp);

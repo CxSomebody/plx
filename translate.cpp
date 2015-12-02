@@ -364,7 +364,7 @@ void ForStmt::translate(TranslateEnv &env) const
 {
 	// indvar = from;
 	Operand *o_indvar = indvar->translate(env);
-	env.quads.emplace_back(Quad::MOV, o_indvar, from->translate(env));
+	env.quads.emplace_back(Quad::MOV, o_indvar, astemp(from->translate(env), env));
 	// lim = to;
 	TempOperand *lim = env.newtemp(indvar->type->size());
 	env.quads.emplace_back(Quad::MOV, lim, to->translate(env));

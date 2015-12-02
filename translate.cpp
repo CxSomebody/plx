@@ -91,9 +91,6 @@ void Quad::print() const
 	case Quad::CALL:
 		printf("call ");
 		c->print();
-		putchar('(');
-		a->print();
-		putchar(')');
 		break;
 	case Quad::LABEL:
 		c->print();
@@ -108,6 +105,10 @@ void Quad::print() const
 		printf(" = ");
 		putchar('&');
 		a->print();
+		break;
+	case Quad::PUSH:
+		printf("push ");
+		c->print();
 		break;
 	default:
 		assert(0);
@@ -195,19 +196,14 @@ Operand *BinaryExpr::translate(TranslateEnv &env) const
 Operand *IndexExpr::translate(TranslateEnv &env) const
 {
 	Operand *c;
-	if (array->kind != SYM)
-		TODO("non-SYM subscripted value");
+	assert(array->kind == SYM);
 	Symbol *arraysym = static_cast<SymExpr*>(array.get())->sym;
-	if (arraysym->kind != Symbol::VAR)
-		TODO("non-VAR subscripted value");
+	assert(arraysym->kind == Symbol::VAR);
 	Type *arrayty = static_cast<VarSymbol*>(arraysym)->type;
-	if (arrayty->kind != Type::ARRAY)
-		TODO("non-ARRAY subscripted value");
+	assert(arrayty->kind == Type::ARRAY);
 	int scale = static_cast<ArrayType*>(arrayty)->elemtype->size();
 	c = array->translate(env);
-	if (c->kind != Operand::MEM) {
-		TODO("non-MEM subscripted value");
-	}
+	assert(c->kind == Operand::MEM);
 	MemOperand *moarray = static_cast<MemOperand*>(c);
 	assert(!moarray->index);
 	moarray->_size = type->size();
@@ -242,9 +238,9 @@ Operand *UnaryExpr::translate(TranslateEnv &env) const
 
 void translate_call(TranslateEnv &env, ProcSymbol *proc, const vector<unique_ptr<Expr>> &args)
 {
-	ListOperand *list = new ListOperand();
 	int i=0;
-	for (const unique_ptr<Expr> &arg: args) {
+	for (auto it = args.rbegin(); it != args.rend(); it++) {
+		const unique_ptr<Expr> &arg = *it;
 		Operand *o = arg->translate(env);
 		if (proc->params[i].byref) {
 			TempOperand *addr = env.newtemp(4);
@@ -253,10 +249,11 @@ void translate_call(TranslateEnv &env, ProcSymbol *proc, const vector<unique_ptr
 			env.quads.emplace_back(Quad::LEA, addr, o);
 			o = addr;
 		}
-		list->list.push_back(o);
+		env.quads.emplace_back(Quad::PUSH, o);
 		i++;
 	}
-	env.quads.emplace_back(Quad::CALL, translate_sym(env, proc), list);
+	env.quads.emplace_back(Quad::CALL, translate_sym(env, proc));
+	env.quads.emplace_back(Quad::ADD, esp, esp, new ImmOperand(args.size()*4));
 }
 
 Operand *ApplyExpr::translate(TranslateEnv &env) const
@@ -358,9 +355,7 @@ void ReadStmt::translate(TranslateEnv &env) const
 	static LabelOperand o_scanf("scanf");
 	for (const unique_ptr<Expr> &var: vars) {
 		Operand *o = var->translate(env);
-		if (o->kind != Operand::MEM) {
-			TODO("expected lvalue in read stmt");
-		}
+		assert(o->kind == Operand::MEM);
 		// nasm does not allow size prefix here
 		static_cast<MemOperand*>(o)->_size = 0;
 		Operand *addr = env.newtemp(4);
@@ -372,10 +367,10 @@ void ReadStmt::translate(TranslateEnv &env) const
 			fmtstr = new LabelOperand("_$fmtsc");
 		else
 			assert(0);
-		ListOperand *args = new ListOperand();
-		args->list.push_back(fmtstr);
-		args->list.push_back(addr);
-		env.quads.emplace_back(Quad::CALL, &o_scanf, args);
+		env.quads.emplace_back(Quad::PUSH, addr);
+		env.quads.emplace_back(Quad::PUSH, fmtstr);
+		env.quads.emplace_back(Quad::CALL, &o_scanf);
+		env.quads.emplace_back(Quad::ADD, esp, esp, new ImmOperand(8));
 	}
 }
 
@@ -383,16 +378,7 @@ void WriteStmt::translate(TranslateEnv &env) const
 {
 	static LabelOperand o_printf("printf");
 	Operand *fmtstr;
-	ListOperand *args;
-#if 0
-	if (!str.empty()) {
-		fmtstr = new LabelOperand("$fmts_");
-		args = new ListOperand();
-		args->list.push_back(fmtstr);
-		args->list.push_back(new LabelOperand(/*TODO*/));
-		env.quads.emplace_back(Quad::CALL, &o_printf, args);
-	}
-#endif
+	// TODO handle str
 	if (val) {
 		if (val->type == int_type())
 			fmtstr = new LabelOperand("_$fmtpd");
@@ -400,10 +386,10 @@ void WriteStmt::translate(TranslateEnv &env) const
 			fmtstr = new LabelOperand("_$fmtpc");
 		else
 			assert(0);
-		args = new ListOperand();
-		args->list.push_back(fmtstr);
-		args->list.push_back(val->translate(env));
-		env.quads.emplace_back(Quad::CALL, &o_printf, args);
+		env.quads.emplace_back(Quad::PUSH, val->translate(env));
+		env.quads.emplace_back(Quad::PUSH, fmtstr);
+		env.quads.emplace_back(Quad::CALL, &o_printf);
+		env.quads.emplace_back(Quad::ADD, esp, esp, new ImmOperand(8));
 	}
 }
 

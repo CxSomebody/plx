@@ -24,8 +24,9 @@ static const char *opins[] = {
 	"neg",
 	"mov",
 	"jmp",
-	nullptr, // call
+	"call",
 	"lea",
+	"push",
 };
 
 void TranslateEnv::emit(const char *ins, Operand *dst, Operand *src)
@@ -131,17 +132,9 @@ void TranslateEnv::gencode()
 			break;
 		case Quad::NEG:
 		case Quad::JMP:
-			emit(opins[q.op], q.c);
-			break;
 		case Quad::CALL:
-			{
-				const vector<Operand*> &args = static_cast<ListOperand*>(q.a)->list;
-				for (auto it = args.rbegin(); it != args.rend(); it++)
-					emit("push", *it);
-				emit("call", q.c);
-				ImmOperand n(args.size()*4);
-				emit("add", esp, &n);
-			}
+		case Quad::PUSH:
+			emit(opins[q.op], q.c);
 			break;
 		case Quad::LABEL:
 			fprintf(outfp, "%s:\n", static_cast<LabelOperand*>(q.c)->label.c_str());
@@ -175,6 +168,8 @@ const char *regname[8] = {
 
 string TempOperand::gencode(TranslateEnv &env) const
 {
+	if (_size != 4)
+		TODO("temp size other than 4");
 	int phy = env.physreg(this);
 	assert(phy >= 0 && phy < 8);
 	return regname[phy];
@@ -228,10 +223,4 @@ string MemOperand::gencode(TranslateEnv &env) const
 	}
 	ss << ']';
 	return ss.str();
-}
-
-string ListOperand::gencode(TranslateEnv &env) const
-{
-	// invoking gencode on ListOperand does not make sense
-	assert(0);
 }

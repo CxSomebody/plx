@@ -6,7 +6,6 @@ struct Operand {
 		TEMP,
 		MEM,
 		LABEL,
-		LIST, // for function calls
 	} kind;
 	virtual void print() const = 0;
 	virtual std::string gencode(TranslateEnv &env) const = 0;
@@ -134,27 +133,6 @@ struct MemOperand: Operand
 	std::string gencode(TranslateEnv &env) const override;
 };
 
-struct ListOperand: Operand
-{
-	std::vector<Operand*> list;
-	ListOperand(): Operand(LIST) {}
-	void print() const override
-	{
-		bool sep = false;
-		for (Operand *o: list) {
-			if (sep)
-				printf(", ");
-			o->print();
-			sep = true;
-		}
-	}
-	int size() const override
-	{
-		return 0;
-	}
-	std::string gencode(TranslateEnv &env) const override;
-};
-
 struct Quad {
 	enum Op {
 		ADD,
@@ -172,6 +150,7 @@ struct Quad {
 		JMP,
 		CALL,
 		LEA,
+		PUSH,
 		LABEL,
 	} op;
 	Operand *c, *a, *b;

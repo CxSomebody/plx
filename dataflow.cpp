@@ -98,6 +98,7 @@ void compute_def(const Quad &q, dynbitset &ret)
 	case Quad::BLE:
 	case Quad::JMP:
 	case Quad::LABEL:
+	case Quad::PUSH:
 		break;
 	case Quad::CALL:
 		ret.set(8+~0); // eax
@@ -151,11 +152,10 @@ void compute_use(const Quad &q, dynbitset &ret)
 		/* fallthrough */
 	case Quad::JMP:
 	case Quad::LABEL:
-		break;
 	case Quad::CALL:
-		assert(q.a->kind == Operand::LIST);
-		for (Operand *arg: static_cast<ListOperand*>(q.a)->list)
-			use(arg);
+		break;
+	case Quad::PUSH:
+		use(q.c);
 		break;
 	default:
 		assert(0);

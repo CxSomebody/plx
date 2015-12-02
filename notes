@@ -21,3 +21,5 @@ temp活跃范围不跨基本块
 
 对于call, idiv这种指令不用move保存eax, edx等寄存器，相当于aggressive coalescing
 可能导致spill
+
+lea的src operand（一定是mem）前不能带有size prefix

@@ -56,18 +56,18 @@ void def_const(const string &name, int val)
 VarSymbol *def_var(const string &name, Type *type)
 {
 	if (check_redef(name)) {
-		VarSymbol *vs = new VarSymbol(name, type, symtab->level, 0);
+		VarSymbol *vs = new VarSymbol(name, type, symtab->level, 0, false);
 		symtab->map[name] = vs;
 		return vs;
 	}
 	return nullptr;
 }
 
-void def_func(const ProcHeader &header, Type *rettype)
+void def_func(const ProcHeader &header, const vector<Param> &params, Type *rettype)
 {
 	const string &name = header.name;
 	if (check_redef(name)) {
-		symtab->map[name] = new ProcSymbol(name, rettype);
+		symtab->map[name] = new ProcSymbol(name, params, rettype);
 	}
 }
 
@@ -77,7 +77,7 @@ void def_params(const vector<Param> &params, int level)
 	for (const Param &p: params) {
 		const string &name = p.name;
 		if (check_redef(name)) {
-			symtab->map[name] = new VarSymbol(name, p.type, symtab->level, offset);
+			symtab->map[name] = new VarSymbol(name, p.type, symtab->level, offset, p.byref);
 			offset += 4;
 		}
 	}

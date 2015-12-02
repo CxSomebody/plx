@@ -86,13 +86,6 @@ void TranslateEnv::gencode()
 			maxphysreg = temp_reg[i];
 	}
 	fprintf(outfp, "%s:\n", procname.c_str());
-	TempOperand *eax = getphysreg(0);
-	TempOperand *edx = getphysreg(2);
-	TempOperand *ebx = getphysreg(3);
-	TempOperand *esp = getphysreg(4);
-	TempOperand *ebp = getphysreg(5);
-	TempOperand *esi = getphysreg(6);
-	TempOperand *edi = getphysreg(7);
 	// prologue
 	ImmOperand fs(framesize);
 	emit("push", ebp);

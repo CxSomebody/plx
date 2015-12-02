@@ -17,7 +17,8 @@ dataflow.o: dataflow.cpp dataflow.h translate.h dynbitset.h
 expr.o: expr.cpp semant.h
 lexer.o: lexer.c lexer.h tokens.h keywords.gperf.h tokname.inc
 symtab.o: symtab.cpp semant.h
-plx.o: plx.cpp lexer.h tokens.h
+parser.o: parser.cpp semant.h lexer.h tokens.h
+plx.o: plx.cpp semant.h lexer.h tokens.h
 regalloc.o: regalloc.cpp dataflow.h
 translate.o: translate.cpp translate.h semant.h
 type.o: type.cpp semant.h

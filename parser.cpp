@@ -450,9 +450,9 @@ static ProcHeader proc_header(bool isfunc)
 			check(':'); getsym();
 			Type *retty = basic_type();
 			header.rettype = retty;
-			def_func(header, retty);
+			def_func(header, header.params, retty);
 		} else {
-			def_func(header, nullptr);
+			def_func(header, header.params, nullptr);
 		}
 		return header;
 	} CATCH_R(ProcHeader())

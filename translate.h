@@ -96,6 +96,8 @@ struct MemOperand: Operand
 		offset(offset),
 		index(index),
 		scale(scale) {}
+	MemOperand(int size, TempOperand *baset):
+		MemOperand(size, baset, 0, nullptr, 0) {}
 	MemOperand(int size, LabelOperand *basel):
 		MemOperand(size, basel, 0, nullptr, 0) {}
 	void print() const override
@@ -242,7 +244,7 @@ public:
 
 extern const char *regname[8];
 
-TempOperand *getphysreg(int id);
+extern TempOperand *eax, *ecx, *edx, *ebx, *esp, *ebp, *esi, *edi;
 
 void todo(const char *file, int line, const char *msg);
 #define TODO(msg) todo(__FILE__, __LINE__, msg)

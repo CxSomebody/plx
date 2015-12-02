@@ -31,14 +31,19 @@ Symbol *TranslateEnv::lookup(const std::string &name) const
 	return symtab->lookup(name);
 }
 
-TempOperand *getphysreg(int id)
-{
-	static TempOperand physreg[8] = {
-		{~0,4}, {~1,4}, {~2,4}, {~3,4},
-		{~4,4}, {~5,4}, {~6,4}, {~7,4},
-	};
-	return &physreg[id];
-}
+static TempOperand physreg[8] = {
+	{~0,4}, {~1,4}, {~2,4}, {~3,4},
+	{~4,4}, {~5,4}, {~6,4}, {~7,4},
+};
+
+TempOperand *eax = &physreg[0];
+TempOperand *ecx = &physreg[1];
+TempOperand *edx = &physreg[2];
+TempOperand *ebx = &physreg[3];
+TempOperand *esp = &physreg[4];
+TempOperand *ebp = &physreg[5];
+TempOperand *esi = &physreg[6];
+TempOperand *edi = &physreg[7];
 
 void todo(const char *file, int line, const char *msg)
 {
@@ -121,26 +126,26 @@ LabelOperand *TranslateEnv::newlabel()
 	return new LabelOperand(tmp);
 }
 
-Operand *translate_sym(Symbol *sym, TranslateEnv &env)
+Operand *translate_sym(TranslateEnv &env, Symbol *sym)
 {
 	if (sym->kind == Symbol::VAR) {
 		VarSymbol *vs = static_cast<VarSymbol*>(sym);
-#if 0
-		if (!vs->level) {
-			// global var
-			return new MemOperand(new LabelOperand(vs->name));
-		}
-#endif
-		// local var
 		TempOperand *bp;
 		if (vs->level == env.level()) {
-			bp = getphysreg(5);
+			bp = ebp;
 		} else {
 			int leveldiff = env.level()-vs->level;
 			bp = env.newtemp(4);
-			env.quads.emplace_back(Quad::MOV, bp, new MemOperand(4, getphysreg(5), 8+4*(leveldiff-1)));
+			env.quads.emplace_back(Quad::MOV, bp, new MemOperand(4, ebp, 8+4*(leveldiff-1)));
 		}
-		return new MemOperand(vs->type->size(), bp, vs->offset);
+		MemOperand *m = new MemOperand(vs->isref ? 4 : vs->type->size(), bp, vs->offset);
+		if (vs->isref) {
+			// m is a pointer
+			TempOperand *t = env.newtemp(4);
+			env.quads.emplace_back(Quad::MOV, t, m);
+			m = new MemOperand(vs->type->size(), t);
+		}
+		return m;
 	}
 	if (sym->kind == Symbol::PROC) {
 		// address of function
@@ -163,7 +168,7 @@ TempOperand *astemp(Operand *o, TranslateEnv &env)
 
 Operand *SymExpr::translate(TranslateEnv &env) const
 {
-	return translate_sym(sym, env);
+	return translate_sym(env, sym);
 }
 
 Operand *LitExpr::translate(TranslateEnv &env) const
@@ -235,13 +240,29 @@ Operand *UnaryExpr::translate(TranslateEnv &env) const
 	return c;
 }
 
-Operand *ApplyExpr::translate(TranslateEnv &env) const
+void translate_call(TranslateEnv &env, ProcSymbol *proc, const vector<unique_ptr<Expr>> &args)
 {
 	ListOperand *list = new ListOperand();
-	for (const unique_ptr<Expr> &arg: args)
-		list->list.push_back(arg->translate(env));
-	env.quads.emplace_back(Quad::CALL, translate_sym(func, env), list);
-	return getphysreg(0);
+	int i=0;
+	for (const unique_ptr<Expr> &arg: args) {
+		Operand *o = arg->translate(env);
+		if (proc->params[i].byref) {
+			TempOperand *addr = env.newtemp(4);
+			assert(o->kind == Operand::MEM);
+			static_cast<MemOperand*>(o)->_size = 0;
+			env.quads.emplace_back(Quad::LEA, addr, o);
+			o = addr;
+		}
+		list->list.push_back(o);
+		i++;
+	}
+	env.quads.emplace_back(Quad::CALL, translate_sym(env, proc), list);
+}
+
+Operand *ApplyExpr::translate(TranslateEnv &env) const
+{
+	translate_call(env, func, args);
+	return eax;
 }
 
 void EmptyStmt::translate(TranslateEnv &env) const
@@ -261,7 +282,7 @@ void AssignStmt::translate(TranslateEnv &env) const
 	Symbol *varsym;
 	if (var->kind == Expr::SYM &&
 	    (varsym = static_cast<SymExpr*>(var.get())->sym)->kind == Symbol::PROC) {
-		ovar = translate_sym(env.lookup(varsym->name+'$'), env);
+		ovar = translate_sym(env, env.lookup(varsym->name+'$'));
 	} else {
 		ovar = var->translate(env);
 	}
@@ -271,10 +292,7 @@ void AssignStmt::translate(TranslateEnv &env) const
 
 void CallStmt::translate(TranslateEnv &env) const
 {
-	ListOperand *list = new ListOperand();
-	for (const unique_ptr<Expr> &arg: args)
-		list->list.push_back(arg->translate(env));
-	env.quads.emplace_back(Quad::CALL, translate_sym(proc, env), list);
+	translate_call(env, proc, args);
 }
 
 void IfStmt::translate(TranslateEnv &env) const

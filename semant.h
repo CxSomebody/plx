@@ -63,6 +63,13 @@ struct ArrayType: Type
 	int align() const override;
 };
 
+struct Param {
+	std::string name;
+	Type *type;
+	bool byref;
+	Param(const std::string &name, Type *type, bool byref);
+};
+
 struct Symbol {
 	enum Kind {
 		VAR,
@@ -81,8 +88,9 @@ struct VarSymbol: Symbol
 	Type *type;
 	int level;
 	int offset; // relative to bp
-	VarSymbol(const std::string &name, Type *type, int level, int offset):
-		Symbol(VAR, name, type), type(type), level(level), offset(offset) {}
+	bool isref;
+	VarSymbol(const std::string &name, Type *type, int level, int offset, bool isref):
+		Symbol(VAR, name, type), type(type), level(level), offset(offset), isref(isref) {}
 };
 
 struct ConstSymbol: Symbol
@@ -94,9 +102,10 @@ struct ConstSymbol: Symbol
 
 struct ProcSymbol: Symbol
 {
+	std::vector<Param> params;
 	Type *rettype;
-	ProcSymbol(const std::string &name, Type *rettype):
-		Symbol(PROC, name, nullptr), rettype(rettype) {}
+	ProcSymbol(const std::string &name, const std::vector<Param> &params, Type *rettype):
+		Symbol(PROC, name, nullptr), params(params), rettype(rettype) {}
 };
 
 struct Stmt;
@@ -131,13 +140,6 @@ struct Block {
 	int allocaddr(); // should not really belong to semant.h
 };
 
-struct Param {
-	std::string name;
-	Type *type;
-	bool byref;
-	Param(const std::string &name, Type *type, bool byref);
-};
-
 struct ProcHeader {
 	std::string name;
 	std::vector<Param> params;
@@ -149,7 +151,7 @@ struct ProcHeader {
 
 void def_const(const std::string &name, int val);
 VarSymbol *def_var(const std::string &name, Type *type);
-void def_func(const ProcHeader &header, Type *rettype);
+void def_func(const ProcHeader &header, const std::vector<Param> &params, Type *rettype);
 void def_params(const std::vector<Param> &params, int level);
 Type *error_type();
 Type *int_type();

@@ -6,17 +6,28 @@ struct BB {
 
 class Graph
 {
-	std::vector<std::vector<int>> neighbors;
+	std::vector<std::vector<int>> _neighbors;
 	int end;
 public:
-	Graph(int end): neighbors(8+end), end(end) {}
+	Graph(int end): _neighbors(8+end), end(end) {}
+	std::vector<int> &neighbors(int v)
+	{
+		return _neighbors[8+v];
+	}
+	const std::vector<int> &neighbors(int v) const
+	{
+		return _neighbors[8+v];
+	}
+	int ntemp() const { return end; }
 	void connect(int a, int b);
+	std::vector<int> remove(int v);
 	void print() const;
 	int degree(int v) const
 	{
-		return neighbors[8+v].size();
+		return neighbors(v).size();
 	}
 };
 
 std::vector<std::unique_ptr<BB>> partition(const std::vector<Quad> &quads);
 Graph local_livevar(const BB &bb, size_t ntemp);
+std::vector<int> color_graph(Graph &&g);

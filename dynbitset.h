@@ -18,12 +18,12 @@ public:
 	bool get(int index) const
 	{
 		assert(index >= 0 && size_t(index) < _size);
-		return data[index>>lwsize] & 1<<(index&(wsize-1));
+		return data[index>>lwsize] & 1ul<<(index&(wsize-1));
 	}
 	void set(int index)
 	{
 		assert(index >= 0 && size_t(index) < _size);
-		data[index>>lwsize] |= 1<<(index&(wsize-1));
+		data[index>>lwsize] |= 1ul<<(index&(wsize-1));
 	}
 	dynbitset operator|(const dynbitset &that)
 	{

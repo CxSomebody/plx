@@ -61,7 +61,7 @@ void TranslateEnv::gencode()
 		}
 #endif
 		printf("tempid=%d\n", tempid);
-		local_livevar(*bb, tempid);
+		color_graph(local_livevar(*bb, tempid));
 	}
 #if 0
 	temp_reg.resize(tempid);

@@ -116,17 +116,21 @@ void compute_def(const Quad &q, dynbitset &ret)
 
 void compute_use(const Quad &q, dynbitset &ret)
 {
+	auto usemem = [&](MemOperand *m) {
+		if (m->baset)
+			ret.set(8+m->baset->id);
+		if (m->index)
+			ret.set(8+m->index->id);
+	};
 	auto use = [&](Operand *o) {
 		if (o->kind == Operand::TEMP) {
 			ret.set(8+astemp(o)->id);
 		} else if (o->kind == Operand::MEM) {
-			MemOperand *mo = static_cast<MemOperand*>(o);
-			if (mo->baset)
-				ret.set(8+mo->baset->id);
-			if (mo->index)
-				ret.set(8+mo->index->id);
+			usemem(static_cast<MemOperand*>(o));
 		}
 	};
+	if (q.c && q.c->kind == Operand::MEM)
+		usemem(static_cast<MemOperand*>(q.c));
 	switch (q.op) {
 	case Quad::ADD:
 	case Quad::SUB:
@@ -162,10 +166,10 @@ void Graph::connect(int a, int b)
 {
 	assert(a >= -8 && a < end);
 	assert(b >= -8 && b < end);
-	vector<int> &na = neighbors[8+a];
+	vector<int> &na = neighbors(a);
 	if (find(na.begin(), na.end(), b) == na.end()) {
 		na.push_back(b);
-		neighbors[8+b].push_back(a);
+		neighbors(b).push_back(a);
 	}
 }
 
@@ -183,12 +187,25 @@ void Graph::print() const
 	for (int i=-8; i<end; i++) {
 		printtemp(i);
 		putchar(':');
-		for (int v: neighbors[8+i]) {
+		for (int a: neighbors(i)) {
 			putchar(' ');
-			printtemp(v);
+			printtemp(a);
 		}
 		putchar('\n');
 	}
+}
+
+vector<int> Graph::remove(int v)
+{
+	assert(v >= -8 && v < end);
+	for (int a: neighbors(v)) {
+		vector<int> &na = neighbors(a);
+		na.erase(find(na.begin(), na.end(), v));
+	}
+	vector<int> &nv = neighbors(v);
+	vector<int> ret(move(nv));
+	nv.clear();
+	return ret;
 }
 
 void print_bitset(const dynbitset &bs)

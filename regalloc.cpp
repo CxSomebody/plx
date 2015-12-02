@@ -14,7 +14,7 @@ vector<int> color_graph(Graph &&g)
 	vector<int> color(ntemp, -1);
 	vector<int> removed;
 	removed.reserve(ntemp);
-	bool removed_p[ntemp] = {false};
+	bool removed_p[ntemp] = {};
 	vector<vector<int>> neighbors(ntemp);
 	auto remove_node = [&](int i) {
 		assert(!removed_p[i]);

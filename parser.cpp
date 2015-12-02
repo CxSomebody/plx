@@ -719,11 +719,13 @@ static vector<unique_ptr<Expr>> expr_list()
 	X _{')'};
 	try {
 		vector<unique_ptr<Expr>> ret;
-		for (;;) {
-			ret.emplace_back(expr());
-			if (tok.sym != ',')
-				break;
-			getsym();
+		if (tok.sym != ')') {
+			for (;;) {
+				ret.emplace_back(expr());
+				if (tok.sym != ',')
+					break;
+				getsym();
+			}
 		}
 		return ret;
 	} CATCH_R(vector<unique_ptr<Expr>>())
@@ -813,10 +815,10 @@ static unique_ptr<Expr> term()
 static unique_ptr<Expr> factor()
 {
 	unique_ptr<Expr> e;
+	Symbol *s;
 	switch (tok.sym) {
 	case IDENT:
 		switch (ntok.sym) {
-			Symbol *s;
 		case '(':
 			s = lookup(tok.s);
 			checkprocsym(s);
@@ -833,8 +835,13 @@ static unique_ptr<Expr> factor()
 			check(']'); getsym();
 			return e;
 		}
-		e = ident_expr(tok.s);
+		s = lookup(tok.s);
 		getsym();
+		if (s && s->kind == Symbol::PROC) {
+			e = make_unique<ApplyExpr>(static_cast<ProcSymbol*>(s), vector<unique_ptr<Expr>>());
+		} else {
+			e = make_unique<SymExpr>(s);
+		}
 		return e;
 	case INT:
 		e = make_unique<LitExpr>(tok.i);

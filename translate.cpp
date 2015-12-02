@@ -110,6 +110,14 @@ void Quad::print() const
 		printf("push ");
 		c->print();
 		break;
+	case Quad::INC:
+		printf("inc ");
+		c->print();
+		break;
+	case Quad::DEC:
+		printf("dec ");
+		c->print();
+		break;
 	default:
 		assert(0);
 	}
@@ -253,7 +261,8 @@ void translate_call(TranslateEnv &env, ProcSymbol *proc, const vector<unique_ptr
 		i++;
 	}
 	env.quads.emplace_back(Quad::CALL, translate_sym(env, proc));
-	env.quads.emplace_back(Quad::ADD, esp, esp, new ImmOperand(args.size()*4));
+	if (!args.empty())
+		env.quads.emplace_back(Quad::ADD, esp, esp, new ImmOperand(args.size()*4));
 }
 
 Operand *ApplyExpr::translate(TranslateEnv &env) const
@@ -343,9 +352,10 @@ void ForStmt::translate(TranslateEnv &env) const
 	LabelOperand *lstart = env.newlabel();
 	LabelOperand *lend = env.newlabel();
 	env.quads.emplace_back(Quad::LABEL, lstart);
-	env.quads.emplace_back(Quad::BGT, lend, o_indvar, lim);
+	env.quads.emplace_back(down ? Quad::BLT : Quad::BGT, lend, o_indvar, lim);
 	// <cond>
 	body->translate(env);
+	env.quads.emplace_back(down ? Quad::DEC : Quad::INC, o_indvar);
 	env.quads.emplace_back(Quad::JMP, lstart);
 	env.quads.emplace_back(Quad::LABEL, lend);
 }
@@ -431,6 +441,9 @@ void Block::translate(FILE *outfp)
 		sub->translate(outfp);
 	for (const unique_ptr<Stmt> &stmt: stmts)
 		stmt->translate(env);
+	Symbol *retval = symtab->lookup(name+'$');
+	if (retval)
+		env.quads.emplace_back(Quad::MOV, eax, translate_sym(env, retval));
 	env.gencode();
 	printf("end %s\n", name.c_str());
 }

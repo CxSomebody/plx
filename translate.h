@@ -151,6 +151,8 @@ struct Quad {
 		CALL,
 		LEA,
 		PUSH,
+		INC,
+		DEC,
 		LABEL,
 	} op;
 	Operand *c, *a, *b;

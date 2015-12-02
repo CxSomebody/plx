@@ -68,12 +68,6 @@ vector<unique_ptr<BB>> partition(const vector<Quad> &quads)
 	return blocks;
 }
 
-#if 0
-vector<vector<int>> livevar(const vector<unique_ptr<BB>> &blocks, int n)
-{
-}
-#endif
-
 void compute_def(const Quad &q, dynbitset &ret)
 {
 	auto def = [&](Operand *o) {
@@ -81,6 +75,10 @@ void compute_def(const Quad &q, dynbitset &ret)
 			ret.set(8+astemp(o)->id);
 	};
 	switch (q.op) {
+	case Quad::DIV:
+		ret.set(8+~0); // eax
+		ret.set(8+~2); // edx
+		/* fallthrough */
 	case Quad::ADD:
 	case Quad::SUB:
 	case Quad::MUL:
@@ -88,6 +86,8 @@ void compute_def(const Quad &q, dynbitset &ret)
 	case Quad::NEG:
 	case Quad::MOV:
 	case Quad::LEA:
+	case Quad::INC:
+	case Quad::DEC:
 		def(q.c);
 		/* fallthrough */
 	case Quad::BEQ:
@@ -103,11 +103,6 @@ void compute_def(const Quad &q, dynbitset &ret)
 	case Quad::CALL:
 		ret.set(8+~0); // eax
 		ret.set(8+~1); // ecx
-		ret.set(8+~2); // edx
-		break;
-	case Quad::DIV:
-		def(q.c);
-		ret.set(8+~0); // eax
 		ret.set(8+~2); // edx
 		break;
 	default:
@@ -155,6 +150,8 @@ void compute_use(const Quad &q, dynbitset &ret)
 	case Quad::CALL:
 		break;
 	case Quad::PUSH:
+	case Quad::INC:
+	case Quad::DEC:
 		use(q.c);
 		break;
 	default:

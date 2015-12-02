@@ -27,6 +27,8 @@ static const char *opins[] = {
 	"call",
 	"lea",
 	"push",
+	"inc",
+	"dec",
 };
 
 void TranslateEnv::emit(const char *ins, Operand *dst, Operand *src)
@@ -88,10 +90,12 @@ void TranslateEnv::gencode()
 	}
 	fprintf(outfp, "%s:\n", procname.c_str());
 	// prologue
-	ImmOperand fs(framesize);
 	emit("push", ebp);
 	emit("mov", ebp, esp);
-	emit("sub", esp, &fs);
+	if (framesize) {
+		ImmOperand fs(framesize);
+		emit("sub", esp, &fs);
+	}
 	if (maxphysreg >= 3) {
 		emit("push", ebx);
 		if (maxphysreg >= 6) {
@@ -134,6 +138,8 @@ void TranslateEnv::gencode()
 		case Quad::JMP:
 		case Quad::CALL:
 		case Quad::PUSH:
+		case Quad::INC:
+		case Quad::DEC:
 			emit(opins[q.op], q.c);
 			break;
 		case Quad::LABEL:

@@ -14,7 +14,7 @@ static const char *opins[] = {
 	"add",
 	"sub",
 	"imul",
-	"idiv",
+	nullptr, // idiv
 	"je",
 	"jne",
 	"jl",
@@ -24,7 +24,7 @@ static const char *opins[] = {
 	"neg",
 	"mov",
 	"jmp",
-	"call",
+	nullptr, // call
 	"lea",
 };
 
@@ -44,6 +44,15 @@ void TranslateEnv::emit(const char *ins, Operand *dst)
 void TranslateEnv::emit(const char *ins)
 {
 	fprintf(outfp, "\t%s\n", ins);
+}
+
+void TranslateEnv::emit_mov(Operand *dst, Operand *src)
+{
+	if (!(dst->kind == Operand::TEMP &&
+	      src->kind == Operand::TEMP &&
+	      physreg(static_cast<TempOperand*>(dst)) ==
+	      physreg(static_cast<TempOperand*>(src))))
+		emit("mov", dst, src);
 }
 
 void TranslateEnv::gencode()
@@ -87,16 +96,15 @@ void TranslateEnv::gencode()
 		case Quad::ADD:
 		case Quad::SUB:
 		case Quad::MUL:
-			emit("mov", q.c, q.a);
+			emit_mov(q.c, q.a);
 			emit(opins[q.op], q.c, q.b);
 			break;
 		case Quad::DIV:
 			// dividend in EDX:EAX
-			emit("mov", eax, q.a);
+			emit_mov(eax, q.a);
 			emit("xor", edx, edx);
 			emit("idiv", q.b);
-			// might be unnecessary
-			emit("mov", q.c, eax);
+			emit_mov(q.c, eax);
 			break;
 		case Quad::BEQ:
 		case Quad::BNE:
@@ -116,7 +124,14 @@ void TranslateEnv::gencode()
 			emit(opins[q.op], q.c);
 			break;
 		case Quad::CALL:
-			// TODO
+			{
+				const vector<Operand*> &args = static_cast<ListOperand*>(q.a)->list;
+				for (auto it = args.rbegin(); it != args.rend(); it++)
+					emit("push", *it);
+				emit("call", q.c);
+				ImmOperand n(args.size()*4);
+				emit("add", esp, &n);
+			}
 			break;
 		case Quad::LABEL:
 			fprintf(outfp, "%s:\n", static_cast<LabelOperand*>(q.c)->label.c_str());
@@ -144,9 +159,14 @@ const char *regname[8] = {
 
 string TempOperand::gencode(TranslateEnv &env) const
 {
-	int phy = id >= 0 ? env.temp_reg[id] : ~id;
+	int phy = env.physreg(this);
 	assert(phy >= 0 && phy < 8);
 	return regname[phy];
+}
+
+int TranslateEnv::physreg(const TempOperand *t)
+{
+	return t->id < 0 ? ~t->id : temp_reg[t->id];
 }
 
 string LabelOperand::gencode(TranslateEnv &env) const

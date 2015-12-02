@@ -224,16 +224,17 @@ class TranslateEnv {
 	int framesize;
 	int tempid = 0;
 	int labelid = 0;
-	int reg_temp[8];
+	std::vector<int> temp_reg;
 	void emit(const char *ins, Operand *dst, Operand *src);
 	void emit(const char *ins, Operand *dst);
 	void emit(const char *ins);
+	void emit_mov(Operand *dst, Operand *src);
 public:
 	std::vector<Quad> quads;
-	std::vector<int> temp_reg;
 	TempOperand *newtemp(int size);
 	LabelOperand *newlabel();
 	Symbol *lookup(const std::string &name) const;
+	int physreg(const TempOperand *t);
 	TranslateEnv(SymbolTable *symtab, const std::string &procname, FILE *outfp, int framesize): symtab(symtab), procname(procname), outfp(outfp), framesize(framesize) {}
 	int level() const;
 	void gencode();

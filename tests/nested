@@ -1,0 +1,20 @@
+procedure g(a: integer);
+begin
+  write(a)
+end;
+function f(a: integer): integer;
+  procedure q(b: integer);
+    procedure r(c: integer);
+    begin
+      f := a+b+c
+    end;
+  begin
+    g(a);
+    r(b+b)
+  end;
+begin
+  q(a+a)
+end;
+begin
+  write(f(111))
+end.

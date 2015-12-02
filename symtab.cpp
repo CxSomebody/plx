@@ -8,8 +8,6 @@
 
 using namespace std;
 
-Symbol::Symbol(Kind kind, const string &name, Type *type): kind(kind), name(name), type(type) {}
-
 void Symbol::print() const
 {
 	if (this) printf("%s", name.c_str());
@@ -49,7 +47,7 @@ bool check_redef(const string &name)
 void def_const(const string &name, int val)
 {
 	if (check_redef(name)) {
-		symtab->map[name] = new ConstSymbol(name, val);
+		symtab->map[name] = new ConstSymbol(name, symtab->level, val);
 	}
 }
 
@@ -67,13 +65,15 @@ void def_func(const ProcHeader &header, const vector<Param> &params, Type *retty
 {
 	const string &name = header.name;
 	if (check_redef(name)) {
-		symtab->map[name] = new ProcSymbol(name, params, rettype);
+		symtab->map[name] = new ProcSymbol(name, symtab->level+1, params, rettype);
 	}
 }
 
-void def_params(const vector<Param> &params, int level)
+void def_params(const vector<Param> &params)
 {
-	int offset = 8+level*4;
+	// level 0 block has no params, so level > 0
+	assert(symtab->level > 0 || params.empty());
+	int offset = 8+(symtab->level-1)*4;
 	for (const Param &p: params) {
 		const string &name = p.name;
 		if (check_redef(name)) {

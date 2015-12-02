@@ -88,7 +88,7 @@ void TranslateEnv::gencode()
 		if (maxphysreg < temp_reg[i])
 			maxphysreg = temp_reg[i];
 	}
-	fprintf(outfp, "%s:\n", procname.c_str());
+	fprintf(outfp, "$%s:\n", procname.c_str());
 	// prologue
 	emit("push", ebp);
 	emit("mov", ebp, esp);

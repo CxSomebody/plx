@@ -199,12 +199,15 @@ struct Quad {
 
 struct Symbol;
 struct SymbolTable;
+struct ProcSymbol;
+struct Expr;
 
 class TranslateEnv {
 	SymbolTable *symtab;
 	std::string procname;
 	FILE *outfp;
 	int framesize;
+	int level;
 	int tempid = 0;
 	int labelid = 0;
 	std::vector<int> temp_reg;
@@ -217,9 +220,10 @@ public:
 	TempOperand *newtemp(int size);
 	LabelOperand *newlabel();
 	Symbol *lookup(const std::string &name) const;
+	Operand *translate_sym(Symbol *sym);
+	void translate_call(ProcSymbol *proc, const std::vector<std::unique_ptr<Expr>> &args);
 	int physreg(const TempOperand *t);
-	TranslateEnv(SymbolTable *symtab, const std::string &procname, FILE *outfp, int framesize): symtab(symtab), procname(procname), outfp(outfp), framesize(framesize) {}
-	int level() const;
+	TranslateEnv(SymbolTable *symtab, const std::string &procname, FILE *outfp, int framesize);
 	void gencode();
 };
 

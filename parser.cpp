@@ -125,7 +125,7 @@ static void skip()
 }
 
 static unique_ptr<Block> program();
-static unique_ptr<Block> block(ProcHeader &&header, int level);
+static unique_ptr<Block> block(ProcHeader &&header);
 static void const_part();
 static void const_def();
 static int constant();
@@ -135,7 +135,7 @@ static void var_decl(vector<VarSymbol*> &list);
 static vector<string> id_list();
 static Type *type();
 static Type *basic_type();
-static vector<unique_ptr<Block>> sub_list(int level);
+static vector<unique_ptr<Block>> sub_list();
 static ProcHeader proc_header(bool isfunc);
 static vector<Param> param_list();
 static vector<Param> param_group();
@@ -195,19 +195,19 @@ static unique_ptr<Block> program()
 {
 	X _{0};
 	try {
-		unique_ptr<Block> blk(block(ProcHeader("main", vector<Param>{}, nullptr), 0));
+		unique_ptr<Block> blk(block(ProcHeader("main", vector<Param>{}, nullptr)));
 		check('.'); getsym();
 		check(0);
 		return blk;
 	} CATCH_R(nullptr)
 }
 
-static unique_ptr<Block> block(ProcHeader &&header, int level)
+static unique_ptr<Block> block(ProcHeader &&header)
 {
 	X _{';', '.'};
 	try {
 		push_symtab();
-		def_params(header.params, level-1);
+		def_params(header.params);
 		if (tok.sym == T_CONST) {
 			getsym();
 			const_part();
@@ -221,7 +221,7 @@ static unique_ptr<Block> block(ProcHeader &&header, int level)
 			// local var for function return value
 			vars.push_back(def_var(header.name+'$', header.rettype));
 		}
-		vector<unique_ptr<Block>> subs(sub_list(level));
+		vector<unique_ptr<Block>> subs(sub_list());
 		unique_ptr<CompStmt> body(comp_stmt());
 		SymbolTable *symtab = pop_symtab();
 		return make_unique<Block>
@@ -389,7 +389,7 @@ static Type *basic_type()
 	} CATCH_R(nullptr)
 }
 
-static vector<unique_ptr<Block>> sub_list(int level)
+static vector<unique_ptr<Block>> sub_list()
 {
 	X _{T_BEGIN};
 	try {
@@ -413,7 +413,7 @@ static vector<unique_ptr<Block>> sub_list(int level)
 				default:
 					error(';');
 				}
-				ret.emplace_back(block(move(header), level+1));
+				ret.emplace_back(block(move(header)));
 				switch (tok.sym) {
 				case ';':
 					getsym();

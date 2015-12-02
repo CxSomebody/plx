@@ -21,9 +21,18 @@ static const char *opstr[] = {
 	"<=",
 };
 
-int TranslateEnv::level() const
+TranslateEnv::TranslateEnv(SymbolTable *symtab,
+			   const std::string &procname,
+			   FILE *outfp,
+			   int framesize):
+	symtab(symtab),
+	procname(procname),
+	outfp(outfp),
+	framesize(framesize)
 {
-	return symtab->level;
+	level = symtab->level;
+	if (level < 1)
+		level = 1;
 }
 
 Symbol *TranslateEnv::lookup(const std::string &name) const
@@ -135,24 +144,31 @@ LabelOperand *TranslateEnv::newlabel()
 	return new LabelOperand(tmp);
 }
 
-Operand *translate_sym(TranslateEnv &env, Symbol *sym)
+Operand *TranslateEnv::translate_sym(Symbol *sym)
 {
 	if (sym->kind == Symbol::VAR) {
 		VarSymbol *vs = static_cast<VarSymbol*>(sym);
-		TempOperand *bp;
-		if (vs->level == env.level()) {
-			bp = ebp;
+		MemOperand *m;
+		if (vs->level) {
+			// local var
+			TempOperand *bp;
+			if (vs->level == level) {
+				bp = ebp;
+			} else {
+				int leveldiff = level-vs->level;
+				bp = newtemp(4);
+				quads.emplace_back(Quad::MOV, bp, new MemOperand(4, ebp, 8+4*(leveldiff-1)));
+			}
+			m = new MemOperand(vs->isref ? 4 : vs->type->size(), bp, vs->offset);
+			if (vs->isref) {
+				// m is a pointer
+				TempOperand *t = newtemp(4);
+				quads.emplace_back(Quad::MOV, t, m);
+				m = new MemOperand(vs->type->size(), t);
+			}
 		} else {
-			int leveldiff = env.level()-vs->level;
-			bp = env.newtemp(4);
-			env.quads.emplace_back(Quad::MOV, bp, new MemOperand(4, ebp, 8+4*(leveldiff-1)));
-		}
-		MemOperand *m = new MemOperand(vs->isref ? 4 : vs->type->size(), bp, vs->offset);
-		if (vs->isref) {
-			// m is a pointer
-			TempOperand *t = env.newtemp(4);
-			env.quads.emplace_back(Quad::MOV, t, m);
-			m = new MemOperand(vs->type->size(), t);
+			// global var
+			m = new MemOperand(vs->type->size(), new LabelOperand('$'+vs->name));
 		}
 		return m;
 	}
@@ -163,6 +179,34 @@ Operand *translate_sym(TranslateEnv &env, Symbol *sym)
 	}
 	assert(sym->kind == Symbol::CONST);
 	return new ImmOperand(static_cast<ConstSymbol*>(sym)->val);
+}
+
+void TranslateEnv::translate_call(ProcSymbol *proc, const vector<unique_ptr<Expr>> &args)
+{
+	int i=0;
+	for (auto it = args.rbegin(); it != args.rend(); it++) {
+		const unique_ptr<Expr> &arg = *it;
+		Operand *o = arg->translate(*this);
+		if (proc->params[i].byref) {
+			TempOperand *addr = newtemp(4);
+			assert(o->kind == Operand::MEM);
+			static_cast<MemOperand*>(o)->_size = 0;
+			quads.emplace_back(Quad::LEA, addr, o);
+			o = addr;
+		}
+		quads.emplace_back(Quad::PUSH, o);
+		i++;
+	}
+	assert(proc->level > 0 && proc->level <= level+1);
+	for (int i=1; i<proc->level; i++)
+		quads.emplace_back(Quad::PUSH, i == level ?
+				   static_cast<Operand*>(ebp) :
+				   static_cast<Operand*>(new MemOperand(4, ebp, 8+(i-1)*4)));
+	printf("proc %s level=%d\n", proc->name.c_str(), proc->level);
+	int spinc = (args.size()+(proc->level-1))*4;
+	quads.emplace_back(Quad::CALL, translate_sym(proc));
+	if (spinc)
+		quads.emplace_back(Quad::ADD, esp, esp, new ImmOperand(spinc));
 }
 
 TempOperand *astemp(Operand *o, TranslateEnv &env)
@@ -177,7 +221,7 @@ TempOperand *astemp(Operand *o, TranslateEnv &env)
 
 Operand *SymExpr::translate(TranslateEnv &env) const
 {
-	return translate_sym(env, sym);
+	return env.translate_sym(sym);
 }
 
 Operand *LitExpr::translate(TranslateEnv &env) const
@@ -244,30 +288,9 @@ Operand *UnaryExpr::translate(TranslateEnv &env) const
 	return c;
 }
 
-void translate_call(TranslateEnv &env, ProcSymbol *proc, const vector<unique_ptr<Expr>> &args)
-{
-	int i=0;
-	for (auto it = args.rbegin(); it != args.rend(); it++) {
-		const unique_ptr<Expr> &arg = *it;
-		Operand *o = arg->translate(env);
-		if (proc->params[i].byref) {
-			TempOperand *addr = env.newtemp(4);
-			assert(o->kind == Operand::MEM);
-			static_cast<MemOperand*>(o)->_size = 0;
-			env.quads.emplace_back(Quad::LEA, addr, o);
-			o = addr;
-		}
-		env.quads.emplace_back(Quad::PUSH, o);
-		i++;
-	}
-	env.quads.emplace_back(Quad::CALL, translate_sym(env, proc));
-	if (!args.empty())
-		env.quads.emplace_back(Quad::ADD, esp, esp, new ImmOperand(args.size()*4));
-}
-
 Operand *ApplyExpr::translate(TranslateEnv &env) const
 {
-	translate_call(env, func, args);
+	env.translate_call(func, args);
 	return eax;
 }
 
@@ -288,7 +311,7 @@ void AssignStmt::translate(TranslateEnv &env) const
 	Symbol *varsym;
 	if (var->kind == Expr::SYM &&
 	    (varsym = static_cast<SymExpr*>(var.get())->sym)->kind == Symbol::PROC) {
-		ovar = translate_sym(env, env.lookup(varsym->name+'$'));
+		ovar = env.translate_sym(env.lookup(varsym->name+'$'));
 	} else {
 		ovar = var->translate(env);
 	}
@@ -298,7 +321,7 @@ void AssignStmt::translate(TranslateEnv &env) const
 
 void CallStmt::translate(TranslateEnv &env) const
 {
-	translate_call(env, proc, args);
+	env.translate_call(proc, args);
 }
 
 void IfStmt::translate(TranslateEnv &env) const
@@ -443,9 +466,20 @@ void Block::translate(FILE *outfp)
 		stmt->translate(env);
 	Symbol *retval = symtab->lookup(name+'$');
 	if (retval)
-		env.quads.emplace_back(Quad::MOV, eax, translate_sym(env, retval));
+		env.quads.emplace_back(Quad::MOV, eax, env.translate_sym(retval));
 	env.gencode();
 	printf("end %s\n", name.c_str());
+}
+
+static char sizechar(int size)
+{
+	switch (size) {
+	case 4:
+		return 'd';
+	case 1:
+		return 'b';
+	}
+	assert(0);
 }
 
 void translate_all(unique_ptr<Block> &&blk)
@@ -453,6 +487,7 @@ void translate_all(unique_ptr<Block> &&blk)
 	FILE *outfp = fopen("out.s", "w");
 	fputs("\tglobal\tmain\n"
 	      "\textern\tprintf, scanf\n"
+	      "\n"
 	      "\tsection\t.data\n"
 	      "_$fmtsd:\n"
 	      "\tdb\t'%d',0\n"
@@ -462,7 +497,15 @@ void translate_all(unique_ptr<Block> &&blk)
 	      "\tdb\t'%d',10,0\n"
 	      "_$fmtpc:\n"
 	      "\tdb\t'%c',10,0\n"
-	      "\tsection\t.text\n", outfp);
+	      "\n"
+	      "\tsection\t.bss\n", outfp);
+	for (VarSymbol *vs: blk->vars) {
+		Type *type = vs->type;
+		int align = type->align();
+		fprintf(outfp, "$%s:\n", vs->name.c_str());
+		fprintf(outfp, "\tres%c\t%d\n", sizechar(align), type->size()/align);
+	}
+	fputs("\n\tsection\t.text\n", outfp);
 	blk->translate(outfp);
 	//blk->print(0);
 	fclose(outfp);

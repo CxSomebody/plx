@@ -78,34 +78,35 @@ struct Symbol {
 	} kind;
 	std::string name;
 	Type *type;
+	int level;
 	void print() const;
 protected:
-	Symbol(Kind kind, const std::string &name, Type *type);
+	Symbol(Kind kind, const std::string &name, Type *type, int level):
+		kind(kind), name(name), type(type), level(level) {}
 };
 
 struct VarSymbol: Symbol
 {
 	Type *type;
-	int level;
 	int offset; // relative to bp
 	bool isref;
 	VarSymbol(const std::string &name, Type *type, int level, int offset, bool isref):
-		Symbol(VAR, name, type), type(type), level(level), offset(offset), isref(isref) {}
+		Symbol(VAR, name, type, level), type(type), offset(offset), isref(isref) {}
 };
 
 struct ConstSymbol: Symbol
 {
 	int val;
-	ConstSymbol(const std::string &name, int val):
-		Symbol(CONST, name, int_type()), val(val) {}
+	ConstSymbol(const std::string &name, int level, int val):
+		Symbol(CONST, name, int_type(), level), val(val) {}
 };
 
 struct ProcSymbol: Symbol
 {
 	std::vector<Param> params;
 	Type *rettype;
-	ProcSymbol(const std::string &name, const std::vector<Param> &params, Type *rettype):
-		Symbol(PROC, name, nullptr), params(params), rettype(rettype) {}
+	ProcSymbol(const std::string &name, int level, const std::vector<Param> &params, Type *rettype):
+		Symbol(PROC, name, nullptr, level), params(params), rettype(rettype) {}
 };
 
 struct Stmt;
@@ -152,7 +153,7 @@ struct ProcHeader {
 void def_const(const std::string &name, int val);
 VarSymbol *def_var(const std::string &name, Type *type);
 void def_func(const ProcHeader &header, const std::vector<Param> &params, Type *rettype);
-void def_params(const std::vector<Param> &params, int level);
+void def_params(const std::vector<Param> &params);
 Type *error_type();
 Type *int_type();
 Type *char_type();

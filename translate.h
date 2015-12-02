@@ -169,8 +169,8 @@ struct Quad {
 		MOV,
 		JMP,
 		CALL,
-		LABEL,
 		LEA,
+		LABEL,
 	} op;
 	Operand *c, *a, *b;
 	Quad(Op op, Operand *c, Operand *a, Operand *b):
@@ -219,25 +219,29 @@ struct SymbolTable;
 
 class TranslateEnv {
 	SymbolTable *symtab;
+	std::string procname;
 	FILE *outfp;
+	int framesize;
 	int tempid = 0;
 	int labelid = 0;
 	int reg_temp[8];
-	void emit(const std::string &ins, const std::string &dst, const std::string &src);
-	void emit(const std::string &ins, const std::string &dst);
-	void allocreg(int t);
+	void emit(const char *ins, Operand *dst, Operand *src);
+	void emit(const char *ins, Operand *dst);
+	void emit(const char *ins);
 public:
 	std::vector<Quad> quads;
 	std::vector<int> temp_reg;
 	TempOperand *newtemp(int size);
 	LabelOperand *newlabel();
 	Symbol *lookup(const std::string &name) const;
-	TranslateEnv(SymbolTable *symtab, FILE *outfp): symtab(symtab), outfp(outfp) {}
+	TranslateEnv(SymbolTable *symtab, const std::string &procname, FILE *outfp, int framesize): symtab(symtab), procname(procname), outfp(outfp), framesize(framesize) {}
 	int level() const;
 	void gencode();
 };
 
 extern const char *regname[8];
+
+TempOperand *getphysreg(int id);
 
 void todo(const char *file, int line, const char *msg);
 #define TODO(msg) todo(__FILE__, __LINE__, msg)

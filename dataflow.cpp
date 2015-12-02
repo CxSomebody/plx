@@ -225,7 +225,7 @@ void print_bitset(const dynbitset &bs)
 }
 
 // returns interference graph
-Graph local_livevar(const BB &bb, size_t ntemp)
+void local_livevar(const BB &bb, size_t ntemp, Graph &ig)
 {
 	size_t n = bb.quads.size();
 	vector<dynbitset> def(n, dynbitset(8+ntemp));
@@ -250,7 +250,6 @@ Graph local_livevar(const BB &bb, size_t ntemp)
 			putchar('\n');
 		}
 	}
-	Graph ig(ntemp);
 	for (size_t i=0; i<n; i++) {
 		def[i].foreach([&](int tdef) {
 			out[i].foreach([&](int tlive) {
@@ -260,6 +259,4 @@ Graph local_livevar(const BB &bb, size_t ntemp)
 			});
 		});
 	}
-	ig.print();
-	return ig;
 }

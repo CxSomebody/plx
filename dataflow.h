@@ -29,5 +29,5 @@ public:
 };
 
 std::vector<std::unique_ptr<BB>> partition(const std::vector<Quad> &quads);
-Graph local_livevar(const BB &bb, size_t ntemp);
+void local_livevar(const BB &bb, size_t ntemp, Graph &ig);
 std::vector<int> color_graph(Graph &&g);

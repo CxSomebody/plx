@@ -33,8 +33,10 @@ Symbol *TranslateEnv::lookup(const std::string &name) const
 
 TempOperand *getphysreg(int id)
 {
-	static TempOperand physreg[8] =
-	{{~0,4}, {~1,4}, {~2,4}, {~3,4}, {~4,4}, {~5,4}, {~6,4}, {~7,4}};
+	static TempOperand physreg[8] = {
+		{~0,4}, {~1,4}, {~2,4}, {~3,4},
+		{~4,4}, {~5,4}, {~6,4}, {~7,4},
+	};
 	return &physreg[id];
 }
 
@@ -402,7 +404,7 @@ void Cond::translate(TranslateEnv &env, LabelOperand *label, bool negate) const
 			       astemp(right->translate(env), env));
 }
 
-void Block::allocaddr()
+int Block::allocaddr()
 {
 	int offset = 0;
 	for (VarSymbol *vs: vars) {
@@ -411,23 +413,18 @@ void Block::allocaddr()
 		offset = (offset-size) & ~(align-1);
 		vs->offset = offset;
 	}
+	return -offset;
 }
 
 void Block::translate(FILE *outfp)
 {
 	printf("begin %s\n", name.c_str());
-	TranslateEnv env(symtab, outfp);
-	allocaddr();
+	int framesize = allocaddr();
+	TranslateEnv env(symtab, name, outfp, framesize);
 	for (const unique_ptr<Block> &sub: subs)
 		sub->translate(outfp);
 	for (const unique_ptr<Stmt> &stmt: stmts)
 		stmt->translate(env);
-#if 0
-	for (const Quad &q: env.quads) {
-		q.print();
-		putchar('\n');
-	}
-#endif
 	env.gencode();
 	printf("end %s\n", name.c_str());
 }
@@ -436,6 +433,6 @@ void translate_all(unique_ptr<Block> &&blk)
 {
 	FILE *outfp = fopen("out.s", "w");
 	blk->translate(outfp);
-	blk->print(0);
+	//blk->print(0);
 	fclose(outfp);
 }

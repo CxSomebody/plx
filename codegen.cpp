@@ -1,4 +1,5 @@
 #include <cassert>
+#include <cctype>
 #include <cstdio>
 #include <memory>
 #include <sstream>
@@ -9,7 +10,6 @@
 
 using namespace std;
 
-#if 0
 static const char *opins[] = {
 	"add",
 	"sub",
@@ -21,17 +21,29 @@ static const char *opins[] = {
 	"jge",
 	"jg",
 	"jle",
+	"neg",
+	"mov",
+	"jmp",
+	"call",
+	"lea",
 };
-#endif
 
-void TranslateEnv::emit(const string &ins, const string &dst, const string &src)
+void TranslateEnv::emit(const char *ins, Operand *dst, Operand *src)
 {
-	fprintf(outfp, "\t%s\t%s, %s\n", ins.c_str(), dst.c_str(), src.c_str());
+	fprintf(outfp, "\t%s\t%s, %s\n", ins,
+		dst->gencode(*this).c_str(),
+		src->gencode(*this).c_str());
 }
 
-void TranslateEnv::emit(const string &ins, const string &dst)
+void TranslateEnv::emit(const char *ins, Operand *dst)
 {
-	fprintf(outfp, "\t%s\t%s\n", ins.c_str(), dst.c_str());
+	fprintf(outfp, "\t%s\t%s\n", ins,
+		dst->gencode(*this).c_str());
+}
+
+void TranslateEnv::emit(const char *ins)
+{
+	fprintf(outfp, "\t%s\n", ins);
 }
 
 void TranslateEnv::gencode()
@@ -50,36 +62,41 @@ void TranslateEnv::gencode()
 		return ss.str();
 	};
 	vector<unique_ptr<BB>> bbs = partition(quads);
+	Graph ig(tempid);
 	for (const unique_ptr<BB> &bb: bbs) {
 		printf("=== BLOCK %d pred=%s succ=%s ===\n", bb->id,
 		       bblisttostr(bb->pred).c_str(),
 		       bblisttostr(bb->succ).c_str());
-#if 0
-		for (const Quad &q: bb->quads) {
-			q.print();
-			putchar('\n');
-		}
-#endif
 		printf("tempid=%d\n", tempid);
-		color_graph(local_livevar(*bb, tempid));
+		local_livevar(*bb, tempid, ig);
 	}
-#if 0
-	temp_reg.resize(tempid);
+	temp_reg = color_graph(move(ig));
+	fprintf(outfp, "%s:\n", procname.c_str());
+	TempOperand *eax = getphysreg(0);
+	TempOperand *edx = getphysreg(2);
+	TempOperand *esp = getphysreg(4);
+	TempOperand *ebp = getphysreg(5);
+	// prologue
+	ImmOperand fs(framesize);
+	emit("push", ebp);
+	emit("mov", ebp, esp);
+	emit("sub", esp, &fs);
+	// body
 	for (const Quad &q: quads) {
 		switch (q.op) {
 		case Quad::ADD:
 		case Quad::SUB:
-			{
-				string c = q.c->gencode(*this);
-				string a = q.a->gencode(*this);
-				string b = q.b->gencode(*this);
-				emit("mov", c, a);
-				emit(opins[q.op], c, b);
-			}
-			break;
 		case Quad::MUL:
+			emit("mov", q.c, q.a);
+			emit(opins[q.op], q.c, q.b);
+			break;
 		case Quad::DIV:
-			TODO("mul/div");
+			// dividend in EDX:EAX
+			emit("mov", eax, q.a);
+			emit("xor", edx, edx);
+			emit("idiv", q.b);
+			// might be unnecessary
+			emit("mov", q.c, eax);
 			break;
 		case Quad::BEQ:
 		case Quad::BNE:
@@ -87,26 +104,30 @@ void TranslateEnv::gencode()
 		case Quad::BGE:
 		case Quad::BGT:
 		case Quad::BLE:
-			{
-				string c = q.c->gencode(*this);
-				string a = q.a->gencode(*this);
-				string b = q.b->gencode(*this);
-				emit("cmp", a, b);
-				emit(opins[q.op], c);
-			}
+			emit("cmp", q.a, q.b);
+			emit(opins[q.op], q.c);
 			break;
 		case Quad::MOV:
-			{
-				string c = q.c->gencode(*this);
-				string a = q.a->gencode(*this);
-				emit("mov", c, a);
-			}
+		case Quad::LEA:
+			emit(opins[q.op], q.c, q.a);
+			break;
+		case Quad::NEG:
+		case Quad::JMP:
+			emit(opins[q.op], q.c);
+			break;
+		case Quad::CALL:
+			// TODO
+			break;
+		case Quad::LABEL:
+			fprintf(outfp, "%s:\n", static_cast<LabelOperand*>(q.c)->label.c_str());
 			break;
 		default:
 			assert(0);
 		}
 	}
-#endif
+	// epilogue
+	emit("leave");
+	emit("ret");
 }
 
 string ImmOperand::gencode(TranslateEnv &env) const
@@ -124,13 +145,13 @@ const char *regname[8] = {
 string TempOperand::gencode(TranslateEnv &env) const
 {
 	int phy = id >= 0 ? env.temp_reg[id] : ~id;
-	assert(phy<8);
+	assert(phy >= 0 && phy < 8);
 	return regname[phy];
 }
 
 string LabelOperand::gencode(TranslateEnv &env) const
 {
-	return label;
+	return isalpha(label[0]) ? '$'+label : label;
 }
 
 string MemOperand::gencode(TranslateEnv &env) const

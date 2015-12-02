@@ -128,7 +128,7 @@ struct Block {
 		symtab(symtab) {}
 	void print(int level) const;
 	void translate(FILE *outfp);
-	void allocaddr();
+	int allocaddr(); // should not really belong to semant.h
 };
 
 struct Param {

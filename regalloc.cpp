@@ -30,6 +30,7 @@ vector<int> color_graph(Graph &&g)
 				return remove_nodes();
 			}
 		}
+		// no nodes with degree < k
 		for (int i=0; i<ntemp; i++) {
 			if (!removed_p[i]) {
 				remove_node(i);
@@ -55,7 +56,7 @@ vector<int> color_graph(Graph &&g)
 				break;
 			}
 		}
-		printf("color[%d] = %d\n", t, color[t]);
+		//printf("color[%d] = %d\n", t, color[t]);
 	}
 	return color;
 };

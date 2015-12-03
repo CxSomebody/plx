@@ -9,7 +9,7 @@ struct Operand {
 	} kind;
 	int size;
 	virtual void print() const = 0;
-	virtual std::string gencode(TranslateEnv &env) const = 0;
+	virtual std::string gencode() const = 0;
 	bool istemp() const { return kind == TEMP; }
 	bool ismem () const { return kind == MEM ; }
 protected:
@@ -24,7 +24,7 @@ struct ImmOperand: Operand
 	{
 		printf("%d", val);
 	}
-	std::string gencode(TranslateEnv &env) const override;
+	std::string gencode() const override;
 };
 
 struct TempOperand: Operand
@@ -36,7 +36,7 @@ struct TempOperand: Operand
 		void printtemp(int);
 		printtemp(id);
 	}
-	std::string gencode(TranslateEnv &env) const override;
+	std::string gencode() const override;
 };
 
 struct LabelOperand: Operand
@@ -47,7 +47,7 @@ struct LabelOperand: Operand
 	{
 		printf("%s", label.c_str());
 	}
-	std::string gencode(TranslateEnv &env) const override;
+	std::string gencode() const override;
 };
 
 struct MemOperand: Operand
@@ -112,7 +112,7 @@ struct MemOperand: Operand
 		}
 		putchar(']');
 	}
-	std::string gencode(TranslateEnv &env) const override;
+	std::string gencode() const override;
 };
 
 struct Quad {
@@ -200,6 +200,7 @@ class TranslateEnv {
 	void emit(const char *ins, Operand *dst);
 	void emit(const char *ins);
 	void emit_mov(Operand *dst, Operand *src);
+	void resolve(Operand *o);
 public:
 	std::vector<Quad> quads;
 	TempOperand *newtemp(int size);
@@ -216,6 +217,7 @@ extern const char *regname4[8];
 extern const char *regname1[4];
 
 extern TempOperand *eax, *ecx, *edx, *ebx, *esp, *ebp, *esi, *edi;
+TempOperand *getphysreg(int size, int id);
 
 void todo(const char *file, int line, const char *msg);
 #define TODO(msg) todo(__FILE__, __LINE__, msg)

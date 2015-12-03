@@ -40,19 +40,37 @@ Symbol *TranslateEnv::lookup(const std::string &name) const
 	return symtab->lookup(name);
 }
 
-static TempOperand physreg[8] = {
+static TempOperand physreg4[8] = {
 	{4,~0}, {4,~1}, {4,~2}, {4,~3},
 	{4,~4}, {4,~5}, {4,~6}, {4,~7},
 };
 
-TempOperand *eax = &physreg[0];
-TempOperand *ecx = &physreg[1];
-TempOperand *edx = &physreg[2];
-TempOperand *ebx = &physreg[3];
-TempOperand *esp = &physreg[4];
-TempOperand *ebp = &physreg[5];
-TempOperand *esi = &physreg[6];
-TempOperand *edi = &physreg[7];
+static TempOperand physreg1[4] = {
+	{1,~0}, {1,~1}, {1,~2}, {1,~3},
+};
+
+TempOperand *eax = &physreg4[0];
+TempOperand *ecx = &physreg4[1];
+TempOperand *edx = &physreg4[2];
+TempOperand *ebx = &physreg4[3];
+TempOperand *esp = &physreg4[4];
+TempOperand *ebp = &physreg4[5];
+TempOperand *esi = &physreg4[6];
+TempOperand *edi = &physreg4[7];
+
+TempOperand *getphysreg(int size, int id)
+{
+	assert(id >= 0);
+	if (size == 4) {
+		assert(id < 8);
+		return &physreg4[id];
+	}
+	if (size == 1) {
+		assert(id < 4);
+		return &physreg1[id];
+	}
+	assert(0);
+}
 
 #if 0
 TempOperand *al = &physreg[8];
@@ -240,7 +258,7 @@ void TranslateEnv::translate_call(ProcSymbol *proc, const vector<unique_ptr<Expr
 		quads.emplace_back(Quad::PUSH, i == level ?
 				   static_cast<Operand*>(ebp) :
 				   static_cast<Operand*>(new MemOperand(4, ebp, 8+(i-1)*4)));
-	printf("proc %s level=%d\n", proc->name.c_str(), proc->level);
+	//printf("proc %s level=%d\n", proc->name.c_str(), proc->level);
 	int spinc = (args.size()+(proc->level-1))*4;
 	quads.emplace_back(Quad::CALL, translate_sym(proc));
 	if (spinc)
@@ -521,7 +539,7 @@ int Block::allocaddr()
 void Block::translate(FILE *outfp)
 {
 	const char *block_name = proc ? proc->decorated_name.c_str() : "main";
-	printf("begin %s\n", block_name);
+	//printf("begin %s\n", block_name);
 	int framesize = allocaddr();
 	TranslateEnv env(symtab, block_name, outfp, framesize);
 	for (const unique_ptr<Block> &sub: subs)
@@ -534,7 +552,7 @@ void Block::translate(FILE *outfp)
 			env.quads.emplace_back(Quad::MOV, eax, env.translate_sym(retval));
 	}
 	env.gencode();
-	printf("end %s\n", block_name);
+	//printf("end %s\n", block_name);
 }
 
 static char sizechar(int size)

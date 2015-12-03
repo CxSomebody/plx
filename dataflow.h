@@ -30,4 +30,4 @@ public:
 
 std::vector<std::unique_ptr<BB>> partition(const std::vector<Quad> &quads);
 std::vector<int> color_graph(Graph &&g);
-Graph global_livevar(const TranslateEnv &env, int ntemp);
+Graph global_livevar(const std::vector<Quad> &quads, int ntemp);

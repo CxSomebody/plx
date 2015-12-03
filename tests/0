@@ -1,6 +1,0 @@
-var
-  a, b: integer;
-begin
-  a := 123+456;
-  b := a;
-end.

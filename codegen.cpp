@@ -38,14 +38,14 @@ static const char *opins[] = {
 void TranslateEnv::emit(const char *ins, Operand *dst, Operand *src)
 {
 	fprintf(outfp, "\t%s\t%s, %s\n", ins,
-		dst->gencode(*this).c_str(),
-		src->gencode(*this).c_str());
+		dst->gencode().c_str(),
+		src->gencode().c_str());
 }
 
 void TranslateEnv::emit(const char *ins, Operand *dst)
 {
 	fprintf(outfp, "\t%s\t%s\n", ins,
-		dst->gencode(*this).c_str());
+		dst->gencode().c_str());
 }
 
 void TranslateEnv::emit(const char *ins)
@@ -53,13 +53,33 @@ void TranslateEnv::emit(const char *ins)
 	fprintf(outfp, "\t%s\n", ins);
 }
 
+bool same_reg(Operand *a, Operand *b)
+{
+	return (a->istemp() &&
+		b->istemp() &&
+		a->size == b->size &&
+		astemp(a)->id == astemp(b)->id);
+}
+
 void TranslateEnv::emit_mov(Operand *dst, Operand *src)
 {
-	if (!(dst->istemp() &&
-	      src->istemp() &&
-	      physreg(astemp(dst)) ==
-	      physreg(astemp(src))))
+	if (!same_reg(dst, src))
 		emit("mov", dst, src);
+}
+
+void TranslateEnv::resolve(Operand *o)
+{
+	if (o) {
+		if (o->istemp()) {
+			TempOperand *t = astemp(o);
+			if (t->id >= 0)
+				t->id = ~temp_reg[t->id];
+		} else if (o->ismem()) {
+			MemOperand *m = static_cast<MemOperand*>(o);
+			resolve(m->baset);
+			resolve(m->index);
+		}
+	}
 }
 
 void TranslateEnv::gencode()
@@ -86,7 +106,12 @@ void TranslateEnv::gencode()
 		printf("tempid=%d\n", tempid);
 	}
 #endif
-	temp_reg = color_graph(global_livevar(*this, tempid));
+	temp_reg = color_graph(global_livevar(quads, tempid));
+	for (Quad &q: quads) {
+		resolve(q.c);
+		resolve(q.a);
+		resolve(q.b);
+	}
 	int maxphysreg = -1;
 	for (int i=0; i<tempid; i++) {
 		if (maxphysreg < temp_reg[i])
@@ -161,7 +186,7 @@ void TranslateEnv::gencode()
 	emit("ret");
 }
 
-string ImmOperand::gencode(TranslateEnv &env) const
+string ImmOperand::gencode() const
 {
 	char tmp[12];
 	sprintf(tmp, "%d", val);
@@ -177,10 +202,10 @@ const char *regname1[4] = {
 	"al", "cl", "dl", "bl",
 };
 
-string TempOperand::gencode(TranslateEnv &env) const
+string TempOperand::gencode() const
 {
-	int phy = env.physreg(this);
-	assert(phy >= 0);
+	assert(id < 0);
+	int phy = ~id;
 	if (size == 4) {
 		assert(phy < 8);
 		return regname4[phy];
@@ -192,17 +217,12 @@ string TempOperand::gencode(TranslateEnv &env) const
 	assert(0);
 }
 
-int TranslateEnv::physreg(const TempOperand *t)
-{
-	return t->id < 0 ? ~t->id : temp_reg[t->id];
-}
-
-string LabelOperand::gencode(TranslateEnv &env) const
+string LabelOperand::gencode() const
 {
 	return isalpha(label[0]) ? '$'+label : label;
 }
 
-string MemOperand::gencode(TranslateEnv &env) const
+string MemOperand::gencode() const
 {
 	stringstream ss;
 	if (size == 4) {
@@ -217,13 +237,13 @@ string MemOperand::gencode(TranslateEnv &env) const
 	ss << '[';
 	bool sep = false;
 	if (baset) {
-		ss << baset->gencode(env);
+		ss << baset->gencode();
 		sep = true;
 	}
 	if (basel) {
 		if (sep)
 			ss << '+';
-		ss << basel->gencode(env);
+		ss << basel->gencode();
 		sep = true;
 	}
 	if (offset) {
@@ -235,7 +255,7 @@ string MemOperand::gencode(TranslateEnv &env) const
 	if (index) {
 		if (sep)
 			ss << '+';
-		ss << index->gencode(env);
+		ss << index->gencode();
 		ss << '*' << scale;
 	}
 	ss << ']';

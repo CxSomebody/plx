@@ -226,9 +226,9 @@ void print_bitset(const dynbitset &bs)
 	putchar(']');
 }
 
-Graph global_livevar(const TranslateEnv &env, int ntemp)
+Graph global_livevar(const vector<Quad> &quads, int ntemp)
 {
-	size_t n = env.quads.size();
+	size_t n = quads.size();
 	map<string, int> labelmap;
 	vector<dynbitset> def(n, dynbitset(8+ntemp));
 	vector<dynbitset> use(n, dynbitset(8+ntemp));
@@ -236,7 +236,7 @@ Graph global_livevar(const TranslateEnv &env, int ntemp)
 	vector<dynbitset> in (n, dynbitset(8+ntemp));
 	vector<vector<int>> succ(n);
 	for (size_t i=0; i<n; i++) {
-		const Quad &q = env.quads[i];
+		const Quad &q = quads[i];
 		if (q.op == Quad::LABEL) {
 			labelmap[static_cast<LabelOperand*>(q.c)->label] = i;
 		} else {
@@ -245,7 +245,7 @@ Graph global_livevar(const TranslateEnv &env, int ntemp)
 		}
 	}
 	for (size_t i=0; i<n; i++) {
-		const Quad &q = env.quads[i];
+		const Quad &q = quads[i];
 		if (q.is_jump_or_branch())
 			succ[i].push_back(labelmap[static_cast<LabelOperand*>(q.c)->label]);
 		if (!q.isjump() && i != n-1)
@@ -265,8 +265,9 @@ Graph global_livevar(const TranslateEnv &env, int ntemp)
 			}
 		}
 	} while (changed);
+#if 0
 	for (size_t i=0; i<n; i++) {
-		env.quads[i].print();
+		quads[i].print();
 		printf(" -- def=");
 		print_bitset(def[i]);
 		printf(" use=");
@@ -275,6 +276,7 @@ Graph global_livevar(const TranslateEnv &env, int ntemp)
 		print_bitset(out[i]);
 		putchar('\n');
 	}
+#endif
 	Graph ig(ntemp);
 	for (size_t i=0; i<n; i++) {
 		def[i].foreach([&](int tdef) {

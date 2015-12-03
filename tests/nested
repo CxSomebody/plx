@@ -25,5 +25,5 @@ begin
   q(a+a)
 end;
 begin
-  write(f(111))
+  write(f(1))
 end.

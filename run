@@ -2,4 +2,8 @@ set -e
 ./plx tests/$1
 nasm -felf32 out.s
 gcc -m32 out.o
-exec ./a.out < tests/$1.in
+if [ -f tests/$1.in ]; then
+	exec ./a.out < tests/$1.in
+else
+	exec ./a.out
+fi

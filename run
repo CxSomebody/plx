@@ -1,0 +1,5 @@
+set -e
+./plx tests/$1
+nasm -felf32 out.s
+gcc -m32 out.o
+exec ./a.out

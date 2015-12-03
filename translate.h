@@ -7,24 +7,22 @@ struct Operand {
 		MEM,
 		LABEL,
 	} kind;
+	int size;
 	virtual void print() const = 0;
 	virtual std::string gencode(TranslateEnv &env) const = 0;
-	virtual int size() const = 0;
+	bool istemp() const { return kind == TEMP; }
+	bool ismem () const { return kind == MEM ; }
 protected:
-	Operand(Kind kind): kind(kind) {}
+	Operand(Kind kind, int size): kind(kind), size(size) {}
 };
 
 struct ImmOperand: Operand
 {
 	int val;
-	ImmOperand(int val): Operand(IMM), val(val) {}
+	ImmOperand(int val): Operand(IMM, 4), val(val) {}
 	void print() const override
 	{
 		printf("%d", val);
-	}
-	int size() const override
-	{
-		return 4;
 	}
 	std::string gencode(TranslateEnv &env) const override;
 };
@@ -32,16 +30,11 @@ struct ImmOperand: Operand
 struct TempOperand: Operand
 {
 	int id;
-	int _size;
-	TempOperand(int id, int size): Operand(TEMP), id(id), _size(size) {}
+	TempOperand(int size, int id): Operand(TEMP, size), id(id) {}
 	void print() const override
 	{
 		void printtemp(int);
 		printtemp(id);
-	}
-	int size() const override
-	{
-		return _size;
 	}
 	std::string gencode(TranslateEnv &env) const override;
 };
@@ -49,21 +42,16 @@ struct TempOperand: Operand
 struct LabelOperand: Operand
 {
 	std::string label;
-	LabelOperand(const std::string &label): Operand(LABEL), label(label) {}
+	LabelOperand(const std::string &label): Operand(LABEL, 4), label(label) {}
 	void print() const override
 	{
 		printf("%s", label.c_str());
-	}
-	int size() const override
-	{
-		return 4; // a label is a pointer
 	}
 	std::string gencode(TranslateEnv &env) const override;
 };
 
 struct MemOperand: Operand
 {
-	int _size;
 	TempOperand *baset;
 	LabelOperand *basel;
 	int offset;
@@ -74,8 +62,7 @@ struct MemOperand: Operand
 		   int offset,
 		   TempOperand *index,
 		   int scale):
-		Operand(MEM),
-		_size(size),
+		Operand(MEM, size),
 		baset(baset),
 		basel(nullptr),
 		offset(offset),
@@ -88,8 +75,7 @@ struct MemOperand: Operand
 		   int offset,
 		   TempOperand *index,
 		   int scale):
-		Operand(MEM),
-		_size(size),
+		Operand(MEM, size),
 		baset(nullptr),
 		basel(basel),
 		offset(offset),
@@ -101,7 +87,7 @@ struct MemOperand: Operand
 		MemOperand(size, basel, 0, nullptr, 0) {}
 	void print() const override
 	{
-		printf("%d", _size);
+		printf("%d", size);
 		putchar('[');
 		bool sep = false;
 		if (baset) {
@@ -126,10 +112,6 @@ struct MemOperand: Operand
 		}
 		putchar(']');
 	}
-	int size() const override
-	{
-		return _size;
-	}
 	std::string gencode(TranslateEnv &env) const override;
 };
 
@@ -153,6 +135,8 @@ struct Quad {
 		PUSH,
 		INC,
 		DEC,
+		SEX,
+		CDQ,
 		LABEL,
 	} op;
 	Operand *c, *a, *b;
@@ -160,6 +144,7 @@ struct Quad {
 		op(op), c(c), a(a), b(b) {}
 	Quad(Op op, Operand *c, Operand *a): Quad(op, c, a, nullptr) {}
 	Quad(Op op, Operand *c): Quad(op, c, nullptr, nullptr) {}
+	Quad(Op op): Quad(op, nullptr, nullptr, nullptr) {}
 	void print() const;
 	bool isjump() const
 	{
@@ -227,7 +212,8 @@ public:
 	void gencode();
 };
 
-extern const char *regname[8];
+extern const char *regname4[8];
+extern const char *regname1[4];
 
 extern TempOperand *eax, *ecx, *edx, *ebx, *esp, *ebp, *esi, *edi;
 

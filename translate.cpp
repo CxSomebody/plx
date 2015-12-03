@@ -9,10 +9,10 @@
 using namespace std;
 
 static const char *opstr[] = {
-	"+",
-	"-",
-	"*",
-	"/",
+	"+=",
+	"-=",
+	"*=",
+	nullptr,
 	"=",
 	"<>",
 	"<",
@@ -41,8 +41,8 @@ Symbol *TranslateEnv::lookup(const std::string &name) const
 }
 
 static TempOperand physreg[8] = {
-	{~0,4}, {~1,4}, {~2,4}, {~3,4},
-	{~4,4}, {~5,4}, {~6,4}, {~7,4},
+	{4,~0}, {4,~1}, {4,~2}, {4,~3},
+	{4,~4}, {4,~5}, {4,~6}, {4,~7},
 };
 
 TempOperand *eax = &physreg[0];
@@ -53,6 +53,13 @@ TempOperand *esp = &physreg[4];
 TempOperand *ebp = &physreg[5];
 TempOperand *esi = &physreg[6];
 TempOperand *edi = &physreg[7];
+
+#if 0
+TempOperand *al = &physreg[8];
+TempOperand *cl = &physreg[9];
+TempOperand *dl = &physreg[10];
+TempOperand *bl = &physreg[11];
+#endif
 
 void todo(const char *file, int line, const char *msg)
 {
@@ -66,18 +73,17 @@ void Quad::print() const
 	case Quad::ADD:
 	case Quad::SUB:
 	case Quad::MUL:
-	case Quad::DIV:
 		c->print();
-		printf(" = ");
-		a->print();
 		printf(" %s ", opstr[op]);
-		b->print();
+		a->print();
+		break;
+	case Quad::DIV:
+		printf("div ");
+		c->print();
 		break;
 	case Quad::NEG:
+		printf("neg ");
 		c->print();
-		printf(" = ");
-		putchar('-');
-		a->print();
 		break;
 	case Quad::MOV:
 		c->print();
@@ -127,6 +133,14 @@ void Quad::print() const
 		printf("dec ");
 		c->print();
 		break;
+	case Quad::SEX:
+		c->print();
+		printf(" = sex ");
+		a->print();
+		break;
+	case Quad::CDQ:
+		printf("cdq");
+		break;
 	default:
 		assert(0);
 	}
@@ -134,7 +148,7 @@ void Quad::print() const
 
 TempOperand *TranslateEnv::newtemp(int size)
 {
-	return new TempOperand(tempid++, size);
+	return new TempOperand(size, tempid++);
 }
 
 LabelOperand *TranslateEnv::newlabel()
@@ -142,6 +156,31 @@ LabelOperand *TranslateEnv::newlabel()
 	char tmp[16];
 	sprintf(tmp, ".l%d", labelid++);
 	return new LabelOperand(tmp);
+}
+
+TempOperand *astemp(Operand *o, TranslateEnv &env)
+{
+	if (o->kind != Operand::TEMP) {
+		TempOperand *t = env.newtemp(o->size);
+		env.quads.emplace_back(Quad::MOV, t, o);
+		return t;
+	}
+	return static_cast<TempOperand*>(o);
+}
+
+Operand *resize(TranslateEnv &env, int size, Operand *o)
+{
+	if (size == o->size)
+		return o;
+	TempOperand *t;
+	if (size > o->size) {
+		t = env.newtemp(size);
+		env.quads.emplace_back(Quad::SEX, t, o);
+	} else {
+		// TODO what if physreg for t is none of e[acdb]x
+		t = new TempOperand(size, astemp(o, env)->id);
+	}
+	return t;
 }
 
 Operand *TranslateEnv::translate_sym(Symbol *sym)
@@ -190,11 +229,11 @@ void TranslateEnv::translate_call(ProcSymbol *proc, const vector<unique_ptr<Expr
 		if (proc->params[i].byref) {
 			TempOperand *addr = newtemp(4);
 			assert(o->kind == Operand::MEM);
-			static_cast<MemOperand*>(o)->_size = 0;
+			static_cast<MemOperand*>(o)->size = 0;
 			quads.emplace_back(Quad::LEA, addr, o);
 			o = addr;
 		}
-		quads.emplace_back(Quad::PUSH, o);
+		quads.emplace_back(Quad::PUSH, resize(*this, 4, o));
 		i++;
 	}
 	assert(proc->level > 0 && proc->level <= level+1);
@@ -206,17 +245,7 @@ void TranslateEnv::translate_call(ProcSymbol *proc, const vector<unique_ptr<Expr
 	int spinc = (args.size()+(proc->level-1))*4;
 	quads.emplace_back(Quad::CALL, translate_sym(proc));
 	if (spinc)
-		quads.emplace_back(Quad::ADD, esp, esp, new ImmOperand(spinc));
-}
-
-TempOperand *astemp(Operand *o, TranslateEnv &env)
-{
-	if (o->kind != Operand::TEMP) {
-		TempOperand *t = env.newtemp(o->size());
-		env.quads.emplace_back(Quad::MOV, t, o);
-		return t;
-	}
-	return static_cast<TempOperand*>(o);
+		quads.emplace_back(Quad::ADD, esp, new ImmOperand(spinc));
 }
 
 Operand *SymExpr::translate(TranslateEnv &env) const
@@ -231,7 +260,7 @@ Operand *LitExpr::translate(TranslateEnv &env) const
 
 Operand *BinaryExpr::translate(TranslateEnv &env) const
 {
-	Operand *c;
+	Operand *c, *a, *b;
 	Quad::Op qop;
 	switch (op) {
 	case ADD: qop = Quad::ADD; break;
@@ -241,7 +270,21 @@ Operand *BinaryExpr::translate(TranslateEnv &env) const
 	default: assert(0);
 	}
 	c = env.newtemp(type->size());
-	env.quads.emplace_back(qop, c, astemp(left->translate(env), env), astemp(right->translate(env), env));
+	a = resize(env, c->size, astemp(left ->translate(env), env));
+	b = resize(env, c->size, astemp(right->translate(env), env));
+	if (op == DIV) {
+		if (c->size == 4) {
+			env.quads.emplace_back(Quad::MOV, eax, a);
+			env.quads.emplace_back(Quad::CDQ);
+			env.quads.emplace_back(Quad::DIV, b);
+			env.quads.emplace_back(Quad::MOV, c, eax);
+		} else {
+			TODO("DIV with size(c) != 4");
+		}
+	} else {
+		env.quads.emplace_back(Quad::MOV, c, a);
+		env.quads.emplace_back(qop, c, b);
+	}
 	return c;
 }
 
@@ -258,7 +301,7 @@ Operand *IndexExpr::translate(TranslateEnv &env) const
 	assert(c->kind == Operand::MEM);
 	MemOperand *moarray = static_cast<MemOperand*>(c);
 	assert(!moarray->index);
-	moarray->_size = type->size();
+	moarray->size = type->size();
 	Operand *oindex = index->translate(env);
 	if (oindex->kind == Operand::MEM) {
 		TempOperand *tmp = env.newtemp(index->type->size());
@@ -284,7 +327,10 @@ Operand *UnaryExpr::translate(TranslateEnv &env) const
 	default: assert(0);
 	}
 	Operand *c = env.newtemp(type->size());
-	env.quads.emplace_back(qop, c, sub->translate(env));
+	Operand *a = sub->translate(env);
+	assert(c->size == a->size);
+	env.quads.emplace_back(Quad::MOV, c, a);
+	env.quads.emplace_back(qop, c);
 	return c;
 }
 
@@ -316,6 +362,7 @@ void AssignStmt::translate(TranslateEnv &env) const
 		ovar = var->translate(env);
 	}
 	Operand *oval = astemp(val->translate(env), env);
+	oval = resize(env, ovar->size, oval);
 	env.quads.emplace_back(Quad::MOV, ovar, oval);
 }
 
@@ -390,7 +437,7 @@ void ReadStmt::translate(TranslateEnv &env) const
 		Operand *o = var->translate(env);
 		assert(o->kind == Operand::MEM);
 		// nasm does not allow size prefix here
-		static_cast<MemOperand*>(o)->_size = 0;
+		static_cast<MemOperand*>(o)->size = 0;
 		Operand *addr = env.newtemp(4);
 		env.quads.emplace_back(Quad::LEA, addr, o);
 		Operand *fmtstr;
@@ -403,15 +450,27 @@ void ReadStmt::translate(TranslateEnv &env) const
 		env.quads.emplace_back(Quad::PUSH, addr);
 		env.quads.emplace_back(Quad::PUSH, fmtstr);
 		env.quads.emplace_back(Quad::CALL, &o_scanf);
-		env.quads.emplace_back(Quad::ADD, esp, esp, new ImmOperand(8));
+		env.quads.emplace_back(Quad::ADD, esp, new ImmOperand(8));
 	}
 }
+
+static vector<string> strings;
 
 void WriteStmt::translate(TranslateEnv &env) const
 {
 	static LabelOperand o_printf("printf");
+	static LabelOperand o_putchar("putchar");
 	Operand *fmtstr;
-	// TODO handle str
+	if (!str.empty()) {
+		char strlabel[16];
+		sprintf(strlabel, "_$s%d", int(strings.size()));
+		strings.push_back(str);
+		fmtstr = new LabelOperand("_$fmtps");
+		env.quads.emplace_back(Quad::PUSH, new LabelOperand(strlabel));
+		env.quads.emplace_back(Quad::PUSH, fmtstr);
+		env.quads.emplace_back(Quad::CALL, &o_printf);
+		env.quads.emplace_back(Quad::ADD, esp, new ImmOperand(8));
+	}
 	if (val) {
 		if (val->type == int_type())
 			fmtstr = new LabelOperand("_$fmtpd");
@@ -419,10 +478,15 @@ void WriteStmt::translate(TranslateEnv &env) const
 			fmtstr = new LabelOperand("_$fmtpc");
 		else
 			assert(0);
-		env.quads.emplace_back(Quad::PUSH, val->translate(env));
+		env.quads.emplace_back(Quad::PUSH, resize(env, 4, val->translate(env)));
 		env.quads.emplace_back(Quad::PUSH, fmtstr);
 		env.quads.emplace_back(Quad::CALL, &o_printf);
-		env.quads.emplace_back(Quad::ADD, esp, esp, new ImmOperand(8));
+		env.quads.emplace_back(Quad::ADD, esp, new ImmOperand(8));
+	}
+	if (!str.empty() || val->type == int_type()) {
+		env.quads.emplace_back(Quad::PUSH, new ImmOperand(10));
+		env.quads.emplace_back(Quad::CALL, &o_putchar);
+		env.quads.emplace_back(Quad::ADD, esp, new ImmOperand(4));
 	}
 }
 
@@ -486,17 +550,7 @@ void translate_all(unique_ptr<Block> &&blk)
 {
 	FILE *outfp = fopen("out.s", "w");
 	fputs("\tglobal\tmain\n"
-	      "\textern\tprintf, scanf\n"
-	      "\n"
-	      "\tsection\t.data\n"
-	      "_$fmtsd:\n"
-	      "\tdb\t'%d',0\n"
-	      "_$fmtsc:\n"
-	      "\tdb\t' %c',0\n"
-	      "_$fmtpd:\n"
-	      "\tdb\t'%d',10,0\n"
-	      "_$fmtpc:\n"
-	      "\tdb\t'%c',10,0\n"
+	      "\textern\tprintf, scanf, putchar\n"
 	      "\n"
 	      "\tsection\t.bss\n", outfp);
 	for (VarSymbol *vs: blk->vars) {
@@ -508,5 +562,22 @@ void translate_all(unique_ptr<Block> &&blk)
 	fputs("\n\tsection\t.text\n", outfp);
 	blk->translate(outfp);
 	//blk->print(0);
+	fputs("\n"
+	      "\tsection\t.data\n"
+	      "_$fmtsd:\n"
+	      "\tdb\t'%d',0\n"
+	      "_$fmtsc:\n"
+	      "\tdb\t' %c',0\n"
+	      "_$fmtpd:\n"
+	      "\tdb\t'%d',0\n"
+	      "_$fmtpc:\n"
+	      "\tdb\t'%c',0\n"
+	      "_$fmtps:\n"
+	      "\tdb\t'%s',0\n", outfp);
+	int n = strings.size();
+	for (int i=0; i<n; i++) {
+		// TODO escape quotes
+		fprintf(outfp, "_$s%d:\n\tdb\t\"%s\",0\n", i, strings[i].c_str());
+	}
 	fclose(outfp);
 }

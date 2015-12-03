@@ -40,7 +40,7 @@ procedure printstr;
 var
   i: integer;
 begin
-  for i:=sp to 79 do write(str[sp])
+  for i:=sp to 79 do write(str[i])
 end;
 function gcd(a, b: integer): integer;
 begin

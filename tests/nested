@@ -1,6 +1,14 @@
-procedure g(a: integer);
+procedure p(a: integer);
+  procedure q;
+    procedure r;
+    begin
+      write(a)
+    end
+  begin
+    r
+  end
 begin
-  write(a)
+  q
 end;
 function f(a: integer): integer;
   procedure q(b: integer);
@@ -9,10 +17,11 @@ function f(a: integer): integer;
       f := a+b+c
     end;
   begin
-    g(a);
+    p(b);
     r(b+b)
   end;
 begin
+  p(a);
   q(a+a)
 end;
 begin

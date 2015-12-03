@@ -1,11 +1,9 @@
 lexer出错如何处理？如引号不匹配
 报错，跳至下一行
 
-内层过程存取外层变量
-
 所有的lvalue都将translate为mem-operand，可以使用lea指令取得其地址
 
-现阶段，把read语句翻译为n个printf
+现阶段，把read语句翻译为n个scanf
 
 不能用defvar处理函数返回值，会遮蔽函数符号！改名就好，f$
 
@@ -13,3 +11,8 @@ lexer出错如何处理？如引号不匹配
 可能导致spill
 
 lea的src operand（一定是mem）前不能带有size prefix
+解决方案：设size为0
+
+function returning char
+
+function missing return type declaration

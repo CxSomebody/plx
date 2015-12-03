@@ -206,7 +206,7 @@ static unique_ptr<Block> block(ProcHeader &&header)
 {
 	X _{';', '.'};
 	try {
-		push_symtab();
+		push_symtab(header.name);
 		def_params(header.params);
 		if (tok.sym == T_CONST) {
 			getsym();

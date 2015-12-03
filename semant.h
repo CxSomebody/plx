@@ -105,6 +105,7 @@ struct ProcSymbol: Symbol
 {
 	std::vector<Param> params;
 	Type *rettype;
+	std::string decorated_name;
 	ProcSymbol(const std::string &name, int level, const std::vector<Param> &params, Type *rettype):
 		Symbol(PROC, name, nullptr, level), params(params), rettype(rettype) {}
 };

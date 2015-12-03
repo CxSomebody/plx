@@ -12,11 +12,6 @@
 
 using namespace std;
 
-bool istemp(Operand *o)
-{
-	return o->kind == Operand::TEMP;
-}
-
 vector<unique_ptr<BB>> partition(const vector<Quad> &quads)
 {
 	map<string, BB*> table;
@@ -71,25 +66,25 @@ vector<unique_ptr<BB>> partition(const vector<Quad> &quads)
 void compute_def(const Quad &q, dynbitset &ret)
 {
 	auto def = [&](Operand *o) {
-		if (o->kind == Operand::TEMP)
+		if (o->istemp())
 			ret.set(8+astemp(o)->id);
 	};
 	switch (q.op) {
 	case Quad::DIV:
-		ret.set(8+~0); // eax
-		ret.set(8+~2); // edx
-		/* fallthrough */
+		def(eax);
+		def(edx);
+		break;
 	case Quad::ADD:
 	case Quad::SUB:
 	case Quad::MUL:
-	//case Quad::DIV:
 	case Quad::NEG:
 	case Quad::MOV:
 	case Quad::LEA:
 	case Quad::INC:
 	case Quad::DEC:
+	case Quad::SEX:
 		def(q.c);
-		/* fallthrough */
+		break;
 	case Quad::BEQ:
 	case Quad::BNE:
 	case Quad::BLT:
@@ -100,9 +95,12 @@ void compute_def(const Quad &q, dynbitset &ret)
 	case Quad::PUSH:
 		break;
 	case Quad::CALL:
-		ret.set(8+~0); // eax
-		ret.set(8+~1); // ecx
-		ret.set(8+~2); // edx
+		def(eax);
+		def(ecx);
+		def(edx);
+		break;
+	case Quad::CDQ:
+		def(edx);
 		break;
 	default:
 		assert(0);
@@ -118,39 +116,48 @@ void compute_use(const Quad &q, dynbitset &ret)
 			ret.set(8+m->index->id);
 	};
 	auto use = [&](Operand *o) {
-		if (o->kind == Operand::TEMP) {
+		if (o->istemp()) {
 			ret.set(8+astemp(o)->id);
-		} else if (o->kind == Operand::MEM) {
+		} else if (o->ismem()) {
 			usemem(static_cast<MemOperand*>(o));
 		}
 	};
-	if (q.c && q.c->kind == Operand::MEM)
-		usemem(static_cast<MemOperand*>(q.c));
 	switch (q.op) {
 	case Quad::ADD:
 	case Quad::SUB:
 	case Quad::MUL:
+	case Quad::MOV:
+	case Quad::LEA:
+	case Quad::SEX:
+		if (q.c->ismem())
+			usemem(static_cast<MemOperand*>(q.c));
+		use(q.a);
+		break;
 	case Quad::DIV:
+		use(eax);
+		use(edx);
+		use(q.c);
+		break;
 	case Quad::BEQ:
 	case Quad::BNE:
 	case Quad::BLT:
 	case Quad::BGE:
 	case Quad::BGT:
 	case Quad::BLE:
-		use(q.b);
-		/* fallthrough */
-	case Quad::NEG:
-	case Quad::MOV:
-	case Quad::LEA:
 		use(q.a);
-		/* fallthrough */
+		use(q.b);
+		break;
 	case Quad::JMP:
 	case Quad::CALL:
 		break;
+	case Quad::NEG:
 	case Quad::PUSH:
 	case Quad::INC:
 	case Quad::DEC:
 		use(q.c);
+		break;
+	case Quad::CDQ:
+		use(eax);
 		break;
 	default:
 		assert(0);
@@ -171,7 +178,7 @@ void Graph::connect(int a, int b)
 void printtemp(int t)
 {
 	if (t<0) {
-		printf("%s", regname[~t]);
+		printf("%s", regname4[~t]);
 	} else {
 		printf("$%d", t);
 	}

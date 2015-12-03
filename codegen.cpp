@@ -8,13 +8,15 @@
 #include "translate.h"
 #include "dataflow.h"
 
+#define astemp static_cast<TempOperand*>
+
 using namespace std;
 
 static const char *opins[] = {
 	"add",
 	"sub",
 	"imul",
-	nullptr, // idiv
+	"idiv",
 	"je",
 	"jne",
 	"jl",
@@ -29,6 +31,8 @@ static const char *opins[] = {
 	"push",
 	"inc",
 	"dec",
+	"movsx",
+	"cdq",
 };
 
 void TranslateEnv::emit(const char *ins, Operand *dst, Operand *src)
@@ -51,10 +55,10 @@ void TranslateEnv::emit(const char *ins)
 
 void TranslateEnv::emit_mov(Operand *dst, Operand *src)
 {
-	if (!(dst->kind == Operand::TEMP &&
-	      src->kind == Operand::TEMP &&
-	      physreg(static_cast<TempOperand*>(dst)) ==
-	      physreg(static_cast<TempOperand*>(src))))
+	if (!(dst->istemp() &&
+	      src->istemp() &&
+	      physreg(astemp(dst)) ==
+	      physreg(astemp(src))))
 		emit("mov", dst, src);
 }
 
@@ -111,15 +115,18 @@ void TranslateEnv::gencode()
 		case Quad::ADD:
 		case Quad::SUB:
 		case Quad::MUL:
-			emit_mov(q.c, q.a);
-			emit(opins[q.op], q.c, q.b);
+		case Quad::LEA:
+		case Quad::SEX:
+			emit(opins[q.op], q.c, q.a);
 			break;
 		case Quad::DIV:
-			// dividend in EDX:EAX
-			emit_mov(eax, q.a);
-			emit("xor", edx, edx);
-			emit("idiv", q.b);
-			emit_mov(q.c, eax);
+		case Quad::NEG:
+		case Quad::JMP:
+		case Quad::CALL:
+		case Quad::PUSH:
+		case Quad::INC:
+		case Quad::DEC:
+			emit(opins[q.op], q.c);
 			break;
 		case Quad::BEQ:
 		case Quad::BNE:
@@ -131,16 +138,10 @@ void TranslateEnv::gencode()
 			emit(opins[q.op], q.c);
 			break;
 		case Quad::MOV:
-		case Quad::LEA:
-			emit(opins[q.op], q.c, q.a);
+			emit_mov(q.c, q.a);
 			break;
-		case Quad::NEG:
-		case Quad::JMP:
-		case Quad::CALL:
-		case Quad::PUSH:
-		case Quad::INC:
-		case Quad::DEC:
-			emit(opins[q.op], q.c);
+		case Quad::CDQ:
+			emit(opins[q.op]);
 			break;
 		case Quad::LABEL:
 			fprintf(outfp, "%s:\n", static_cast<LabelOperand*>(q.c)->label.c_str());
@@ -167,18 +168,28 @@ string ImmOperand::gencode(TranslateEnv &env) const
 	return string(tmp);
 }
 
-const char *regname[8] = {
+const char *regname4[8] = {
 	"eax", "ecx", "edx", "ebx",
 	"esp", "ebp", "esi", "edi",
 };
 
+const char *regname1[4] = {
+	"al", "cl", "dl", "bl",
+};
+
 string TempOperand::gencode(TranslateEnv &env) const
 {
-	if (_size != 4)
-		TODO("temp size other than 4");
 	int phy = env.physreg(this);
-	assert(phy >= 0 && phy < 8);
-	return regname[phy];
+	assert(phy >= 0);
+	if (size == 4) {
+		assert(phy < 8);
+		return regname4[phy];
+	}
+	if (size == 1) {
+		assert(phy < 4);
+		return regname1[phy];
+	}
+	assert(0);
 }
 
 int TranslateEnv::physreg(const TempOperand *t)
@@ -194,11 +205,11 @@ string LabelOperand::gencode(TranslateEnv &env) const
 string MemOperand::gencode(TranslateEnv &env) const
 {
 	stringstream ss;
-	if (_size == 4) {
+	if (size == 4) {
 		ss << "dword ";
-	} else if (_size == 1) {
+	} else if (size == 1) {
 		ss << "byte ";
-	} else if (_size == 0) {
+	} else if (size == 0) {
 		/* do nothing */
 	} else {
 		assert(0);

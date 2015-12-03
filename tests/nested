@@ -3,10 +3,10 @@ procedure p(a: integer);
     procedure r;
     begin
       write(a)
-    end
+    end;
   begin
     r
-  end
+  end;
 begin
   q
 end;

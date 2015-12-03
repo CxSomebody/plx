@@ -61,12 +61,14 @@ VarSymbol *def_var(const string &name, Type *type)
 	return nullptr;
 }
 
-void def_func(const ProcHeader &header, const vector<Param> &params, Type *rettype)
+ProcSymbol *def_func(const string &name, const vector<Param> &params, Type *rettype)
 {
-	const string &name = header.name;
 	if (check_redef(name)) {
-		symtab->map[name] = new ProcSymbol(name, symtab->level+1, params, rettype);
+		ProcSymbol *ps = new ProcSymbol(name, symtab->proc, params, rettype);
+		symtab->map[name] = ps;
+		return ps;
 	}
+	return nullptr;
 }
 
 void def_params(const vector<Param> &params)
@@ -155,10 +157,10 @@ void SymbolTable::print(int level) const
 	}
 }
 
-void push_symtab()
+void push_symtab(ProcSymbol *proc)
 {
 	int nextlevel = symtab ? symtab->level+1 : 0;
-	SymbolTable *newst = new SymbolTable(symtab, nextlevel);
+	SymbolTable *newst = new SymbolTable(symtab, proc, nextlevel);
 	symtab = newst;
 }
 
@@ -174,7 +176,7 @@ void print_stmt(Stmt *s);
 void Block::print(int level) const
 {
 	indent(level);
-	printf("%s\n", name.c_str());
+	printf("%s\n", proc->decorated_name.c_str());
 	symtab->print(level);
 	indent(level);
 	printf("{\n");

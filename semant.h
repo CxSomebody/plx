@@ -101,38 +101,44 @@ struct ConstSymbol: Symbol
 		Symbol(CONST, name, int_type(), level), val(val) {}
 };
 
+struct ProcSymbol;
+
+struct SymbolTable {
+	std::map<std::string, Symbol*> map;
+	SymbolTable *up;
+	ProcSymbol *proc;
+	int level;
+	SymbolTable(SymbolTable *up, ProcSymbol *proc, int level): up(up), proc(proc), level(level) {}
+	Symbol *lookup(const std::string &name);
+	void print(int level) const;
+};
+
 struct ProcSymbol: Symbol
 {
 	std::vector<Param> params;
 	Type *rettype;
 	std::string decorated_name;
-	ProcSymbol(const std::string &name, int level, const std::vector<Param> &params, Type *rettype):
-		Symbol(PROC, name, nullptr, level), params(params), rettype(rettype) {}
+	ProcSymbol(const std::string &name, ProcSymbol *up, const std::vector<Param> &params, Type *rettype):
+		Symbol(PROC, name, nullptr, up ? up->level+1 : 1),
+		params(params),
+		rettype(rettype),
+		decorated_name(up ? up->decorated_name+'$'+name : name) {}
 };
 
 struct Stmt;
 
-struct SymbolTable {
-	std::map<std::string, Symbol*> map;
-	SymbolTable *up;
-	int level;
-	SymbolTable(SymbolTable *up, int level): up(up), level(level) {}
-	Symbol *lookup(const std::string &name);
-	void print(int level) const;
-};
-
 struct Block {
-	std::string name;
+	ProcSymbol *proc;
 	std::vector<std::unique_ptr<Block>> subs;
 	std::vector<VarSymbol*> vars;
 	std::vector<std::unique_ptr<Stmt>> stmts;
 	SymbolTable *symtab;
-	Block(std::string &&name,
+	Block(ProcSymbol *proc,
 	      decltype(subs) &&subs,
 	      decltype(vars) &&vars,
 	      decltype(stmts)&&stmts,
 	      SymbolTable *symtab):
-		name(move(name)),
+		proc(proc),
 		subs(move(subs)),
 		vars(move(vars)),
 		stmts(move(stmts)),
@@ -142,18 +148,9 @@ struct Block {
 	int allocaddr(); // should not really belong to semant.h
 };
 
-struct ProcHeader {
-	std::string name;
-	std::vector<Param> params;
-	Type *rettype;
-	ProcHeader() = default;
-	ProcHeader(const std::string &name, std::vector<Param> &&params, Type *rettype):
-		name(name), params(std::move(params)), rettype(rettype) {}
-};
-
 void def_const(const std::string &name, int val);
 VarSymbol *def_var(const std::string &name, Type *type);
-void def_func(const ProcHeader &header, const std::vector<Param> &params, Type *rettype);
+ProcSymbol *def_func(const std::string &name, const std::vector<Param> &params, Type *rettype);
 void def_params(const std::vector<Param> &params);
 Type *error_type();
 Type *int_type();
@@ -161,7 +158,7 @@ Type *char_type();
 Type *array_type(Type *elty, int n);
 bool is_proc(const std::string &ident);
 std::vector<Param> param_group(std::vector<std::string> &&names, Type *type, bool byref);
-void push_symtab();
+void push_symtab(ProcSymbol *proc);
 SymbolTable *pop_symtab();
 void translate_all(std::unique_ptr<Block> &&blk);
 Symbol *lookup(const std::string &name);

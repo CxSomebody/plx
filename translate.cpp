@@ -213,8 +213,7 @@ Operand *TranslateEnv::translate_sym(Symbol *sym)
 	}
 	if (sym->kind == Symbol::PROC) {
 		// address of function
-		// TODO decorate inner function names
-		return new LabelOperand(sym->name);
+		return new LabelOperand(static_cast<ProcSymbol*>(sym)->decorated_name);
 	}
 	assert(sym->kind == Symbol::CONST);
 	return new ImmOperand(static_cast<ConstSymbol*>(sym)->val);
@@ -521,18 +520,21 @@ int Block::allocaddr()
 
 void Block::translate(FILE *outfp)
 {
-	printf("begin %s\n", name.c_str());
+	const char *block_name = proc ? proc->decorated_name.c_str() : "main";
+	printf("begin %s\n", block_name);
 	int framesize = allocaddr();
-	TranslateEnv env(symtab, name, outfp, framesize);
+	TranslateEnv env(symtab, block_name, outfp, framesize);
 	for (const unique_ptr<Block> &sub: subs)
 		sub->translate(outfp);
 	for (const unique_ptr<Stmt> &stmt: stmts)
 		stmt->translate(env);
-	Symbol *retval = symtab->lookup(name+'$');
-	if (retval)
-		env.quads.emplace_back(Quad::MOV, eax, env.translate_sym(retval));
+	if (proc) {
+		Symbol *retval = symtab->lookup(proc->name+'$');
+		if (retval)
+			env.quads.emplace_back(Quad::MOV, eax, env.translate_sym(retval));
+	}
 	env.gencode();
-	printf("end %s\n", name.c_str());
+	printf("end %s\n", block_name);
 }
 
 static char sizechar(int size)

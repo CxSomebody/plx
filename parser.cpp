@@ -125,7 +125,7 @@ static void skip()
 }
 
 static unique_ptr<Block> program();
-static unique_ptr<Block> block(ProcHeader &&header);
+static unique_ptr<Block> block(ProcSymbol *proc);
 static void const_part();
 static void const_def();
 static int constant();
@@ -136,7 +136,7 @@ static vector<string> id_list();
 static Type *type();
 static Type *basic_type();
 static vector<unique_ptr<Block>> sub_list();
-static ProcHeader proc_header(bool isfunc);
+static ProcSymbol *proc_header(bool isfunc);
 static vector<Param> param_list();
 static vector<Param> param_group();
 static unique_ptr<Stmt> stmt();
@@ -195,19 +195,20 @@ static unique_ptr<Block> program()
 {
 	X _{0};
 	try {
-		unique_ptr<Block> blk(block(ProcHeader("main", vector<Param>{}, nullptr)));
+		unique_ptr<Block> blk(block(nullptr));
 		check('.'); getsym();
 		check(0);
 		return blk;
 	} CATCH_R(nullptr)
 }
 
-static unique_ptr<Block> block(ProcHeader &&header)
+static unique_ptr<Block> block(ProcSymbol *proc)
 {
 	X _{';', '.'};
 	try {
-		push_symtab(header.name);
-		def_params(header.params);
+		push_symtab(proc);
+		if (proc)
+			def_params(proc->params);
 		if (tok.sym == T_CONST) {
 			getsym();
 			const_part();
@@ -217,15 +218,15 @@ static unique_ptr<Block> block(ProcHeader &&header)
 			getsym();
 			vars = var_part();
 		}
-		if (header.rettype) {
+		if (proc && proc->rettype) {
 			// local var for function return value
-			vars.push_back(def_var(header.name+'$', header.rettype));
+			vars.push_back(def_var(proc->name+'$', proc->rettype));
 		}
 		vector<unique_ptr<Block>> subs(sub_list());
 		unique_ptr<CompStmt> body(comp_stmt());
 		SymbolTable *symtab = pop_symtab();
 		return make_unique<Block>
-			(move(header.name),
+			(proc,
 			 move(subs),
 			 move(vars),
 			 move(body->body),
@@ -398,7 +399,7 @@ static vector<unique_ptr<Block>> sub_list()
 			bool isfunc = tok.sym == T_FUNCTION;
 			if (tok.sym == T_PROCEDURE || isfunc) {
 				getsym();
-				ProcHeader header(proc_header(isfunc));
+				ProcSymbol *proc = proc_header(isfunc);
 				switch (tok.sym) {
 				case ';':
 					getsym();
@@ -413,7 +414,7 @@ static vector<unique_ptr<Block>> sub_list()
 				default:
 					error(';');
 				}
-				ret.emplace_back(block(move(header)));
+				ret.emplace_back(block(proc));
 				switch (tok.sym) {
 				case ';':
 					getsym();
@@ -433,29 +434,29 @@ static vector<unique_ptr<Block>> sub_list()
 	} CATCH_R(vector<unique_ptr<Block>>())
 }
 
-static ProcHeader proc_header(bool isfunc)
+static ProcSymbol *proc_header(bool isfunc)
 {
 	X _{T_CONST, T_VAR, T_PROCEDURE, T_FUNCTION, T_BEGIN};
 	try {
-		ProcHeader header;
+		ProcSymbol *proc;
 		check(IDENT);
-		header.name = move(tok.s);
+		string name(move(tok.s));
 		getsym();
+		vector<Param> params;
 		if (tok.sym == '(') {
 			getsym();
-			header.params = param_list();
+			params = param_list();
 			check(')'); getsym();
 		}
 		if (isfunc) {
 			check(':'); getsym();
 			Type *retty = basic_type();
-			header.rettype = retty;
-			def_func(header, header.params, retty);
+			proc = def_func(name, params, retty);
 		} else {
-			def_func(header, header.params, nullptr);
+			proc = def_func(name, params, nullptr);
 		}
-		return header;
-	} CATCH_R(ProcHeader())
+		return proc;
+	} CATCH_R(nullptr)
 }
 
 static vector<Param> param_list()

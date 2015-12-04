@@ -66,7 +66,7 @@ static void skip_line(void)
 static void error(char *fmt, ...)
 {
 	va_list ap;
-	fprintf(stderr, "%s: %d:%d: ", fpath, lineno, colno);
+	fprintf(stderr, "%s:%d:%d: ", fpath, lineno, colno);
 	va_start(ap, fmt);
 	vfprintf(stderr, fmt, ap);
 	va_end(ap);

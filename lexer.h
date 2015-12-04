@@ -4,6 +4,7 @@ extern union tokval_u {
 	char *s;
 	int i;
 } tokval;
+extern char *fpath;
 extern int lineno, colno;
 void lexer_open(const char *path);
 void lexer_close(void);

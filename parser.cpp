@@ -1,3 +1,4 @@
+#include <cstdarg>
 #include <cstdio>
 #include <initializer_list>
 #include <map>
@@ -65,6 +66,15 @@ static void getsym()
 	savetok(lex(), &ntok);
 }
 
+static void error(const char *fmt...)
+{
+	fprintf(stderr, "%s:%d:%d: ", fpath, tok.line, tok.col);
+	va_list ap;
+	va_start(ap, fmt);
+	vfprintf(stderr, fmt, ap);
+	va_end(ap);
+}
+
 static void recover()
 {
 	for (;;) {
@@ -74,12 +84,11 @@ static void recover()
 			if (tok.sym == it->first)
 				throw it->second;
 		getsym();
-		fprintf(stderr, "%d:%d: [skipping ‘%s’]\n",
-			tok.line, tok.col, tok.spell.c_str());
+		error("[skipping ‘%s’]\n", tok.spell.c_str());
 	}
 }
 
-static void error(int s)
+static void expecting(int s)
 {
 	char tmp[4];
 	const char *sname;
@@ -96,8 +105,7 @@ static void error(int s)
 	} else {
 		sname = tokname[s-256];
 	}
-	fprintf(stderr, "%d:%d: expected %s, found ‘%s’\n",
-		tok.line, tok.col, sname, tok.spell.c_str());
+	error("expected %s, found ‘%s’\n", sname, tok.spell.c_str());
 	parser_errors++;
 }
 
@@ -105,22 +113,20 @@ static void error(int s)
 static void check(int s)
 {
 	if (tok.sym != s) {
-		error(s);
+		expecting(s);
 		recover();
 	}
 }
 
 static void missing(int s)
 {
-	fprintf(stderr, "%d:%d: missing '%c' before ‘%s’\n",
-		tok.line, tok.col, s, tok.spell.c_str());
+	error("missing '%c' before ‘%s’\n", s, tok.spell.c_str());
 	parser_errors++;
 }
 
-static void skip()
+static void extra()
 {
-	fprintf(stderr, "%d:%d: ignoring extra token ‘%s’\n",
-		tok.line, tok.col, tok.spell.c_str());
+	error("extraneous token ‘%s’\n", tok.spell.c_str());
 	parser_errors++;
 	getsym();
 }
@@ -162,10 +168,11 @@ unique_ptr<Expr> ident_expr(const string &name)
 	return make_unique<SymExpr>(lookup(name));
 }
 
+// TODO move to typecheck
 static void checkprocsym(Symbol *s)
 {
 	if (!(s && s->kind == Symbol::PROC)) {
-		fprintf(stderr, "%d:%d: ‘%s’ is not a proc symbol\n", tok.line, tok.col, tok.s.c_str());
+		error("‘%s’ is not a proc symbol\n", tok.s.c_str());
 		parser_errors++;
 	}
 }
@@ -253,7 +260,7 @@ static void const_part()
 					missing(';');
 					break;
 				default:
-					error(';');
+					expecting(';');
 				}
 				break;
 			}
@@ -323,7 +330,7 @@ static vector<VarSymbol*> var_part()
 				missing(';');
 				break;
 			default:
-				error(';');
+				expecting(';');
 			}
 		} while (tok.sym == IDENT);
 		return ret;
@@ -413,7 +420,7 @@ static vector<unique_ptr<Block>> sub_list()
 					missing(';');
 					break;
 				default:
-					error(';');
+					expecting(';');
 				}
 				ret.emplace_back(block(proc));
 				switch (tok.sym) {
@@ -426,7 +433,7 @@ static vector<unique_ptr<Block>> sub_list()
 					missing(';');
 					break;
 				default:
-					error(';');
+					expecting(';');
 				}
 			} else {
 				return ret;
@@ -439,7 +446,6 @@ static ProcSymbol *proc_header(bool isfunc)
 {
 	X _{T_CONST, T_VAR, T_PROCEDURE, T_FUNCTION, T_BEGIN};
 	try {
-		ProcSymbol *proc;
 		check(IDENT);
 		string name(move(tok.s));
 		getsym();
@@ -449,14 +455,22 @@ static ProcSymbol *proc_header(bool isfunc)
 			params = param_list();
 			check(')'); getsym();
 		}
+		Type *retty = nullptr;
 		if (isfunc) {
-			check(':'); getsym();
-			Type *retty = basic_type();
-			proc = def_func(name, params, retty);
-		} else {
-			proc = def_func(name, params, nullptr);
+			switch (tok.sym) {
+			case ':':
+				getsym();
+				retty = basic_type();
+				break;
+			case ';':
+				error("missing return type declaration\n");
+				break;
+			default:
+				// TODO report error
+				recover();
+			}
 		}
-		return proc;
+		return def_func(name, params, retty);
 	} CATCH_R(nullptr)
 }
 
@@ -517,7 +531,7 @@ static unique_ptr<CompStmt> comp_stmt()
 				missing(';');
 				break;
 			default:
-				error(';');
+				expecting(';');
 				// we may get stuck in an infinite loop otherwise, because <stmt> is nullable
 				getsym();
 			}
@@ -594,7 +608,7 @@ static unique_ptr<IfStmt> if_stmt()
 		check(T_THEN); getsym();
 		unique_ptr<Stmt> st(stmt());
 		if (tok.sym == ';' && ntok.sym == T_ELSE) {
-			skip();
+			extra();
 			goto else_part;
 		}
 		if (tok.sym == T_ELSE) {
@@ -627,10 +641,10 @@ static unique_ptr<DoWhileStmt> do_while_stmt()
 		if (tok.sym == T_WHILE) {
 			getsym();
 		} else if (tok.sym == ';' && ntok.sym == T_WHILE) {
-			skip();
+			extra();
 			getsym();
 		} else {
-			error(T_WHILE);
+			expecting(T_WHILE);
 		}
 		unique_ptr<Cond> c(cond());
 		return make_unique<DoWhileStmt>(move(c), move(body));

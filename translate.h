@@ -221,3 +221,9 @@ TempOperand *getphysreg(int size, int id);
 
 void todo(const char *file, int line, const char *msg);
 #define TODO(msg) todo(__FILE__, __LINE__, msg)
+
+#ifdef __CYGWIN__
+# define EP "_"
+#else
+# define EP
+#endif

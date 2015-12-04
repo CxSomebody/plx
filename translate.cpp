@@ -1,4 +1,6 @@
 #include <cassert>
+#include <cstdio>
+#include <cstdlib>
 #include <map>
 #include <memory>
 #include <string>
@@ -449,7 +451,7 @@ void ForStmt::translate(TranslateEnv &env) const
 
 void ReadStmt::translate(TranslateEnv &env) const
 {
-	static LabelOperand o_scanf("scanf");
+	static LabelOperand o_scanf(EP "scanf");
 	for (const unique_ptr<Expr> &var: vars) {
 		Operand *o = var->translate(env);
 		assert(o->kind == Operand::MEM);
@@ -475,8 +477,8 @@ static vector<string> strings;
 
 void WriteStmt::translate(TranslateEnv &env) const
 {
-	static LabelOperand o_printf("printf");
-	static LabelOperand o_putchar("putchar");
+	static LabelOperand o_printf(EP "printf");
+	static LabelOperand o_putchar(EP "putchar");
 	Operand *fmtstr;
 	if (!str.empty()) {
 		char strlabel[16];
@@ -538,7 +540,7 @@ int Block::allocaddr()
 
 void Block::translate(FILE *outfp)
 {
-	const char *block_name = proc ? proc->decorated_name.c_str() : "main";
+	const char *block_name = proc ? proc->decorated_name.c_str() : EP "main";
 	//printf("begin %s\n", block_name);
 	int framesize = allocaddr();
 	TranslateEnv env(symtab, block_name, outfp, framesize);
@@ -569,8 +571,8 @@ static char sizechar(int size)
 void translate_all(unique_ptr<Block> &&blk)
 {
 	FILE *outfp = fopen("out.s", "w");
-	fputs("\tglobal\tmain\n"
-	      "\textern\tprintf, scanf, putchar\n"
+	fputs("\tglobal\t" EP "main\n"
+	      "\textern\t" EP "printf, " EP "scanf, " EP "putchar\n"
 	      "\n"
 	      "\tsection\t.bss\n", outfp);
 	for (VarSymbol *vs: blk->vars) {

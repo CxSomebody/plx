@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <cassert>
+#include <cstdio>
 #include <map>
 #include <memory>
 #include <string>

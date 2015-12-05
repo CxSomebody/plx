@@ -68,6 +68,7 @@ static void getsym()
 
 static void error(const char *fmt...)
 {
+	parser_errors++;
 	fprintf(stderr, "%s:%d:%d: ", fpath, tok.line, tok.col);
 	va_list ap;
 	va_start(ap, fmt);
@@ -84,7 +85,6 @@ static void recover()
 			if (tok.sym == it->first)
 				throw it->second;
 		getsym();
-		error("[skipping ‘%s’]\n", tok.spell.c_str());
 	}
 }
 
@@ -106,7 +106,11 @@ static void expecting(int s)
 		sname = tokname[s-256];
 	}
 	error("expected %s, found ‘%s’\n", sname, tok.spell.c_str());
-	parser_errors++;
+}
+
+static void unexp()
+{
+	error("unexpected ‘%s’\n", tok.spell.c_str());
 }
 
 // returns true upon ERROR
@@ -121,13 +125,11 @@ static void check(int s)
 static void missing(int s)
 {
 	error("missing '%c' before ‘%s’\n", s, tok.spell.c_str());
-	parser_errors++;
 }
 
 static void extra()
 {
 	error("extraneous token ‘%s’\n", tok.spell.c_str());
-	parser_errors++;
 	getsym();
 }
 
@@ -173,7 +175,6 @@ static void checkprocsym(Symbol *s)
 {
 	if (!(s && s->kind == Symbol::PROC)) {
 		error("‘%s’ is not a proc symbol\n", tok.s.c_str());
-		parser_errors++;
 	}
 }
 
@@ -466,7 +467,7 @@ static ProcSymbol *proc_header(bool isfunc)
 				error("missing return type declaration\n");
 				break;
 			default:
-				// TODO report error
+				unexp();
 				recover();
 			}
 		}
@@ -667,7 +668,7 @@ static unique_ptr<ForStmt> for_stmt()
 		case T_TO:
 			break;
 		default:
-			// TODO report error
+			unexp();
 			recover();
 		}
 		getsym();
@@ -773,7 +774,7 @@ static unique_ptr<Cond> cond()
 			op = Cond::LE;
 			break;
 		default:
-			// TODO report error
+			unexp();
 			recover();
 		}
 		getsym();
@@ -869,7 +870,7 @@ static unique_ptr<Expr> factor()
 		check(')'); getsym();
 		return e;
 	}
-	// TODO report error
+	unexp();
 	recover();
 	return nullptr;
 }

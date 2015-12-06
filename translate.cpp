@@ -550,8 +550,12 @@ void Block::translate(FILE *outfp)
 		stmt->translate(env);
 	if (proc) {
 		Symbol *retval = symtab->lookup(proc->name+'$');
-		if (retval)
-			env.quads.emplace_back(Quad::MOV, eax, env.translate_sym(retval));
+		if (retval) {
+			assert(retval->kind == Symbol::VAR);
+			VarSymbol *v = static_cast<VarSymbol*>(retval);
+			int rvsize = v->type->size();
+			env.quads.emplace_back(Quad::MOV, getphysreg(rvsize, 0), resize(env, rvsize, env.translate_sym(retval)));
+		}
 	}
 	env.gencode();
 	//printf("end %s\n", block_name);

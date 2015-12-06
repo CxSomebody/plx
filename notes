@@ -12,7 +12,3 @@ lexer出错如何处理？如引号不匹配
 
 lea的src operand（一定是mem）前不能带有size prefix
 解决方案：设size为0
-
-function returning char
-
-function missing return type declaration

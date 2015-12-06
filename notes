@@ -24,3 +24,50 @@ TODO:
    byref参数必须是lvalue
 
 写更多的测试程序
+
+增强表达能力
+ [OK] 引入while语句
+ 引入复合条件
+  注意
+   运算符优先级与Pascal不同，1<2 and 3<4 等价于 (1<2) and (3<4)
+   与Pascal相同的是，单目运算符not优先级最高
+
+AND:
+
+if A and B then goto L
+
+if !A then goto L_after_B
+if B then goto L
+L_after_B:
+
+negated:
+
+if !A or !B then goto L
+
+if !A then goto L
+if !B then goto L
+
+OR:
+
+if A or B then goto L
+
+if A then goto L
+if B then goto L
+
+negated:
+
+if !A and !B then goto L
+
+if A then goto L_after_B
+if !B then goto L
+L_after_B:
+
+优化
+ CSE
+ Strength reduction
+ Constant folding & propagation
+ 循环优化
+
+要检验优化的效果，需要进行benchmark，对比优化前后执行用时
+ benchmark程序哪里来？
+  实现经典数据结构？语言太简单！

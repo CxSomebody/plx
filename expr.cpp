@@ -196,16 +196,16 @@ void WriteStmt::print() const
 	putchar(')');
 }
 
-void Cond::print() const
+void SimpleCond::print() const
 {
 	const char *opstr;
 	switch (op) {
-	case Cond::EQ: opstr = "=" ; break;
-	case Cond::NE: opstr = "<>"; break;
-	case Cond::LT: opstr = "<" ; break;
-	case Cond::GE: opstr = ">="; break;
-	case Cond::GT: opstr = ">" ; break;
-	case Cond::LE: opstr = "<="; break;
+	case EQ: opstr = "=" ; break;
+	case NE: opstr = "<>"; break;
+	case LT: opstr = "<" ; break;
+	case GE: opstr = ">="; break;
+	case GT: opstr = ">" ; break;
+	case LE: opstr = "<="; break;
 	default: assert(0);
 	}
 	left->print();
@@ -213,4 +213,15 @@ void Cond::print() const
 	right->print();
 }
 
-Cond::Cond(Op op, unique_ptr<Expr> &&left, unique_ptr<Expr> &&right): op(op), left(move(left)), right(move(right)) {}
+void CompCond::print() const
+{
+	const char *opstr;
+	switch (op) {
+	case AND: opstr = "and"; break;
+	case OR : opstr = "or" ; break;
+	default: assert(0);
+	}
+	left->print();
+	printf(" %s ", opstr);
+	right->print();
+}

@@ -244,13 +244,38 @@ struct ApplyExpr: Expr
 };
 
 struct Cond {
+	enum Kind {
+		SIMPLE,
+		COMP,
+	} kind;
+	virtual void print() const = 0;
+	virtual void translate(TranslateEnv &env, LabelOperand *label, bool negate) const = 0;
+	Cond(Kind kind): kind(kind) {}
+};
+
+struct SimpleCond: Cond
+{
 	enum Op {
 		EQ, NE, LT, GE, GT, LE
 	} op;
 	std::unique_ptr<Expr> left, right;
-	Cond(Op op, std::unique_ptr<Expr> &&left, std::unique_ptr<Expr> &&right);
-	void print() const;
-	void translate(TranslateEnv &env, LabelOperand *label, bool negate) const;
+	void print() const override;
+	void translate(TranslateEnv &env, LabelOperand *label, bool negate) const override;
+	SimpleCond(Op op, std::unique_ptr<Expr> &&left, std::unique_ptr<Expr> &&right):
+		Cond(SIMPLE), op(op), left(std::move(left)), right(std::move(right)) {}
+};
+
+struct CompCond: Cond
+{
+	enum Op {
+		AND,
+		OR,
+	} op;
+	std::unique_ptr<Cond> left, right;
+	void print() const override;
+	void translate(TranslateEnv &env, LabelOperand *label, bool negate) const override;
+	CompCond(Op op, std::unique_ptr<Cond> &&left, std::unique_ptr<Cond> &&right):
+		Cond(COMP), op(op), left(std::move(left)), right(std::move(right)) {}
 };
 
 struct Stmt {

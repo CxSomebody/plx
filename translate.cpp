@@ -509,21 +509,51 @@ void WriteStmt::translate(TranslateEnv &env) const
 	}
 }
 
-void Cond::translate(TranslateEnv &env, LabelOperand *label, bool negate) const
+void SimpleCond::translate(TranslateEnv &env, LabelOperand *label, bool negate) const
 {
 	Quad::Op qop;
 	switch (op^negate) {
-	case Cond::EQ: qop = Quad::BEQ; break;
-	case Cond::NE: qop = Quad::BNE; break;
-	case Cond::LT: qop = Quad::BLT; break;
-	case Cond::GE: qop = Quad::BGE; break;
-	case Cond::GT: qop = Quad::BGT; break;
-	case Cond::LE: qop = Quad::BLE; break;
+	case EQ: qop = Quad::BEQ; break;
+	case NE: qop = Quad::BNE; break;
+	case LT: qop = Quad::BLT; break;
+	case GE: qop = Quad::BGE; break;
+	case GT: qop = Quad::BGT; break;
+	case LE: qop = Quad::BLE; break;
 	default: assert(0);
 	}
 	env.quads.emplace_back(qop, label,
 			       astemp(left ->translate(env), env),
 			       astemp(right->translate(env), env));
+}
+
+void CompCond::translate(TranslateEnv &env, LabelOperand *ltrue, bool negate) const
+{
+	LabelOperand *lfalse;
+	switch (op) {
+	case AND:
+		if (negate) {
+			left ->translate(env, ltrue, true);
+			right->translate(env, ltrue, true);
+		} else {
+			lfalse = env.newlabel();
+			left ->translate(env, lfalse, true);
+			right->translate(env, ltrue, false);
+			env.quads.emplace_back(Quad::LABEL, lfalse);
+		}
+		break;
+	case OR:
+		if (negate) {
+			lfalse = env.newlabel();
+			left ->translate(env, lfalse, false);
+			right->translate(env, ltrue, true);
+			env.quads.emplace_back(Quad::LABEL, lfalse);
+		} else {
+			left ->translate(env, ltrue, false);
+			right->translate(env, ltrue, false);
+		}
+		break;
+	default: assert(0);
+	}
 }
 
 int Block::allocaddr()

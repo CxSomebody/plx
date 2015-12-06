@@ -74,6 +74,7 @@ static void error(const char *fmt...)
 	va_start(ap, fmt);
 	vfprintf(stderr, fmt, ap);
 	va_end(ap);
+	fputc('\n', stderr);
 }
 
 static void recover()
@@ -105,12 +106,12 @@ static void expecting(int s)
 	} else {
 		sname = tokname[s-256];
 	}
-	error("expected %s, found ‘%s’\n", sname, tok.spell.c_str());
+	error("expected %s, found ‘%s’", sname, tok.spell.c_str());
 }
 
 static void unexp()
 {
-	error("unexpected ‘%s’\n", tok.spell.c_str());
+	error("unexpected ‘%s’", tok.spell.c_str());
 }
 
 // returns true upon ERROR
@@ -124,12 +125,12 @@ static void check(int s)
 
 static void missing(int s)
 {
-	error("missing '%c' before ‘%s’\n", s, tok.spell.c_str());
+	error("missing '%c' before ‘%s’", s, tok.spell.c_str());
 }
 
 static void extra()
 {
-	error("extraneous token ‘%s’\n", tok.spell.c_str());
+	error("extraneous token ‘%s’", tok.spell.c_str());
 	getsym();
 }
 
@@ -164,6 +165,9 @@ static unique_ptr<Expr> term();
 static unique_ptr<Expr> expr();
 static vector<unique_ptr<Expr>> expr_list();
 static unique_ptr<Cond> cond();
+static unique_ptr<Cond> disjunction();
+static unique_ptr<Cond> conjunction();
+static unique_ptr<Cond> primary_cond();
 
 unique_ptr<Expr> ident_expr(const string &name)
 {
@@ -174,7 +178,7 @@ unique_ptr<Expr> ident_expr(const string &name)
 static void checkprocsym(Symbol *s)
 {
 	if (!(s && s->kind == Symbol::PROC)) {
-		error("‘%s’ is not a proc symbol\n", tok.s.c_str());
+		error("‘%s’ is not a proc symbol", tok.s.c_str());
 	}
 }
 
@@ -464,7 +468,7 @@ static ProcSymbol *proc_header(bool isfunc)
 				retty = basic_type();
 				break;
 			case ';':
-				error("missing return type declaration\n");
+				error("missing return type declaration");
 				break;
 			default:
 				unexp();
@@ -549,6 +553,7 @@ static unique_ptr<Stmt> stmt()
 		switch (tok.sym) {
 		case IDENT:
 			if (ntok.sym == BECOMES ||
+			    ntok.sym == '=' /* error */ ||
 			    ntok.sym == '[')
 				return assign_stmt();
 			return call_stmt();
@@ -576,7 +581,15 @@ static unique_ptr<AssignStmt> assign_stmt()
 	X _{';', T_END, T_ELSE, T_WHILE};
 	try {
 		unique_ptr<Expr> var(lvalue());
-		check(BECOMES); getsym();
+		if (tok.sym == BECOMES) {
+			getsym();
+		} else if (tok.sym == '=') {
+			error("use ‘:=’ for assignment, not ‘=’");
+			getsym();
+		} else {
+			unexp();
+			recover();
+		}
 		unique_ptr<Expr> val(expr());
 		return make_unique<AssignStmt>(move(var), move(val));
 	} CATCH_R(nullptr)
@@ -752,35 +765,70 @@ static unique_ptr<Cond> cond()
 {
 	X _{T_THEN, ';', T_END, T_ELSE, T_WHILE};
 	try {
-		unique_ptr<Expr> e1(expr());
-		Cond::Op op;
-		switch (tok.sym) {
-		case '=':
-			op = Cond::EQ;
-			break;
-		case NE:
-			op = Cond::NE;
-			break;
-		case '<':
-			op = Cond::LT;
-			break;
-		case GE:
-			op = Cond::GE;
-			break;
-		case '>':
-			op = Cond::GT;
-			break;
-		case LE:
-			op = Cond::LE;
-			break;
-		default:
-			unexp();
-			recover();
-		}
-		getsym();
-		unique_ptr<Expr> e2(expr());
-		return make_unique<Cond>(op, move(e1), move(e2));
+		return disjunction();
 	} CATCH_R(nullptr)
+}
+
+static unique_ptr<Cond> disjunction()
+{
+	unique_ptr<Cond> c(conjunction());
+	for (;;) {
+		if (tok.sym != T_OR)
+			return c;
+		getsym();
+		c = make_unique<CompCond>(CompCond::OR, move(c), conjunction());
+	}
+	return c;
+}
+
+static unique_ptr<Cond> conjunction()
+{
+	unique_ptr<Cond> c(primary_cond());
+	for (;;) {
+		if (tok.sym != T_AND)
+			return c;
+		getsym();
+		c = make_unique<CompCond>(CompCond::AND, move(c), primary_cond());
+	}
+	return c;
+}
+
+static unique_ptr<Cond> primary_cond()
+{
+	if (tok.sym == '(') {
+		getsym();
+		unique_ptr<Cond> c(cond());
+		check(')'); getsym();
+		return c;
+	}
+	unique_ptr<Expr> e1(expr());
+	SimpleCond::Op op;
+	switch (tok.sym) {
+	case '=':
+		op = SimpleCond::EQ;
+		break;
+	case NE:
+		op = SimpleCond::NE;
+		break;
+	case '<':
+		op = SimpleCond::LT;
+		break;
+	case GE:
+		op = SimpleCond::GE;
+		break;
+	case '>':
+		op = SimpleCond::GT;
+		break;
+	case LE:
+		op = SimpleCond::LE;
+		break;
+	default:
+		unexp();
+		recover();
+	}
+	getsym();
+	unique_ptr<Expr> e2(expr());
+	return make_unique<SimpleCond>(op, move(e1), move(e2));
 }
 
 static unique_ptr<Expr> expr()

@@ -6,7 +6,7 @@ struct Type {
 		ARRAY,
 	} kind;
 	virtual ~Type();
-	virtual void print() const = 0;
+	virtual std::string tostr() const = 0;
 	virtual int size() const = 0;
 	virtual int align() const = 0;
 protected:
@@ -40,7 +40,7 @@ struct ErrorType: Type
 struct IntType: Type
 {
 	IntType();
-	void print() const override;
+	std::string tostr() const override;
 	int size() const override;
 	int align() const override;
 };
@@ -48,7 +48,7 @@ struct IntType: Type
 struct CharType: Type
 {
 	CharType();
-	void print() const override;
+	std::string tostr() const override;
 	int size() const override;
 	int align() const override;
 };
@@ -58,7 +58,7 @@ struct ArrayType: Type
 	Type *elemtype;
 	int nelem;
 	ArrayType(Type *elemtype, int nelem);
-	void print() const override;
+	std::string tostr() const override;
 	int size() const override;
 	int align() const override;
 };

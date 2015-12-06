@@ -1,6 +1,7 @@
 #include <cstdio>
 #include <map>
 #include <memory>
+#include <sstream>
 #include <string>
 #include <vector>
 #include "semant.h"
@@ -13,26 +14,27 @@ IntType::IntType(): Type(INT) {}
 CharType::CharType(): Type(CHAR) {}
 ArrayType::ArrayType(Type *elemtype, int nelem): Type(ARRAY), elemtype(elemtype), nelem(nelem) {}
 
-void IntType::print() const
+string IntType::tostr() const
 {
-	printf("int");
+	return "int";
 }
 
 int IntType::size() const { return 4; }
 int IntType::align()const { return 4; }
 
-void CharType::print() const
+string CharType::tostr() const
 {
-	printf("char");
+	return "char";
 }
 
 int CharType::size() const { return 1; }
 int CharType::align()const { return 1; }
 
-void ArrayType::print() const
+string ArrayType::tostr() const
 {
-	printf("array[%d] of ", nelem);
-	elemtype->print();
+	stringstream ss;
+	ss << "array[" << nelem << "] of " << elemtype->tostr();
+	return ss.str();
 }
 
 int ArrayType::size() const

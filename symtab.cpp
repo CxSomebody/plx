@@ -146,10 +146,8 @@ void SymbolTable::print(int level) const
 		indent(level);
 		printf("%s %s", s->name.c_str(), kindstr);
 		if (s->kind == Symbol::VAR) {
-			putchar(' ');
 			VarSymbol *vs = static_cast<VarSymbol*>(s);
-			vs->type->print();
-			printf(" level=%d offset=%+d", vs->level, vs->offset);
+			printf(" %s level=%d offset=%+d", vs->type->tostr().c_str(), vs->level, vs->offset);
 		} else if (s->kind == Symbol::CONST) {
 			printf(" %d", static_cast<ConstSymbol*>(s)->val);
 		}

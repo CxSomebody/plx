@@ -15,7 +15,10 @@ Expr::~Expr() {}
 Expr::Expr(Kind kind, Type *type): kind(kind), type(type) {}
 SymExpr::SymExpr(Symbol *sym): Expr(SYM, sym->type), sym(sym) {}
 LitExpr::LitExpr(int lit): Expr(LIT, int_type()), lit(lit) {}
-BinaryExpr::BinaryExpr(Op op, unique_ptr<Expr> &&left, unique_ptr<Expr> &&right): Expr(BINARY, binexprtype(left->type, right->type)), op(op), left(move(left)), right(move(right)) {}
+BinaryExpr::BinaryExpr(Op op, unique_ptr<Expr> &&left, unique_ptr<Expr> &&right): Expr(BINARY, binexprtype(left->type, right->type)), op(op), left(move(left)), right(move(right))
+{
+	//"operation <TODO> not defined for operand types %s and %s"
+}
 UnaryExpr::UnaryExpr(Op op, unique_ptr<Expr> &&sub): Expr(UNARY, sub->type), op(op), sub(move(sub)) {}
 ApplyExpr::ApplyExpr(ProcSymbol *func, vector<unique_ptr<Expr>> &&args): Expr(APPLY, func->rettype), func(func), args(move(args)) {}
 

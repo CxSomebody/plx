@@ -247,6 +247,7 @@ struct Cond {
 	enum Kind {
 		SIMPLE,
 		COMP,
+		NEG,
 	} kind;
 	virtual void print() const = 0;
 	virtual void translate(TranslateEnv &env, LabelOperand *label, bool negate) const = 0;
@@ -276,6 +277,14 @@ struct CompCond: Cond
 	void translate(TranslateEnv &env, LabelOperand *label, bool negate) const override;
 	CompCond(Op op, std::unique_ptr<Cond> &&left, std::unique_ptr<Cond> &&right):
 		Cond(COMP), op(op), left(std::move(left)), right(std::move(right)) {}
+};
+
+struct NegCond: Cond
+{
+	std::unique_ptr<Cond> sub;
+	void print() const override;
+	void translate(TranslateEnv &env, LabelOperand *label, bool negate) const override;
+	NegCond(std::unique_ptr<Cond> &&sub): Cond(NEG), sub(std::move(sub)) {}
 };
 
 struct Stmt {

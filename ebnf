@@ -29,7 +29,7 @@
 <assign_stmt> ::= <lvalue> BECOMES <expr>
 <lvalue> ::= IDENT [ '[' <expr> ']' ]
 <if_stmt> ::= T_IF <cond> T_THEN <stmt> [ T_ELSE <stmt> ]
-<primary_cond> ::= <expr> <rel_op> <expr> | '(' <cond> ')'
+<primary_cond> ::= <expr> <rel_op> <expr> | '(' <cond> ')' | T_NOT <primary_cond>
 <conjunction> ::= <primary_cond> { T_AND <primary_cond> }
 <disjunction> ::= <conjunction> { T_OR <disjunction> }
 <cond> ::= <disjunction>

@@ -556,6 +556,11 @@ void CompCond::translate(TranslateEnv &env, LabelOperand *ltrue, bool negate) co
 	}
 }
 
+void NegCond::translate(TranslateEnv &env, LabelOperand *ltrue, bool negate) const
+{
+	sub->translate(env, ltrue, !negate);
+}
+
 int Block::allocaddr()
 {
 	int offset = 0;

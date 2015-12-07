@@ -171,7 +171,11 @@ static unique_ptr<Cond> primary_cond();
 
 unique_ptr<Expr> ident_expr(const string &name)
 {
-	return make_unique<SymExpr>(lookup(name));
+	Symbol *s = lookup(name);
+	if (s)
+		return make_unique<SymExpr>(lookup(name));
+	error("‘%s’ is undefined", tok.spell.c_str());
+	return nullptr;
 }
 
 // TODO move to typecheck
@@ -800,6 +804,10 @@ static unique_ptr<Cond> primary_cond()
 		unique_ptr<Cond> c(cond());
 		check(')'); getsym();
 		return c;
+	}
+	if (tok.sym == T_NOT) {
+		getsym();
+		return make_unique<NegCond>(primary_cond());
 	}
 	unique_ptr<Expr> e1(expr());
 	SimpleCond::Op op;

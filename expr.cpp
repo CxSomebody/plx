@@ -13,7 +13,7 @@ using namespace std;
 
 Expr::~Expr() {}
 Expr::Expr(Kind kind, Type *type): kind(kind), type(type) {}
-SymExpr::SymExpr(Symbol *sym): Expr(SYM, sym ? sym->type : nullptr), sym(sym) {}
+SymExpr::SymExpr(Symbol *sym): Expr(SYM, sym->type), sym(sym) {}
 LitExpr::LitExpr(int lit): Expr(LIT, int_type()), lit(lit) {}
 BinaryExpr::BinaryExpr(Op op, unique_ptr<Expr> &&left, unique_ptr<Expr> &&right): Expr(BINARY, binexprtype(left->type, right->type)), op(op), left(move(left)), right(move(right))
 {
@@ -221,7 +221,17 @@ void CompCond::print() const
 	case OR : opstr = "or" ; break;
 	default: assert(0);
 	}
+	putchar('(');
 	left->print();
 	printf(" %s ", opstr);
 	right->print();
+	putchar(')');
+}
+
+void NegCond::print() const
+{
+	printf("not ");
+	putchar('(');
+	sub->print();
+	putchar(')');
 }

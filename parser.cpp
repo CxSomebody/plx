@@ -169,21 +169,25 @@ static unique_ptr<Cond> disjunction();
 static unique_ptr<Cond> conjunction();
 static unique_ptr<Cond> primary_cond();
 
-unique_ptr<Expr> ident_expr(const string &name)
+Symbol *lookup_checked(const string &name)
 {
 	Symbol *s = lookup(name);
-	if (s)
-		return make_unique<SymExpr>(lookup(name));
-	error("‘%s’ is undefined", tok.spell.c_str());
-	return nullptr;
+	if (!s)
+		error("‘%s’ is undefined", tok.spell.c_str());
+	return s;
 }
 
-// TODO move to typecheck
+unique_ptr<Expr> ident_expr(const string &name)
+{
+	Symbol *s = lookup_checked(name);
+	return s ? make_unique<SymExpr>(lookup(name)) : nullptr;
+}
+
 static void checkprocsym(Symbol *s)
 {
-	if (!(s && s->kind == Symbol::PROC)) {
+	assert(s);
+	if (s->kind != Symbol::PROC)
 		error("‘%s’ is not a proc symbol", tok.s.c_str());
-	}
 }
 
 unique_ptr<Block> parse()
@@ -604,8 +608,9 @@ static unique_ptr<CallStmt> call_stmt()
 	X _{';', T_END, T_ELSE, T_WHILE};
 	try {
 		check(IDENT);
-		Symbol *proc = lookup(tok.s);
-		checkprocsym(proc);
+		Symbol *proc = lookup_checked(tok.s);
+		if (proc)
+			checkprocsym(proc);
 		getsym();
 		vector<unique_ptr<Expr>> args;
 		if (tok.sym == '(') {
@@ -613,7 +618,7 @@ static unique_ptr<CallStmt> call_stmt()
 			args = expr_list();
 			check(')'); getsym();
 		}
-		return make_unique<CallStmt>(static_cast<ProcSymbol*>(proc), move(args));
+		return proc ? make_unique<CallStmt>(static_cast<ProcSymbol*>(proc), move(args)) : nullptr;
 	} CATCH_R(nullptr)
 }
 
@@ -893,11 +898,17 @@ static unique_ptr<Expr> factor()
 	case IDENT:
 		switch (ntok.sym) {
 		case '(':
-			s = lookup(tok.s);
-			checkprocsym(s);
+			s = lookup_checked(tok.s);
+			if (s)
+				checkprocsym(s);
 			getsym();
 			getsym();
-			e = make_unique<ApplyExpr>(static_cast<ProcSymbol*>(s), expr_list());
+			if (s) {
+				e = make_unique<ApplyExpr>(static_cast<ProcSymbol*>(s), expr_list());
+			} else {
+				expr_list();
+				e = nullptr;
+			}
 			check(')'); getsym();
 			return e;
 		case '[':
@@ -908,14 +919,13 @@ static unique_ptr<Expr> factor()
 			check(']'); getsym();
 			return e;
 		}
-		s = lookup(tok.s);
+		s = lookup_checked(tok.s);
 		getsym();
-		if (s && s->kind == Symbol::PROC) {
-			e = make_unique<ApplyExpr>(static_cast<ProcSymbol*>(s), vector<unique_ptr<Expr>>());
-		} else {
-			e = make_unique<SymExpr>(s);
-		}
-		return e;
+		if (s)
+			return s->kind == Symbol::PROC ?
+				make_unique<ApplyExpr>(static_cast<ProcSymbol*>(s), vector<unique_ptr<Expr>>()) :
+				make_unique<SymExpr>(s);
+		return nullptr;
 	case INT:
 		e = make_unique<LitExpr>(tok.i);
 		getsym();

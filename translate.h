@@ -10,8 +10,10 @@ struct Operand {
 	int size;
 	virtual void print() const = 0;
 	virtual std::string gencode() const = 0;
-	bool istemp() const { return kind == TEMP; }
-	bool ismem () const { return kind == MEM ; }
+	bool isimm()   const { return kind == IMM;   }
+	bool istemp()  const { return kind == TEMP;  }
+	bool ismem()   const { return kind == MEM;   }
+	bool islabel() const { return kind == LABEL; }
 protected:
 	Operand(Kind kind, int size): kind(kind), size(size) {}
 };
@@ -201,6 +203,7 @@ class TranslateEnv {
 	void emit(const char *ins);
 	void emit_mov(Operand *dst, Operand *src);
 	void resolve(Operand *o);
+	TempOperand *totemp(Operand *o);
 public:
 	std::vector<Quad> quads;
 	TempOperand *newtemp(int size);
@@ -211,6 +214,7 @@ public:
 	int physreg(const TempOperand *t);
 	TranslateEnv(SymbolTable *symtab, const std::string &procname, FILE *outfp, int framesize);
 	void gencode();
+	void rewrite();
 };
 
 extern const char *regname4[8];

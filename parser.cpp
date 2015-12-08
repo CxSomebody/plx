@@ -185,7 +185,6 @@ unique_ptr<Expr> ident_expr(const string &name)
 
 static void checkprocsym(Symbol *s)
 {
-	assert(s);
 	if (s->kind != Symbol::PROC)
 		error("‘%s’ is not a proc symbol", tok.s.c_str());
 }
@@ -921,10 +920,11 @@ static unique_ptr<Expr> factor()
 		}
 		s = lookup_checked(tok.s);
 		getsym();
-		if (s)
-			return s->kind == Symbol::PROC ?
-				make_unique<ApplyExpr>(static_cast<ProcSymbol*>(s), vector<unique_ptr<Expr>>()) :
-				make_unique<SymExpr>(s);
+		if (s) {
+			if (s->kind == Symbol::PROC)
+				return make_unique<ApplyExpr>(static_cast<ProcSymbol*>(s), vector<unique_ptr<Expr>>());
+			return make_unique<SymExpr>(s);
+		}
 		return nullptr;
 	case INT:
 		e = make_unique<LitExpr>(tok.i);

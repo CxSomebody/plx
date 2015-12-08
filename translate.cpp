@@ -178,6 +178,7 @@ LabelOperand *TranslateEnv::newlabel()
 	return new LabelOperand(tmp);
 }
 
+#if 0
 TempOperand *astemp(Operand *o, TranslateEnv &env)
 {
 	if (o->kind != Operand::TEMP) {
@@ -187,20 +188,52 @@ TempOperand *astemp(Operand *o, TranslateEnv &env)
 	}
 	return static_cast<TempOperand*>(o);
 }
+#endif
+
+TempOperand *TranslateEnv::totemp(Operand *o)
+{
+	if (o->kind != Operand::TEMP) {
+		TempOperand *t = newtemp(o->size);
+		quads.emplace_back(Quad::MOV, t, o);
+		return t;
+	}
+	return static_cast<TempOperand*>(o);
+}
 
 Operand *resize(TranslateEnv &env, int size, Operand *o)
 {
 	if (size == o->size)
 		return o;
-	TempOperand *t;
 	if (size > o->size) {
-		t = env.newtemp(size);
+		TempOperand *t = env.newtemp(size);
 		env.quads.emplace_back(Quad::SEX, t, o);
-	} else {
-		// TODO what if physreg for t is none of e[acdb]x
-		t = new TempOperand(size, astemp(o, env)->id);
+		return t;
 	}
-	return t;
+	// shrink the operand
+	switch (o->kind) {
+	case Operand::IMM:
+		{
+			ImmOperand *i = new ImmOperand(*static_cast<ImmOperand*>(o));
+			i->size = size;
+			i->val &= (1 << size*8)-1;
+			return i;
+		}
+	case Operand::TEMP:
+		// TODO what if physreg for t is none of e[acdb]x
+		{
+			TempOperand *t = new TempOperand(size, static_cast<TempOperand*>(o)->id);
+			t->size = size;
+			return t;
+		}
+	case Operand::MEM:
+		{
+			MemOperand *m = new MemOperand(*static_cast<MemOperand*>(o));
+			m->size = size;
+			return m;
+		}
+	default:
+		assert(0);
+	}
 }
 
 Operand *TranslateEnv::translate_sym(Symbol *sym)
@@ -289,8 +322,8 @@ Operand *BinaryExpr::translate(TranslateEnv &env) const
 	default: assert(0);
 	}
 	c = env.newtemp(type->size());
-	a = resize(env, c->size, astemp(left ->translate(env), env));
-	b = resize(env, c->size, astemp(right->translate(env), env));
+	a = resize(env, c->size, left ->translate(env));
+	b = resize(env, c->size, right->translate(env));
 	if (op == DIV) {
 		if (c->size == 4) {
 			env.quads.emplace_back(Quad::MOV, eax, a);
@@ -380,7 +413,7 @@ void AssignStmt::translate(TranslateEnv &env) const
 	} else {
 		ovar = var->translate(env);
 	}
-	Operand *oval = astemp(val->translate(env), env);
+	Operand *oval = val->translate(env);
 	oval = resize(env, ovar->size, oval);
 	env.quads.emplace_back(Quad::MOV, ovar, oval);
 }
@@ -430,7 +463,7 @@ void ForStmt::translate(TranslateEnv &env) const
 {
 	// indvar = from;
 	Operand *o_indvar = indvar->translate(env);
-	env.quads.emplace_back(Quad::MOV, o_indvar, astemp(from->translate(env), env));
+	env.quads.emplace_back(Quad::MOV, o_indvar, from->translate(env));
 	// lim = to;
 	TempOperand *lim = env.newtemp(indvar->type->size());
 	env.quads.emplace_back(Quad::MOV, lim, to->translate(env));
@@ -522,8 +555,8 @@ void SimpleCond::translate(TranslateEnv &env, LabelOperand *label, bool negate) 
 	default: assert(0);
 	}
 	env.quads.emplace_back(qop, label,
-			       astemp(left ->translate(env), env),
-			       astemp(right->translate(env), env));
+			       left ->translate(env),
+			       right->translate(env));
 }
 
 void CompCond::translate(TranslateEnv &env, LabelOperand *ltrue, bool negate) const
@@ -592,6 +625,7 @@ void Block::translate(FILE *outfp)
 			env.quads.emplace_back(Quad::MOV, getphysreg(rvsize, 0), resize(env, rvsize, env.translate_sym(retval)));
 		}
 	}
+	env.rewrite();
 	env.gencode();
 	//printf("end %s\n", block_name);
 }
@@ -641,4 +675,72 @@ void translate_all(unique_ptr<Block> &&blk)
 		fprintf(outfp, "_$s%d:\n\tdb\t\"%s\",0\n", i, strings[i].c_str());
 	}
 	fclose(outfp);
+}
+
+// eliminate invalid combination of opcode and operands, such as
+//   mov     MEM, MEM
+//   idiv    IMM
+void TranslateEnv::rewrite()
+{
+	vector<Quad> oldquads = move(quads);
+	quads.clear();
+	// no const here, we may modify q
+	for (Quad &q: oldquads) {
+		switch (q.op) {
+		case Quad::ADD:
+		case Quad::SUB:
+		case Quad::MUL:
+		case Quad::MOV:
+			// op c,a
+			assert(q.c->istemp() || q.c->ismem());
+			if (q.c->ismem() && q.a->ismem())
+				q.a = totemp(q.a);
+			break;
+		case Quad::DIV:
+		case Quad::NEG:
+		case Quad::INC:
+		case Quad::DEC:
+			// op c
+			// c can't be IMM
+			if (q.c->isimm())
+				q.c = totemp(q.c);
+			break;
+		case Quad::BEQ:
+		case Quad::BNE:
+		case Quad::BLT:
+		case Quad::BGE:
+		case Quad::BGT:
+		case Quad::BLE:
+			// bcc c,a,b
+			assert(q.c->islabel());
+			if (q.a->ismem() && q.b->ismem())
+				q.a = totemp(q.a);
+			break;
+		case Quad::SEX:
+			// movsx c,a
+			assert(q.c->istemp());
+			assert(q.a->istemp() || q.a->ismem());
+			break;
+		case Quad::JMP:
+		case Quad::CALL:
+			assert(q.c->islabel());
+			break;
+		case Quad::LEA:
+			// lea c,a
+			assert(q.c->istemp());
+			assert(q.a->ismem());
+			break;
+		case Quad::PUSH:
+			// push c
+			// c can be anything, including LABEL
+			break;
+		case Quad::CDQ:
+		case Quad::LABEL:
+			// nullary
+			break;
+		default:
+			assert(0);
+		}
+		quads.emplace_back(q);
+	}
 }

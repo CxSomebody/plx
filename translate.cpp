@@ -168,6 +168,7 @@ void Quad::print() const
 
 TempOperand *TranslateEnv::newtemp(int size)
 {
+	tempsize.push_back(size);
 	return new TempOperand(size, tempid++);
 }
 
@@ -596,6 +597,8 @@ void NegCond::translate(TranslateEnv &env, LabelOperand *ltrue, bool negate) con
 
 int Block::allocaddr()
 {
+	if (!proc)
+		return 0; // main() has no local vars
 	int offset = 0;
 	for (VarSymbol *vs: vars) {
 		int size = vs->type->size();
@@ -603,6 +606,7 @@ int Block::allocaddr()
 		offset = (offset-size) & ~(align-1);
 		vs->offset = offset;
 	}
+	//offset &= ~3;
 	return -offset;
 }
 
@@ -625,7 +629,6 @@ void Block::translate(FILE *outfp)
 			env.quads.emplace_back(Quad::MOV, getphysreg(rvsize, 0), resize(env, rvsize, env.translate_sym(retval)));
 		}
 	}
-	env.rewrite();
 	env.gencode();
 	//printf("end %s\n", block_name);
 }
@@ -676,6 +679,22 @@ void translate_all(unique_ptr<Block> &&blk)
 	}
 	fclose(outfp);
 }
+
+void TranslateEnv::rewrite_mem(MemOperand *m)
+{
+	auto check = [this](Operand *&o) {
+		if (o->ismem()) {
+			MemOperand *m = static_cast<MemOperand*>(o);
+			rewrite_mem(m);
+			assert(m->size == 4);
+			TempOperand *t = newtemp(4);
+			quads.emplace_back(Quad::MOV, t, m);
+			o = t;
+		}
+	};
+	check(m->base);
+	check(m->index);
+};
 
 // eliminate invalid combination of opcode and operands, such as
 //   mov     MEM, MEM
@@ -741,6 +760,7 @@ void TranslateEnv::rewrite()
 		default:
 			assert(0);
 		}
+		assert(!(q.op == Quad::MOV && q.c->ismem() && q.a->ismem()));
 		quads.emplace_back(q);
 	}
 }

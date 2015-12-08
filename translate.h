@@ -54,52 +54,31 @@ struct LabelOperand: Operand
 
 struct MemOperand: Operand
 {
-	TempOperand *baset;
-	LabelOperand *basel;
+	Operand *base;
 	int offset;
-	TempOperand *index;
+	Operand *index;
 	int scale;
 	MemOperand(int size,
-		   TempOperand *baset,
+		   Operand *base,
 		   int offset,
-		   TempOperand *index,
+		   Operand *index,
 		   int scale):
 		Operand(MEM, size),
-		baset(baset),
-		basel(nullptr),
+		base(base),
 		offset(offset),
 		index(index),
 		scale(scale) {}
-	MemOperand(int size, TempOperand *baset, int offset):
-		MemOperand(size, baset, offset, nullptr, 0) {}
-	MemOperand(int size,
-		   LabelOperand *basel,
-		   int offset,
-		   TempOperand *index,
-		   int scale):
-		Operand(MEM, size),
-		baset(nullptr),
-		basel(basel),
-		offset(offset),
-		index(index),
-		scale(scale) {}
-	MemOperand(int size, TempOperand *baset):
-		MemOperand(size, baset, 0, nullptr, 0) {}
-	MemOperand(int size, LabelOperand *basel):
-		MemOperand(size, basel, 0, nullptr, 0) {}
+	MemOperand(int size, Operand *base, int offset):
+		MemOperand(size, base, offset, nullptr, 0) {}
+	MemOperand(int size, Operand *base):
+		MemOperand(size, base, 0, nullptr, 0) {}
 	void print() const override
 	{
 		printf("%d", size);
 		putchar('[');
 		bool sep = false;
-		if (baset) {
-			baset->print();
-			sep = true;
-		}
-		if (basel) {
-			if (sep)
-				putchar('+');
-			basel->print();
+		if (base) {
+			base->print();
 			sep = true;
 		}
 		if (offset) {
@@ -198,11 +177,12 @@ class TranslateEnv {
 	int tempid = 0;
 	int labelid = 0;
 	std::vector<int> temp_reg;
+	std::vector<int> tempsize;
 	void emit(const char *ins, Operand *dst, Operand *src);
 	void emit(const char *ins, Operand *dst);
 	void emit(const char *ins);
 	void emit_mov(Operand *dst, Operand *src);
-	void resolve(Operand *o);
+	Operand *resolve(Operand *o);
 	TempOperand *totemp(Operand *o);
 public:
 	std::vector<Quad> quads;
@@ -215,6 +195,7 @@ public:
 	TranslateEnv(SymbolTable *symtab, const std::string &procname, FILE *outfp, int framesize);
 	void gencode();
 	void rewrite();
+	void rewrite_mem(MemOperand *m);
 };
 
 extern const char *regname4[8];

@@ -24,7 +24,7 @@ static const char *opins[] = {
 	"jg",
 	"jle",
 	"neg",
-	"mov",
+	nullptr,
 	"jmp",
 	"call",
 	"lea",
@@ -55,31 +55,38 @@ void TranslateEnv::emit(const char *ins)
 
 bool same_reg(Operand *a, Operand *b)
 {
+#if 0
 	return (a->istemp() &&
 		b->istemp() &&
 		a->size == b->size &&
 		astemp(a)->id == astemp(b)->id);
+#else
+	return a == b;
+#endif
 }
 
-void TranslateEnv::emit_mov(Operand *dst, Operand *src)
+Operand *TranslateEnv::resolve(Operand *o)
 {
-	if (!same_reg(dst, src))
-		emit("mov", dst, src);
-}
-
-void TranslateEnv::resolve(Operand *o)
-{
-	if (o) {
-		if (o->istemp()) {
-			TempOperand *t = astemp(o);
-			if (t->id >= 0)
-				t->id = ~temp_reg[t->id];
-		} else if (o->ismem()) {
-			MemOperand *m = static_cast<MemOperand*>(o);
-			resolve(m->baset);
-			resolve(m->index);
+	if (!o)
+		return nullptr;
+	if (o->istemp()) {
+		TempOperand *t = astemp(o);
+		if (t->id >= 0) {
+			int color = temp_reg[t->id];
+			if (color < 0) {
+				// spilled
+				return new MemOperand(t->size, ebp, color);
+			}
+			return getphysreg(t->size, color);
 		}
+		return o;
 	}
+	if (o->ismem()) {
+		MemOperand *m = static_cast<MemOperand*>(o);
+		m->base = resolve(m->base);
+		m->index = resolve(m->index);
+	}
+	return o;
 }
 
 void TranslateEnv::gencode()
@@ -106,12 +113,30 @@ void TranslateEnv::gencode()
 		printf("tempid=%d\n", tempid);
 	}
 #endif
-	temp_reg = color_graph(global_livevar(quads, tempid));
-	for (Quad &q: quads) {
-		resolve(q.c);
-		resolve(q.a);
-		resolve(q.b);
-	}
+	int offset = -framesize;
+	bool spill;
+	do {
+		rewrite();
+		temp_reg = color_graph(global_livevar(quads, tempid));
+		spill = false;
+		// allocate address for spilled temporaries
+		for (int i=0; i<tempid; i++) {
+			if (temp_reg[i] < 0) {
+				spill = true;
+				int size = tempsize[i];
+				int align = size;
+				offset = (offset-size) & ~(align-1);
+				temp_reg[i] = offset;
+			}
+		}
+		for (Quad &q: quads) {
+			q.c = resolve(q.c);
+			q.a = resolve(q.a);
+			q.b = resolve(q.b);
+		}
+	} while (spill);
+	offset &= ~3;
+	framesize = -offset;
 	int maxphysreg = -1;
 	for (int i=0; i<tempid; i++) {
 		if (maxphysreg < temp_reg[i])
@@ -163,7 +188,9 @@ void TranslateEnv::gencode()
 			emit(opins[q.op], q.c);
 			break;
 		case Quad::MOV:
-			emit_mov(q.c, q.a);
+			assert(!(q.c->ismem() && q.a->ismem()));
+			if (!same_reg(q.c, q.a))
+				emit("mov", q.c, q.a);
 			break;
 		case Quad::CDQ:
 			emit(opins[q.op]);
@@ -236,14 +263,8 @@ string MemOperand::gencode() const
 	}
 	ss << '[';
 	bool sep = false;
-	if (baset) {
-		ss << baset->gencode();
-		sep = true;
-	}
-	if (basel) {
-		if (sep)
-			ss << '+';
-		ss << basel->gencode();
+	if (base) {
+		ss << base->gencode();
 		sep = true;
 	}
 	if (offset) {

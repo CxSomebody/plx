@@ -111,10 +111,16 @@ void compute_def(const Quad &q, dynbitset &ret)
 void compute_use(const Quad &q, dynbitset &ret)
 {
 	auto usemem = [&](MemOperand *m) {
-		if (m->baset)
-			ret.set(8+m->baset->id);
-		if (m->index)
-			ret.set(8+m->index->id);
+		if (m->base) {
+			if (!m->base->islabel()) {
+				assert(m->base->istemp());
+				ret.set(8+astemp(m->base)->id);
+			}
+		}
+		if (m->index) {
+			assert(m->index->istemp());
+			ret.set(8+astemp(m->index)->id);
+		}
 	};
 	auto use = [&](Operand *o) {
 		if (o->istemp()) {

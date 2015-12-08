@@ -57,10 +57,6 @@ vector<int> color_graph(Graph &&g)
 				break;
 			}
 		}
-		if (color[t] < 0) {
-			// actual spill
-			TODO("spill");
-		}
 		//printf("color[%d] = %d\n", t, color[t]);
 	}
 	return color;

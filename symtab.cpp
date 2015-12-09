@@ -54,7 +54,7 @@ void def_const(const string &name, int val)
 VarSymbol *def_var(const string &name, Type *type)
 {
 	if (check_redef(name)) {
-		VarSymbol *vs = new VarSymbol(name, type, symtab->level, 0, false);
+		VarSymbol *vs = new VarSymbol(name, type, symtab->level, false);
 		symtab->map[name] = vs;
 		return vs;
 	}
@@ -79,7 +79,9 @@ void def_params(const vector<Param> &params)
 	for (const Param &p: params) {
 		const string &name = p.name;
 		if (check_redef(name)) {
-			symtab->map[name] = new VarSymbol(name, p.type, symtab->level, offset, p.byref);
+			VarSymbol *vs = new VarSymbol(name, p.type, symtab->level, p.byref);
+			vs->offset = offset;
+			symtab->map[name] = vs;
 			offset += 4;
 		}
 	}

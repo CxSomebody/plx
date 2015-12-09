@@ -62,3 +62,8 @@ Type *elemtype(Type *ty)
 		return static_cast<ArrayType*>(ty)->elemtype;
 	return nullptr;
 }
+
+bool Type::is_scalar() const
+{
+	return kind == INT || kind == CHAR;
+}

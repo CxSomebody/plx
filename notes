@@ -29,7 +29,7 @@ TODO:
 
 增强表达能力
  [OK] 引入while语句
- 引入复合条件
+ [OK] 引入复合条件
   注意
    运算符优先级与Pascal不同，1<2 and 3<4 等价于 (1<2) and (3<4)
    与Pascal相同的是，单目运算符not优先级最高
@@ -73,3 +73,15 @@ L_after_B:
 要检验优化的效果，需要进行benchmark，对比优化前后执行用时
  benchmark程序哪里来？
   实现经典数据结构？语言太简单！
+
+栈空间共用？
+
+每个声明的scalar变量对应一个temp
+每个声明变量，有一个scalar_id
+对于数组，scalar_id<0
+这个scalar_id就是对应的temp的id
+
+synchronization points
+遇到call时，所有变量写回内存
+
+所谓SSA只针对temp

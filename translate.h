@@ -168,16 +168,20 @@ struct SymbolTable;
 struct ProcSymbol;
 struct Expr;
 
+struct VarSymbol;
 class TranslateEnv {
 	SymbolTable *symtab;
 	std::string procname;
 	FILE *outfp;
-	int framesize;
+	int framesize = 0;
 	int level;
 	int tempid = 0;
 	int labelid = 0;
 	std::vector<int> temp_reg;
 	std::vector<int> tempsize;
+	std::vector<VarSymbol*> vars;
+	std::vector<TempOperand*> scalar_temp;
+	std::vector<bool> scalar_loaded;
 	void emit(const char *ins, Operand *dst, Operand *src);
 	void emit(const char *ins, Operand *dst);
 	void emit(const char *ins);
@@ -192,10 +196,12 @@ public:
 	Operand *translate_sym(Symbol *sym);
 	void translate_call(ProcSymbol *proc, const std::vector<std::unique_ptr<Expr>> &args);
 	int physreg(const TempOperand *t);
-	TranslateEnv(SymbolTable *symtab, const std::string &procname, FILE *outfp, int framesize);
+	TranslateEnv(SymbolTable *symtab, const std::string &procname, FILE *outfp, const std::vector<VarSymbol*> &vars);
 	void gencode();
 	void rewrite();
 	void rewrite_mem(MemOperand *m);
+	void allocaddr();
+	void assign_scalar_id();
 };
 
 extern const char *regname4[8];
@@ -203,6 +209,13 @@ extern const char *regname1[4];
 
 extern TempOperand *eax, *ecx, *edx, *ebx, *esp, *ebp, *esi, *edi;
 TempOperand *getphysreg(int size, int id);
+
+struct TranslateOptions {
+	int opt = 0; // optimization level
+};
+
+struct Block;
+void translate_all(std::unique_ptr<Block> &&blk, const TranslateOptions &options);
 
 void todo(const char *file, int line, const char *msg);
 #define TODO(msg) todo(__FILE__, __LINE__, msg)

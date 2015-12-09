@@ -26,11 +26,11 @@ static const char *opstr[] = {
 TranslateEnv::TranslateEnv(SymbolTable *symtab,
 			   const std::string &procname,
 			   FILE *outfp,
-			   int framesize):
+			   const vector<VarSymbol*> &vars):
 	symtab(symtab),
 	procname(procname),
 	outfp(outfp),
-	framesize(framesize)
+	vars(vars)
 {
 	level = symtab->level;
 	if (level < 1)
@@ -595,10 +595,8 @@ void NegCond::translate(TranslateEnv &env, LabelOperand *ltrue, bool negate) con
 	sub->translate(env, ltrue, !negate);
 }
 
-int Block::allocaddr()
+void TranslateEnv::allocaddr()
 {
-	if (!proc)
-		return 0; // main() has no local vars
 	int offset = 0;
 	for (VarSymbol *vs: vars) {
 		int size = vs->type->size();
@@ -607,15 +605,30 @@ int Block::allocaddr()
 		vs->offset = offset;
 	}
 	//offset &= ~3;
-	return -offset;
+	framesize = -offset;
+}
+
+void TranslateEnv::assign_scalar_id()
+{
+	int scalar_id = 0;
+	for (VarSymbol *vs: vars) {
+		if (vs->type->is_scalar()) {
+			vs->scalar_id = scalar_id++;
+			scalar_temp.push_back(newtemp(vs->type->size()));
+		}
+	}
 }
 
 void Block::translate(FILE *outfp)
 {
 	const char *block_name = proc ? proc->decorated_name.c_str() : EP "main";
 	//printf("begin %s\n", block_name);
-	int framesize = allocaddr();
-	TranslateEnv env(symtab, block_name, outfp, framesize);
+	//TranslateEnv env(symtab, block_name, outfp, framesize);
+	TranslateEnv env(symtab, block_name, outfp, vars);
+	if (proc)
+		env.allocaddr();
+	// else do nothing; main() has no local vars
+	//env.assign_scalar_id();
 	for (const unique_ptr<Block> &sub: subs)
 		sub->translate(outfp);
 	for (const unique_ptr<Stmt> &stmt: stmts)
@@ -644,7 +657,7 @@ static char sizechar(int size)
 	assert(0);
 }
 
-void translate_all(unique_ptr<Block> &&blk)
+void translate_all(unique_ptr<Block> &&blk, const TranslateOptions &options)
 {
 	FILE *outfp = fopen("out.s", "w");
 	fputs("\tglobal\t" EP "main\n"

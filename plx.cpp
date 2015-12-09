@@ -4,12 +4,14 @@
 #include <memory>
 #include <string>
 #include <vector>
+#include <unistd.h>
 
 extern "C" {
 #include "lexer.h"
 #include "tokens.h"
 }
 #include "semant.h"
+#include "translate.h"
 
 using namespace std;
 
@@ -24,13 +26,24 @@ extern int parser_errors;
 
 int main(int argc, char **argv)
 {
-	if (argc != 2)
+	int opt;
+	TranslateOptions options;
+	while ((opt = getopt(argc, argv, "O")) != -1) {
+		switch (opt) {
+		case 'O':
+			options.opt = 1;
+			break;
+		default:
+			usage();
+		}
+	}
+	if (optind != argc-1)
 		usage();
-	lexer_open(argv[1]);
+	lexer_open(argv[optind]);
 	unique_ptr<Block> blk = parse();
 	if (parser_errors)
 		return 1;
-	translate_all(move(blk));
+	translate_all(move(blk), options);
 	lexer_close();
 	return 0;
 }

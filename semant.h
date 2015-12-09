@@ -9,6 +9,7 @@ struct Type {
 	virtual std::string tostr() const = 0;
 	virtual int size() const = 0;
 	virtual int align() const = 0;
+	bool is_scalar() const;
 protected:
 	Type(Kind kind);
 };
@@ -88,10 +89,11 @@ protected:
 struct VarSymbol: Symbol
 {
 	Type *type;
-	int offset; // relative to bp
+	int offset = 0; // relative to bp
+	int scalar_id = -1;
 	bool isref;
-	VarSymbol(const std::string &name, Type *type, int level, int offset, bool isref):
-		Symbol(VAR, name, type, level), type(type), offset(offset), isref(isref) {}
+	VarSymbol(const std::string &name, Type *type, int level, bool isref):
+		Symbol(VAR, name, type, level), type(type), isref(isref) {}
 };
 
 struct ConstSymbol: Symbol
@@ -145,7 +147,6 @@ struct Block {
 		symtab(symtab) {}
 	void print(int level) const;
 	void translate(FILE *outfp);
-	int allocaddr(); // should not really belong to semant.h
 };
 
 void def_const(const std::string &name, int val);
@@ -160,7 +161,6 @@ bool is_proc(const std::string &ident);
 std::vector<Param> param_group(std::vector<std::string> &&names, Type *type, bool byref);
 void push_symtab(ProcSymbol *proc);
 SymbolTable *pop_symtab();
-void translate_all(std::unique_ptr<Block> &&blk);
 Symbol *lookup(const std::string &name);
 
 struct Operand;

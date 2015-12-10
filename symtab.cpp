@@ -71,10 +71,11 @@ ProcSymbol *def_func(const string &name, const vector<Param> &params, Type *rett
 	return nullptr;
 }
 
-void def_params(const vector<Param> &params)
+vector<VarSymbol*> def_params(const vector<Param> &params)
 {
 	// level 0 block has no params, so level > 0
 	assert(symtab->level > 0 || params.empty());
+	vector<VarSymbol*> ret;
 	int offset = 8+(symtab->level-1)*4;
 	for (const Param &p: params) {
 		const string &name = p.name;
@@ -83,8 +84,10 @@ void def_params(const vector<Param> &params)
 			vs->offset = offset;
 			symtab->map[name] = vs;
 			offset += 4;
+			ret.push_back(vs);
 		}
 	}
+	return ret;
 }
 
 #if 0

@@ -132,27 +132,29 @@ struct Stmt;
 struct Block {
 	ProcSymbol *proc;
 	std::vector<std::unique_ptr<Block>> subs;
+	std::vector<VarSymbol*> params;
 	std::vector<VarSymbol*> vars;
 	std::vector<std::unique_ptr<Stmt>> stmts;
 	SymbolTable *symtab;
 	Block(ProcSymbol *proc,
 	      decltype(subs) &&subs,
+	      decltype(params) &&params,
 	      decltype(vars) &&vars,
 	      decltype(stmts)&&stmts,
 	      SymbolTable *symtab):
 		proc(proc),
 		subs(move(subs)),
+		params(move(params)),
 		vars(move(vars)),
 		stmts(move(stmts)),
 		symtab(symtab) {}
 	void print(int level) const;
-	void translate(FILE *outfp);
 };
 
 void def_const(const std::string &name, int val);
 VarSymbol *def_var(const std::string &name, Type *type);
 ProcSymbol *def_func(const std::string &name, const std::vector<Param> &params, Type *rettype);
-void def_params(const std::vector<Param> &params);
+std::vector<VarSymbol*> def_params(const std::vector<Param> &params);
 Type *error_type();
 Type *int_type();
 Type *char_type();

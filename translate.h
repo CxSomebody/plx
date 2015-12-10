@@ -168,6 +168,10 @@ struct SymbolTable;
 struct ProcSymbol;
 struct Expr;
 
+struct TranslateOptions {
+	int optimize = 0; // optimization level
+};
+
 struct VarSymbol;
 class TranslateEnv {
 	SymbolTable *symtab;
@@ -179,9 +183,12 @@ class TranslateEnv {
 	int labelid = 0;
 	std::vector<int> temp_reg;
 	std::vector<int> tempsize;
+	std::vector<VarSymbol*> params;
 	std::vector<VarSymbol*> vars;
 	std::vector<TempOperand*> scalar_temp;
-	std::vector<bool> scalar_loaded;
+	TranslateEnv *up;
+	const TranslateOptions *opt;
+	int scalar_id;
 	void emit(const char *ins, Operand *dst, Operand *src);
 	void emit(const char *ins, Operand *dst);
 	void emit(const char *ins);
@@ -193,10 +200,19 @@ public:
 	TempOperand *newtemp(int size);
 	LabelOperand *newlabel();
 	Symbol *lookup(const std::string &name) const;
-	Operand *translate_sym(Symbol *sym);
+	Operand *translate_sym(const Symbol *sym);
+	MemOperand *translate_sym_mem(const VarSymbol *sym);
+	MemOperand *translate_lvalue(const Expr *e);
 	void translate_call(ProcSymbol *proc, const std::vector<std::unique_ptr<Expr>> &args);
 	int physreg(const TempOperand *t);
-	TranslateEnv(SymbolTable *symtab, const std::string &procname, FILE *outfp, const std::vector<VarSymbol*> &vars);
+	Operand *resize(int size, Operand *o);
+	TranslateEnv(SymbolTable *symtab,
+		     const std::string &procname,
+		     FILE *outfp,
+		     const std::vector<VarSymbol*> &params,
+		     const std::vector<VarSymbol*> &vars,
+		     TranslateEnv *up,
+		     const TranslateOptions *opt);
 	void gencode();
 	void rewrite();
 	void rewrite_mem(MemOperand *m);
@@ -210,12 +226,8 @@ extern const char *regname1[4];
 extern TempOperand *eax, *ecx, *edx, *ebx, *esp, *ebp, *esi, *edi;
 TempOperand *getphysreg(int size, int id);
 
-struct TranslateOptions {
-	int opt = 0; // optimization level
-};
-
 struct Block;
-void translate_all(std::unique_ptr<Block> &&blk, const TranslateOptions &options);
+void translate_all(std::unique_ptr<Block> &&blk, const TranslateOptions *options);
 
 void todo(const char *file, int line, const char *msg);
 #define TODO(msg) todo(__FILE__, __LINE__, msg)

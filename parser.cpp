@@ -227,8 +227,9 @@ static unique_ptr<Block> block(ProcSymbol *proc)
 	X _{';', '.'};
 	try {
 		push_symtab(proc);
+		vector<VarSymbol*> params;
 		if (proc)
-			def_params(proc->params);
+			params = def_params(proc->params);
 		if (tok.sym == T_CONST) {
 			getsym();
 			const_part();
@@ -248,6 +249,7 @@ static unique_ptr<Block> block(ProcSymbol *proc)
 		return make_unique<Block>
 			(proc,
 			 move(subs),
+			 move(params),
 			 move(vars),
 			 move(body->body),
 			 symtab);

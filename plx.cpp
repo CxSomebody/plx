@@ -27,11 +27,11 @@ extern int parser_errors;
 int main(int argc, char **argv)
 {
 	int opt;
-	TranslateOptions options;
+	TranslateOptions tropt;
 	while ((opt = getopt(argc, argv, "O")) != -1) {
 		switch (opt) {
 		case 'O':
-			options.opt = 1;
+			tropt.optimize = 1;
 			break;
 		default:
 			usage();
@@ -43,7 +43,7 @@ int main(int argc, char **argv)
 	unique_ptr<Block> blk = parse();
 	if (parser_errors)
 		return 1;
-	translate_all(move(blk), options);
+	translate_all(move(blk), &tropt);
 	lexer_close();
 	return 0;
 }

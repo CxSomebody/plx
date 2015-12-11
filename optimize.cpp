@@ -53,37 +53,36 @@ bool blocks_to_dot(const vector<unique_ptr<BB>> &blocks, const char *fpath)
 vector<dynbitset> domfront(const vector<unique_ptr<BB>> &blocks)
 {
 	int n = blocks.size();
-	vector<dynbitset> sdom(n, dynbitset(n));
+	vector<dynbitset> dom(n, dynbitset(n));
 	vector<int> idom(n, -1);
-	{
-		vector<dynbitset> &dom(sdom); // just an alias
-		// dominator of the start node is itself
-		dom[0].set(0);
-		// for all other nodes, set all nodes as the dominators
-		for (int i=1; i<n; i++)
-			dom[i].set_all();
-		// iteratively eliminate nodes that are not dominators
-		bool changed;
-		do {
-			changed = false;
-			for (int i=1; i<n; i++) {
-				dynbitset s(n);
-				s.set_all();
-				for (const BB *p: blocks[i]->pred)
-					s &= dom[p->id];
-				s.set(i);
-				if (dom[i].update(s))
-					changed = true;
-			}
-		} while (changed);
-#if 0
-		for (int i=0; i<n; i++) {
-			fprintf(stderr, "dom[%d]=%s\n", i, dom[i].tostr().c_str());
+	// dominator of the start node is itself
+	dom[0].set(0);
+	// for all other nodes, set all nodes as the dominators
+	for (int i=1; i<n; i++)
+		dom[i].set_all();
+	// iteratively eliminate nodes that are not dominators
+	bool changed;
+	do {
+		changed = false;
+		for (int i=1; i<n; i++) {
+			dynbitset s(n);
+			s.set_all();
+			for (const BB *p: blocks[i]->pred)
+				s &= dom[p->id];
+			s.set(i);
+			if (dom[i].update(s))
+				changed = true;
 		}
-#endif
+	} while (changed);
+#if 0
+	for (int i=0; i<n; i++) {
+		fprintf(stderr, "dom[%d]=%s\n", i, dom[i].tostr().c_str());
 	}
+#endif
+	vector<dynbitset> sdom(dom);
 	for (int i=0; i<n; i++)
 		sdom[i].clear(i);
+	vector<dynbitset> children(n, dynbitset(n));
 	for (int i=1; i<n; i++) {
 		dynbitset s(n);
 		// union sdom[j] for j in sdom[i]
@@ -94,10 +93,36 @@ vector<dynbitset> domfront(const vector<unique_ptr<BB>> &blocks)
 			assert(idom[i] < 0);
 			idom[i] = j;
 		});
-#if 1
+#if 0
 		fprintf(stderr, "idom[%d]=%d\n", i, idom[i]);
 #endif
+		children[idom[i]].set(i);
 	}
 	vector<dynbitset> domfront(n, dynbitset(n));
+	// DF[i] = DF_local[i] | |DF_up[c] for c in children[i]
+	function<void(int)> compute_df = [&](int i) {
+		dynbitset s(n);
+		// this loop computes DF_local[n]
+		for (const BB *succ: blocks[i]->succ) {
+			int y = succ->id;
+			if (idom[y] != i)
+				s.set(y);
+		}
+		children[i].foreach([&](int c) {
+			compute_df(c);
+			// this loop computes DF_up[c]
+			domfront[c].foreach([&](int w) {
+				if (!dom[w].get(i)) // i not in dom[w]; that is i does not dominate w
+					s.set(w);
+			});
+		});
+		domfront[i] = s;
+	};
+	for (int i=0; i<n; i++) {
+		compute_df(i);
+#if 1
+		fprintf(stderr, "DF[%d]=%s\n", i, domfront[i].tostr().c_str());
+#endif
+	}
 	return domfront;
 }

@@ -1,4 +1,5 @@
 *.o
+/cfg-*
 /keywords.c
 /keywords.gperf
 /keywords.gperf.h

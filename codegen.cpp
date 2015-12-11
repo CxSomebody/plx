@@ -38,14 +38,14 @@ static const char *opins[] = {
 void TranslateEnv::emit(const char *ins, Operand *dst, Operand *src)
 {
 	fprintf(outfp, "\t%s\t%s, %s\n", ins,
-		dst->gencode().c_str(),
-		src->gencode().c_str());
+		dst->tostr().c_str(),
+		src->tostr().c_str());
 }
 
 void TranslateEnv::emit(const char *ins, Operand *dst)
 {
 	fprintf(outfp, "\t%s\t%s\n", ins,
-		dst->gencode().c_str());
+		dst->tostr().c_str());
 }
 
 void TranslateEnv::emit(const char *ins)
@@ -213,7 +213,7 @@ void TranslateEnv::gencode()
 	emit("ret");
 }
 
-string ImmOperand::gencode() const
+string ImmOperand::tostr() const
 {
 	char tmp[12];
 	sprintf(tmp, "%d", val);
@@ -229,27 +229,32 @@ const char *regname1[4] = {
 	"al", "cl", "dl", "bl",
 };
 
-string TempOperand::gencode() const
+string TempOperand::tostr() const
 {
-	assert(id < 0);
-	int phy = ~id;
-	if (size == 4) {
-		assert(phy < 8);
-		return regname4[phy];
+	if (id < 0) {
+		int phy = ~id;
+		if (size == 4) {
+			assert(phy < 8);
+			return regname4[phy];
+		}
+		if (size == 1) {
+			assert(phy < 4);
+			return regname1[phy];
+		}
+		assert(0);
+	} else {
+		char tmp[12];
+		sprintf(tmp, "$%d", id);
+		return string(tmp);
 	}
-	if (size == 1) {
-		assert(phy < 4);
-		return regname1[phy];
-	}
-	assert(0);
 }
 
-string LabelOperand::gencode() const
+string LabelOperand::tostr() const
 {
 	return isalpha(label[0]) ? '$'+label : label;
 }
 
-string MemOperand::gencode() const
+string MemOperand::tostr() const
 {
 	stringstream ss;
 	if (size == 4) {
@@ -264,7 +269,7 @@ string MemOperand::gencode() const
 	ss << '[';
 	bool sep = false;
 	if (base) {
-		ss << base->gencode();
+		ss << base->tostr();
 		sep = true;
 	}
 	if (offset) {
@@ -276,7 +281,7 @@ string MemOperand::gencode() const
 	if (index) {
 		if (sep)
 			ss << '+';
-		ss << index->gencode();
+		ss << index->tostr();
 		ss << '*' << scale;
 	}
 	ss << ']';

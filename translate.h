@@ -8,8 +8,11 @@ struct Operand {
 		LABEL,
 	} kind;
 	int size;
-	virtual void print() const = 0;
-	virtual std::string gencode() const = 0;
+	void print() const
+	{
+		printf("%s", tostr().c_str());
+	}
+	virtual std::string tostr() const = 0;
 	bool isimm()   const { return kind == IMM;   }
 	bool istemp()  const { return kind == TEMP;  }
 	bool ismem()   const { return kind == MEM;   }
@@ -22,34 +25,21 @@ struct ImmOperand: Operand
 {
 	int val;
 	ImmOperand(int val): Operand(IMM, 4), val(val) {}
-	void print() const override
-	{
-		printf("%d", val);
-	}
-	std::string gencode() const override;
+	std::string tostr() const override;
 };
 
 struct TempOperand: Operand
 {
 	int id;
 	TempOperand(int size, int id): Operand(TEMP, size), id(id) {}
-	void print() const override
-	{
-		void printtemp(int);
-		printtemp(id);
-	}
-	std::string gencode() const override;
+	std::string tostr() const override;
 };
 
 struct LabelOperand: Operand
 {
 	std::string label;
 	LabelOperand(const std::string &label): Operand(LABEL, 4), label(label) {}
-	void print() const override
-	{
-		printf("%s", label.c_str());
-	}
-	std::string gencode() const override;
+	std::string tostr() const override;
 };
 
 struct MemOperand: Operand
@@ -72,28 +62,7 @@ struct MemOperand: Operand
 		MemOperand(size, base, offset, nullptr, 0) {}
 	MemOperand(int size, Operand *base):
 		MemOperand(size, base, 0, nullptr, 0) {}
-	void print() const override
-	{
-		printf("%d", size);
-		putchar('[');
-		bool sep = false;
-		if (base) {
-			base->print();
-			sep = true;
-		}
-		if (offset) {
-			printf(sep?"%+d":"%d", offset);
-			sep = true;
-		}
-		if (index) {
-			if (sep)
-				putchar('+');
-			index->print();
-			printf("*%d", scale);
-		}
-		putchar(']');
-	}
-	std::string gencode() const override;
+	std::string tostr() const override;
 };
 
 struct Quad {
@@ -118,15 +87,23 @@ struct Quad {
 		DEC,
 		SEX,
 		CDQ,
+		ADD3,
+		SUB3,
+		MUL3,
+		DIV3,
 		LABEL,
 	} op;
-	Operand *c, *a, *b;
+	union {
+		Operand *c;
+		Operand **args;
+	};
+	Operand *a, *b;
 	Quad(Op op, Operand *c, Operand *a, Operand *b):
 		op(op), c(c), a(a), b(b) {}
 	Quad(Op op, Operand *c, Operand *a): Quad(op, c, a, nullptr) {}
 	Quad(Op op, Operand *c): Quad(op, c, nullptr, nullptr) {}
 	Quad(Op op): Quad(op, nullptr, nullptr, nullptr) {}
-	void print() const;
+	std::string tostr() const;
 	bool isjump() const
 	{
 		return op == JMP;
@@ -187,8 +164,8 @@ class TranslateEnv {
 	std::vector<VarSymbol*> vars;
 	std::vector<TempOperand*> scalar_temp;
 	TranslateEnv *up;
-	const TranslateOptions *opt;
 	int scalar_id;
+
 	void emit(const char *ins, Operand *dst, Operand *src);
 	void emit(const char *ins, Operand *dst);
 	void emit(const char *ins);
@@ -197,6 +174,8 @@ class TranslateEnv {
 	TempOperand *totemp(Operand *o);
 public:
 	std::vector<Quad> quads;
+	const TranslateOptions *opt;
+
 	TempOperand *newtemp(int size);
 	LabelOperand *newlabel();
 	Symbol *lookup(const std::string &name) const;
@@ -218,6 +197,7 @@ public:
 	void rewrite_mem(MemOperand *m);
 	void allocaddr();
 	void assign_scalar_id();
+	void optimize();
 };
 
 extern const char *regname4[8];

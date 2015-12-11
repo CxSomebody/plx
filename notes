@@ -85,3 +85,28 @@ synchronization points
 遇到call时，所有变量写回内存
 
 所谓SSA只针对temp
+
+call前的sync，要包括所有外层scalar，以及（若callee为内层过程）所有局部scalar
+exit处的sync，要包括所有外层scalar
+
+global a
+
+if () {
+	a = 1;
+}
+// has a been modified here?
+if () {
+	f(); // may use a
+}
+
+after converting to ssa...
+
+if () {
+	a1 = 1;
+}
+a2 = phi(a0,a1);
+if () {
+	f(); // a here is a2
+}
+
+NOW COMPUTE DOMFRONT!

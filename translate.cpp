@@ -4,6 +4,7 @@
 #include <cstdlib>
 #include <map>
 #include <memory>
+#include <sstream>
 #include <string>
 #include <vector>
 #include "semant.h"
@@ -99,28 +100,23 @@ void todo(const char *file, int line, const char *msg)
 	abort();
 }
 
-void Quad::print() const
+std::string Quad::tostr() const
 {
+	stringstream ss;
 	switch (op) {
 	case Quad::ADD:
 	case Quad::SUB:
 	case Quad::MUL:
-		c->print();
-		printf(" %s ", opstr[op]);
-		a->print();
+		ss << c->tostr() << ' ' << opstr[op] << ' ' << a->tostr();
 		break;
 	case Quad::DIV:
-		printf("div ");
-		c->print();
+		ss << "div " << c->tostr();
 		break;
 	case Quad::NEG:
-		printf("neg ");
-		c->print();
+		ss << "neg " << c->tostr();
 		break;
 	case Quad::MOV:
-		c->print();
-		printf(" = ");
-		a->print();
+		ss << c->tostr() << " = " << a->tostr();
 		break;
 	case Quad::BEQ:
 	case Quad::BNE:
@@ -128,54 +124,49 @@ void Quad::print() const
 	case Quad::BGE:
 	case Quad::BGT:
 	case Quad::BLE:
-		printf("goto ");
-		c->print();
-		printf(" if ");
-		a->print();
-		printf(" %s ", opstr[op]);
-		b->print();
+		ss << "goto " << c->tostr() << " if " << a->tostr()
+			<< ' ' << opstr[op] << ' ' << b->tostr();
 		break;
 	case Quad::CALL:
-		printf("call ");
-		c->print();
+		ss << "call " << c->tostr();
 		break;
 	case Quad::LABEL:
-		c->print();
-		putchar(':');
+		ss << c->tostr() << ':';
 		break;
 	case Quad::JMP:
-		printf("goto ");
-		c->print();
+		ss << "goto " << c->tostr();
 		break;
 	case Quad::LEA:
-		c->print();
-		printf(" = ");
-		putchar('&');
-		a->print();
+		ss << c->tostr() << " = &" << a->tostr();
 		break;
 	case Quad::PUSH:
-		printf("push ");
-		c->print();
+		ss << "push " << c->tostr();
 		break;
 	case Quad::INC:
-		printf("inc ");
-		c->print();
+		ss << "inc " << c->tostr();
 		break;
 	case Quad::DEC:
-		printf("dec ");
-		c->print();
+		ss << "dec " << c->tostr();
 		break;
 	case Quad::SEX:
-		c->print();
-		printf(" = sex ");
-		a->print();
+		ss << c->tostr() << " = sex " << a->tostr();
 		break;
 	case Quad::CDQ:
-		printf("cdq");
+		ss << "cdq";
+		break;
+	case Quad::ADD3:
+	case Quad::SUB3:
+	case Quad::MUL3:
+	case Quad::DIV3:
+		static char opchar3[4] = {
+			'+', '-', '*', '/'
+		};
+		ss << c->tostr() << " = " << a->tostr() << ' ' << opchar3[op-Quad::ADD3] << ' ' << b->tostr();
 		break;
 	default:
 		assert(0);
 	}
+	return ss.str();
 }
 
 TempOperand *TranslateEnv::newtemp(int size)
@@ -358,29 +349,41 @@ Operand *LitExpr::translate(TranslateEnv &env) const
 Operand *BinaryExpr::translate(TranslateEnv &env) const
 {
 	Operand *c, *a, *b;
-	Quad::Op qop;
-	switch (op) {
-	case ADD: qop = Quad::ADD; break;
-	case SUB: qop = Quad::SUB; break;
-	case MUL: qop = Quad::MUL; break;
-	case DIV: qop = Quad::DIV; break;
-	default: assert(0);
-	}
 	c = env.newtemp(type->size());
 	a = env.resize(c->size, left ->translate(env));
 	b = env.resize(c->size, right->translate(env));
-	if (op == DIV) {
-		if (c->size == 4) {
-			env.quads.emplace_back(Quad::MOV, eax, a);
-			env.quads.emplace_back(Quad::CDQ);
-			env.quads.emplace_back(Quad::DIV, b);
-			env.quads.emplace_back(Quad::MOV, c, eax);
-		} else {
-			TODO("DIV with size(c) != 4");
+	if (env.opt->optimize) {
+		Quad::Op qop;
+		switch (op) {
+		case ADD: qop = Quad::ADD3; break;
+		case SUB: qop = Quad::SUB3; break;
+		case MUL: qop = Quad::MUL3; break;
+		case DIV: qop = Quad::DIV3; break;
+		default: assert(0);
 		}
+		env.quads.emplace_back(qop, c, a, b);
 	} else {
-		env.quads.emplace_back(Quad::MOV, c, a);
-		env.quads.emplace_back(qop, c, b);
+		if (op == DIV) {
+			if (c->size == 4) {
+				env.quads.emplace_back(Quad::MOV, eax, a);
+				env.quads.emplace_back(Quad::CDQ);
+				env.quads.emplace_back(Quad::DIV, b);
+				env.quads.emplace_back(Quad::MOV, c, eax);
+			} else {
+				TODO("DIV with size(c) != 4");
+			}
+		} else {
+			Quad::Op qop;
+			switch (op) {
+			case ADD: qop = Quad::ADD; break;
+			case SUB: qop = Quad::SUB; break;
+			case MUL: qop = Quad::MUL; break;
+			case DIV: qop = Quad::DIV; break;
+			default: assert(0);
+			}
+			env.quads.emplace_back(Quad::MOV, c, a);
+			env.quads.emplace_back(qop, c, b);
+		}
 	}
 	return c;
 }
@@ -689,12 +692,15 @@ void translate_block(const Block &blk, FILE *outfp, TranslateEnv *up, const Tran
 	if (blk.proc) {
 		Symbol *retval = blk.symtab->lookup(blk.proc->name+'$');
 		if (retval) {
+			// load return value into eax
 			assert(retval->kind == Symbol::VAR);
 			VarSymbol *v = static_cast<VarSymbol*>(retval);
 			int rvsize = v->type->size();
 			env.quads.emplace_back(Quad::MOV, getphysreg(rvsize, 0), env.resize(rvsize, env.translate_sym(retval)));
 		}
 	}
+	if (opt->optimize)
+		env.optimize();
 	env.gencode();
 	//printf("end %s\n", block_name);
 }

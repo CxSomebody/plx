@@ -3,6 +3,7 @@
 #include <cstdio>
 #include <map>
 #include <memory>
+#include <sstream>
 #include <string>
 #include <vector>
 #include "translate.h"

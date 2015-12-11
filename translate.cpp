@@ -701,7 +701,8 @@ void translate_block(const Block &blk, FILE *outfp, TranslateEnv *up, const Tran
 	}
 	if (opt->optimize)
 		env.optimize();
-	env.gencode();
+	// FIXME re-enable code generation
+	if (!opt->optimize) env.gencode();
 	//printf("end %s\n", block_name);
 }
 

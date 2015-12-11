@@ -16,7 +16,7 @@ codegen.o: codegen.cpp dataflow.h translate.h
 dataflow.o: dataflow.cpp dataflow.h translate.h dynbitset.h
 expr.o: expr.cpp semant.h
 lexer.o: lexer.c lexer.h tokens.h keywords.gperf.h tokname.inc
-optimize.o: optimize.cpp translate.h
+optimize.o: optimize.cpp translate.h dynbitset.h
 symtab.o: symtab.cpp semant.h
 parser.o: parser.cpp semant.h lexer.h tokens.h
 plx.o: plx.cpp semant.h lexer.h tokens.h translate.h

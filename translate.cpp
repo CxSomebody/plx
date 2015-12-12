@@ -100,6 +100,21 @@ void todo(const char *file, int line, const char *msg)
 	abort();
 }
 
+std::string args_tostr(Operand **args)
+{
+	stringstream ss;
+	ss << '(';
+	bool sep = false;
+	for (int i=0; args[i]; i++) {
+		if (sep)
+			ss << ',';
+		ss << args[i]->tostr();
+		sep = true;
+	}
+	ss << ')';
+	return ss.str();
+}
+
 std::string Quad::tostr() const
 {
 	stringstream ss;
@@ -163,6 +178,9 @@ std::string Quad::tostr() const
 		};
 		ss << c->tostr() << " = " << a->tostr() << ' ' << opchar3[op-Quad::ADD3] << ' ' << b->tostr();
 		break;
+	case Quad::PHI:
+		ss << c->tostr() << " = φ" << args_tostr(args);
+		break;
 	default:
 		assert(0);
 	}
@@ -171,8 +189,10 @@ std::string Quad::tostr() const
 
 TempOperand *TranslateEnv::newtemp(int size)
 {
-	tempsize.push_back(size);
-	return new TempOperand(size, tempid++);
+	assert(int(temps.size()) == tempid);
+	TempOperand *t = new TempOperand(size, tempid++);
+	temps.push_back(t);
+	return t;
 }
 
 LabelOperand *TranslateEnv::newlabel()
@@ -659,6 +679,7 @@ void TranslateEnv::assign_scalar_id()
 	fprintf(stderr, "assign scalar id\n");
 	if (up) {
 		scalar_temp = up->scalar_temp;
+		temps = scalar_temp;
 		tempid = scalar_id;
 	}
 	auto do_var = [&](VarSymbol *vs) {

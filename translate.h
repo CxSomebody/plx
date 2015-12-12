@@ -92,17 +92,20 @@ struct Quad {
 		MUL3,
 		DIV3,
 		LABEL,
+		PHI,
 	} op;
+	Operand *c;
 	union {
-		Operand *c;
+		Operand *a;
 		Operand **args;
 	};
-	Operand *a, *b;
+	Operand *b;
 	Quad(Op op, Operand *c, Operand *a, Operand *b):
 		op(op), c(c), a(a), b(b) {}
 	Quad(Op op, Operand *c, Operand *a): Quad(op, c, a, nullptr) {}
 	Quad(Op op, Operand *c): Quad(op, c, nullptr, nullptr) {}
 	Quad(Op op): Quad(op, nullptr, nullptr, nullptr) {}
+	Quad(Op op, Operand *c, Operand **args): op(op), c(c), args(args) {}
 	std::string tostr() const;
 	bool isjump() const
 	{
@@ -159,10 +162,10 @@ class TranslateEnv {
 	int tempid = 0;
 	int labelid = 0;
 	std::vector<int> temp_reg;
-	std::vector<int> tempsize;
 	std::vector<VarSymbol*> params;
 	std::vector<VarSymbol*> vars;
 	std::vector<TempOperand*> scalar_temp;
+	std::vector<TempOperand*> temps;
 	TranslateEnv *up;
 	int scalar_id;
 

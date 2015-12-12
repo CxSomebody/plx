@@ -33,3 +33,4 @@ std::vector<int> color_graph(Graph &&g);
 Graph global_livevar(const std::vector<Quad> &quads, int ntemp);
 bool blocks_to_dot(const std::vector<std::unique_ptr<BB>> &blocks,
 		   const char *fpath);
+void compute_def(const Quad &q, dynbitset &ret, bool exclude_physreg = false);

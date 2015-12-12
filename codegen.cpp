@@ -6,6 +6,7 @@
 #include <string>
 #include <vector>
 #include "translate.h"
+#include "dynbitset.h"
 #include "dataflow.h"
 
 #define astemp static_cast<TempOperand*>
@@ -123,7 +124,7 @@ void TranslateEnv::gencode()
 		for (int i=0; i<tempid; i++) {
 			if (temp_reg[i] < 0) {
 				spill = true;
-				int size = tempsize[i];
+				int size = temps[i]->size;
 				int align = size;
 				offset = (offset-size) & ~(align-1);
 				temp_reg[i] = offset;

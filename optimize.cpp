@@ -5,21 +5,62 @@
 #include <string>
 #include <vector>
 #include "translate.h"
-#include "dataflow.h"
 #include "dynbitset.h"
+#include "dataflow.h"
 
 using namespace std;
 
-vector<dynbitset> domfront(const vector<unique_ptr<BB>> &blocks);
+vector<dynbitset> compute_domfront(const vector<unique_ptr<BB>> &blocks);
 
 void TranslateEnv::optimize()
 {
 	fprintf(stderr, "optimize: %s\n", procname.c_str());
 	vector<unique_ptr<BB>> blocks = partition(quads);
+	int n = blocks.size();
+	vector<dynbitset> domfront = compute_domfront(blocks);
+	vector<dynbitset> defsites(tempid, dynbitset(n));
+	for (const unique_ptr<BB> &p: blocks) {
+		const BB *bb = p.get();
+		dynbitset bdefs(tempid);
+		for (const Quad &q: bb->quads) {
+			compute_def(q, bdefs, true);
+		}
+		bdefs.foreach([&](int a) {
+			defsites[a].set(bb->id);
+		});
+	}
+	for (int a=0; a<tempid; a++) {
+		fprintf(stderr, "defsites[%d]=%s\n", a, defsites[a].tostr().c_str());
+	}
+	// place phi functions
+	// for each scalar a
+	for (int a=0; a<tempid; a++) {
+		dynbitset f(n); // set of blocks where phi is added
+		dynbitset w(defsites[a]);
+		while (!w.empty()) {
+			int x = w.first();
+			w.clear(x);
+			domfront[x].foreach([&](int y) {
+				if (!f.get(y)) {
+					BB &block_y(*blocks[y]);
+					// insert phi at block y
+					int npred = block_y.pred.size();
+					Operand **args = (Operand **) calloc(sizeof *args, npred+1);
+#if 1
+					for (int i=0; i<npred; i++)
+						args[i] = temps[a];
+#endif
+					block_y.quads.emplace(block_y.quads.begin(), Quad::PHI, temps[a], args);
+					f.set(y);
+					if (!defsites[a].get(y))
+						w.set(y);
+				}
+			});
+		}
+	}
 	char fname[80];
 	sprintf(fname, "cfg-%s.dot", procname.c_str());
 	blocks_to_dot(blocks, fname);
-	domfront(blocks);
 }
 
 bool blocks_to_dot(const vector<unique_ptr<BB>> &blocks, const char *fpath)
@@ -50,7 +91,7 @@ bool blocks_to_dot(const vector<unique_ptr<BB>> &blocks, const char *fpath)
 	return true;
 }
 
-vector<dynbitset> domfront(const vector<unique_ptr<BB>> &blocks)
+vector<dynbitset> compute_domfront(const vector<unique_ptr<BB>> &blocks)
 {
 	int n = blocks.size();
 	vector<dynbitset> dom(n, dynbitset(n));
@@ -120,9 +161,10 @@ vector<dynbitset> domfront(const vector<unique_ptr<BB>> &blocks)
 	};
 	for (int i=0; i<n; i++) {
 		compute_df(i);
-#if 1
+#if 0
 		fprintf(stderr, "DF[%d]=%s\n", i, domfront[i].tostr().c_str());
 #endif
 	}
+
 	return domfront;
 }

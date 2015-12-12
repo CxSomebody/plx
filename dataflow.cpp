@@ -7,8 +7,8 @@
 #include <string>
 #include <vector>
 #include "translate.h"
-#include "dataflow.h"
 #include "dynbitset.h"
+#include "dataflow.h"
 
 #define astemp static_cast<TempOperand*>
 
@@ -65,11 +65,18 @@ vector<unique_ptr<BB>> partition(const vector<Quad> &quads)
 	return blocks;
 }
 
-void compute_def(const Quad &q, dynbitset &ret)
+void compute_def(const Quad &q, dynbitset &ret, bool exclude_physreg)
 {
 	auto def = [&](Operand *o) {
-		if (o->istemp())
-			ret.set(8+astemp(o)->id);
+		if (o->istemp()) {
+			int id = astemp(o)->id;
+			if (exclude_physreg) {
+				if (id >= 0)
+					ret.set(id);
+			} else {
+				ret.set(8+id);
+			}
+		}
 	};
 	switch (q.op) {
 	case Quad::DIV:
@@ -85,6 +92,10 @@ void compute_def(const Quad &q, dynbitset &ret)
 	case Quad::INC:
 	case Quad::DEC:
 	case Quad::SEX:
+	case Quad::ADD3:
+	case Quad::SUB3:
+	case Quad::MUL3:
+	case Quad::DIV3:
 		def(q.c);
 		break;
 	case Quad::BEQ:
@@ -95,6 +106,7 @@ void compute_def(const Quad &q, dynbitset &ret)
 	case Quad::BLE:
 	case Quad::JMP:
 	case Quad::PUSH:
+	case Quad::LABEL:
 		break;
 	case Quad::CALL:
 		def(eax);

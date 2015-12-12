@@ -1,9 +1,11 @@
 #include <cassert>
 #include <cstdio>
 #include <memory>
+#include <sstream>
 #include <string>
 #include <vector>
 #include "translate.h"
+#include "dynbitset.h"
 #include "dataflow.h"
 
 using namespace std;

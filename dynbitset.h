@@ -127,4 +127,20 @@ public:
 		ss << ']';
 		return ss.str();
 	}
+	bool empty() const
+	{
+		int n = data.size();
+		for (int i=0; i<n; i++)
+			if (data[i])
+				return false;
+		return true;
+	}
+	int first() const
+	{
+		int n = _size;
+		for (int i=0; i<n; i++)
+			if (get(i))
+				return i;
+		return -1;
+	}
 };

@@ -91,6 +91,7 @@ struct Quad {
 		SUB3,
 		MUL3,
 		DIV3,
+		NEG2,
 		LABEL,
 		PHI,
 	} op;
@@ -214,6 +215,8 @@ void translate_all(std::unique_ptr<Block> &&blk, const TranslateOptions *options
 
 void todo(const char *file, int line, const char *msg);
 #define TODO(msg) todo(__FILE__, __LINE__, msg)
+
+#define astemp static_cast<TempOperand*>
 
 #ifdef __CYGWIN__
 # define EP "_"

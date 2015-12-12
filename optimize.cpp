@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <cassert>
 #include <cstdio>
 #include <memory>
@@ -10,89 +11,14 @@
 
 using namespace std;
 
-vector<dynbitset> compute_domfront(const vector<unique_ptr<BB>> &blocks);
-
 void TranslateEnv::optimize()
 {
 	fprintf(stderr, "optimize: %s\n", procname.c_str());
 	vector<unique_ptr<BB>> blocks = partition(quads);
-	int n = blocks.size();
-	vector<dynbitset> domfront = compute_domfront(blocks);
-	vector<dynbitset> defsites(tempid, dynbitset(n));
-	for (const unique_ptr<BB> &p: blocks) {
-		const BB *bb = p.get();
-		dynbitset bdefs(tempid);
-		for (const Quad &q: bb->quads) {
-			compute_def(q, bdefs, true);
-		}
-		bdefs.foreach([&](int a) {
-			defsites[a].set(bb->id);
-		});
-	}
-	for (int a=0; a<tempid; a++) {
-		fprintf(stderr, "defsites[%d]=%s\n", a, defsites[a].tostr().c_str());
-	}
-	// place phi functions
-	// for each scalar a
-	for (int a=0; a<tempid; a++) {
-		dynbitset f(n); // set of blocks where phi is added
-		dynbitset w(defsites[a]);
-		while (!w.empty()) {
-			int x = w.first();
-			w.clear(x);
-			domfront[x].foreach([&](int y) {
-				if (!f.get(y)) {
-					BB &block_y(*blocks[y]);
-					// insert phi at block y
-					int npred = block_y.pred.size();
-					Operand **args = (Operand **) calloc(sizeof *args, npred+1);
-#if 1
-					for (int i=0; i<npred; i++)
-						args[i] = temps[a];
-#endif
-					block_y.quads.emplace(block_y.quads.begin(), Quad::PHI, temps[a], args);
-					f.set(y);
-					if (!defsites[a].get(y))
-						w.set(y);
-				}
-			});
-		}
-	}
 	char fname[80];
-	sprintf(fname, "cfg-%s.dot", procname.c_str());
+	sprintf(fname, "cfg-%s0.dot", procname.c_str());
 	blocks_to_dot(blocks, fname);
-}
-
-bool blocks_to_dot(const vector<unique_ptr<BB>> &blocks, const char *fpath)
-{
-	FILE *fp = fopen(fpath, "w");
-	if (!fp) {
-		perror(fpath);
-		return false;
-	}
-	fprintf(fp, "digraph {\n");
-	// declare all basic blocks
-	for (auto it = blocks.begin(); it != blocks.end(); it++) {
-		const BB *bb = it->get();
-		stringstream ss;
-		for (const Quad &q: bb->quads) {
-			ss << q.tostr() << "\\n";
-		}
-		fprintf(fp, "\tB%d [shape=box label=\"Block %d:\\n%s\"];\n", bb->id, bb->id, ss.str().c_str());
-	}
-	// arcs
-	for (auto it = blocks.begin(); it != blocks.end(); it++) {
-		const BB *bb = it->get();
-		for (const BB *succ: bb->succ)
-			fprintf(fp, "\tB%d -> B%d;\n", bb->id, succ->id);
-	}
-	fprintf(fp, "}\n");
-	fclose(fp);
-	return true;
-}
-
-vector<dynbitset> compute_domfront(const vector<unique_ptr<BB>> &blocks)
-{
+	// compute dominator tree and dominance frontier
 	int n = blocks.size();
 	vector<dynbitset> dom(n, dynbitset(n));
 	vector<int> idom(n, -1);
@@ -165,6 +91,125 @@ vector<dynbitset> compute_domfront(const vector<unique_ptr<BB>> &blocks)
 		fprintf(stderr, "DF[%d]=%s\n", i, domfront[i].tostr().c_str());
 #endif
 	}
+	//
+	vector<dynbitset> defsites(tempid, dynbitset(n));
+	for (const unique_ptr<BB> &p: blocks) {
+		const BB *bb = p.get();
+		dynbitset bdefs(tempid);
+		for (const Quad &q: bb->quads) {
+			compute_def(q, bdefs, true);
+		}
+		bdefs.foreach([&](int a) {
+			defsites[a].set(bb->id);
+		});
+	}
+	for (int a=0; a<tempid; a++) {
+		fprintf(stderr, "defsites[%d]=%s\n", a, defsites[a].tostr().c_str());
+	}
+	// place phi functions
+	// for each scalar a
+	for (int a=0; a<tempid; a++) {
+		dynbitset f(n); // set of blocks where phi is added
+		dynbitset w(defsites[a]);
+		while (!w.empty()) {
+			int x = w.first();
+			w.clear(x);
+			domfront[x].foreach([&](int y) {
+				if (!f.get(y)) {
+					BB &block_y(*blocks[y]);
+					// insert phi at block y
+					int npred = block_y.pred.size();
+					Operand **args = (Operand **) calloc(sizeof *args, npred+1);
+#if 1
+					for (int i=0; i<npred; i++)
+						args[i] = temps[a];
+#endif
+					block_y.quads.emplace(block_y.quads.begin(), Quad::PHI, temps[a], args);
+					f.set(y);
+					if (!defsites[a].get(y))
+						w.set(y);
+				}
+			});
+		}
+	}
+	// rename variables
+	function<void(int, vector<vector<int>>)> rename = [&](int b, vector<vector<int>> stack) {
+		for (Quad &q: blocks[b]->quads) {
+			// rename variables used in each non-phi quad
+			if (q.op != Quad::PHI) {
+				dynbitset use(tempid);
+				compute_use(q, use, true);
+				use.foreach([&](int a){
+					int newa = stack[a].back();
+					replace_use(q, a, newa);
+				});
+			}
+			// rename variables defined in each quad
+			dynbitset def(tempid);
+			compute_def(q, def, true);
+			def.foreach([&](int a){
+				int size = temps[a]->size;
+				int newa = newtemp(size)->id;
+				stack[a].push_back(newa);
+				replace_def(q, a, newa);
+			});
+		}
+		for (BB *succ: blocks[b]->succ) {
+			int y = succ->id;
+			// b is the j-th predecessor of y
+			int j;
+			int npred = succ->pred.size();
+			for (j=0; j < npred && succ->pred[j]->id != b; j++);
+			assert(j < npred);
+			// for each phi function in y
+			vector<Quad> &quads(blocks[y]->quads);
+			for (auto it = quads.begin(); it != quads.end() && it->op == Quad::PHI; it++) {
+				Quad &q = *it;
+				Operand *arg = q.args[j];
+				assert(arg->istemp());
+				TempOperand *t = astemp(arg);
+				q.args[j] = new TempOperand(t->size, stack[t->id].back());
+			}
+		}
+		children[b].foreach([&](int child){
+			rename(child, stack);
+		});
+	};
+	vector<vector<int>> stack(tempid);
+	for (int a=0; a<tempid; a++)
+		stack[a].push_back(a);
+	rename(0, stack);
+	sprintf(fname, "cfg-%s.dot", procname.c_str());
+	blocks_to_dot(blocks, fname);
+}
 
-	return domfront;
+bool blocks_to_dot(const vector<unique_ptr<BB>> &blocks, const char *fpath)
+{
+	FILE *fp = fopen(fpath, "w");
+	if (!fp) {
+		perror(fpath);
+		return false;
+	}
+	fprintf(fp, "digraph {\n");
+	// declare all basic blocks
+	for (auto it = blocks.begin(); it != blocks.end(); it++) {
+		const BB *bb = it->get();
+		stringstream ss;
+		for (const Quad &q: bb->quads) {
+			ss << q.tostr() << "\\n";
+		}
+		fprintf(fp, "\tB%d [shape=box label=\"Block %d:\\n%s\"];\n", bb->id, bb->id, ss.str().c_str());
+	}
+	// arcs
+	for (auto it = blocks.begin(); it != blocks.end(); it++) {
+		const BB *bb = it->get();
+		for (const BB *succ: bb->succ) {
+			const vector<BB*> &pred(succ->pred);
+			int j = find(pred.begin(), pred.end(), bb)-pred.begin();
+			fprintf(fp, "\tB%d -> B%d [label=\"%d\"];\n", bb->id, succ->id, j);
+		}
+	}
+	fprintf(fp, "}\n");
+	fclose(fp);
+	return true;
 }

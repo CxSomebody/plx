@@ -10,8 +10,6 @@
 #include "dynbitset.h"
 #include "dataflow.h"
 
-#define astemp static_cast<TempOperand*>
-
 using namespace std;
 
 vector<unique_ptr<BB>> partition(const vector<Quad> &quads)
@@ -96,6 +94,8 @@ void compute_def(const Quad &q, dynbitset &ret, bool exclude_physreg)
 	case Quad::SUB3:
 	case Quad::MUL3:
 	case Quad::DIV3:
+	case Quad::NEG2:
+	case Quad::PHI:
 		def(q.c);
 		break;
 	case Quad::BEQ:
@@ -121,23 +121,32 @@ void compute_def(const Quad &q, dynbitset &ret, bool exclude_physreg)
 	}
 }
 
-void compute_use(const Quad &q, dynbitset &ret)
+void compute_use(const Quad &q, dynbitset &ret, bool exclude_physreg)
 {
+	auto usetemp = [&](TempOperand *t) {
+		int id = t->id;
+		if (exclude_physreg) {
+			if (id >= 0)
+				ret.set(id);
+		} else {
+			ret.set(8+id);
+		}
+	};
 	auto usemem = [&](MemOperand *m) {
 		if (m->base) {
 			if (!m->base->islabel()) {
 				assert(m->base->istemp());
-				ret.set(8+astemp(m->base)->id);
+				usetemp(astemp(m->base));
 			}
 		}
 		if (m->index) {
 			assert(m->index->istemp());
-			ret.set(8+astemp(m->index)->id);
+			usetemp(astemp(m->index));
 		}
 	};
 	auto use = [&](Operand *o) {
 		if (o->istemp()) {
-			ret.set(8+astemp(o)->id);
+			usetemp(astemp(o));
 		} else if (o->ismem()) {
 			usemem(static_cast<MemOperand*>(o));
 		}
@@ -147,6 +156,7 @@ void compute_use(const Quad &q, dynbitset &ret)
 	case Quad::SUB:
 	case Quad::MUL:
 	case Quad::MOV:
+	case Quad::NEG2:
 	case Quad::LEA:
 	case Quad::SEX:
 		if (q.c->ismem())
@@ -164,11 +174,16 @@ void compute_use(const Quad &q, dynbitset &ret)
 	case Quad::BGE:
 	case Quad::BGT:
 	case Quad::BLE:
+	case Quad::ADD3:
+	case Quad::SUB3:
+	case Quad::MUL3:
+	case Quad::DIV3:
 		use(q.a);
 		use(q.b);
 		break;
 	case Quad::JMP:
 	case Quad::CALL:
+	case Quad::LABEL:
 		break;
 	case Quad::NEG:
 	case Quad::PUSH:
@@ -230,22 +245,6 @@ vector<int> Graph::remove(int v)
 	return ret;
 }
 
-void print_bitset(const dynbitset &bs)
-{
-	putchar('[');
-	bool sep = false;
-	for (size_t i=0; i<bs.size(); i++) {
-		int index = i;
-		if (bs.get(index)) {
-			if (sep)
-				putchar(',');
-			printtemp(index-8);
-			sep = true;
-		}
-	}
-	putchar(']');
-}
-
 Graph global_livevar(const vector<Quad> &quads, int ntemp)
 {
 	size_t n = quads.size();
@@ -285,18 +284,6 @@ Graph global_livevar(const vector<Quad> &quads, int ntemp)
 			}
 		}
 	} while (changed);
-#if 0
-	for (size_t i=0; i<n; i++) {
-		quads[i].print();
-		printf(" -- def=");
-		print_bitset(def[i]);
-		printf(" use=");
-		print_bitset(use[i]);
-		printf(" live_out=");
-		print_bitset(out[i]);
-		putchar('\n');
-	}
-#endif
 	Graph ig(ntemp);
 	for (size_t i=0; i<n; i++) {
 		def[i].foreach([&](int tdef) {
@@ -308,4 +295,107 @@ Graph global_livevar(const vector<Quad> &quads, int ntemp)
 		});
 	}
 	return ig;
+}
+
+void replace_def(Quad &q, int old, int neu)
+{
+	auto replace = [=](Operand *&o) {
+		if (o->istemp() && astemp(o)->id == old)
+			o = new TempOperand(o->size, neu);
+	};
+	switch (q.op) {
+	case Quad::ADD3:
+	case Quad::SUB3:
+	case Quad::MUL3:
+	case Quad::DIV3:
+	case Quad::NEG2:
+	case Quad::MOV:
+	case Quad::LEA:
+	case Quad::INC:
+	case Quad::DEC:
+	case Quad::SEX:
+	case Quad::PHI:
+		replace(q.c);
+		break;
+	case Quad::BEQ:
+	case Quad::BNE:
+	case Quad::BLT:
+	case Quad::BGE:
+	case Quad::BGT:
+	case Quad::BLE:
+	case Quad::JMP:
+	case Quad::PUSH:
+	case Quad::LABEL:
+	case Quad::CALL:
+		break;
+	default:
+		assert(0);
+	}
+}
+
+void replace_temp(Operand *&o, int old, int neu)
+{
+	assert(o->istemp());
+	if (astemp(o)->id == old)
+		o = new TempOperand(o->size, neu);
+}
+
+void replace(Operand *&o, int old, int neu);
+
+void replace_mem(MemOperand *m, int old, int neu)
+{
+	if (m->base)
+		replace(m->base, old, neu);
+	if (m->index)
+		replace(m->index, old, neu);
+}
+
+void replace(Operand *&o, int old, int neu)
+{
+	if (o->istemp()) {
+		replace_temp(o, old, neu);
+	} else if (o->ismem()) {
+		replace_mem(static_cast<MemOperand*>(o), old, neu);
+	}
+}
+
+void replace_use(Quad &q, int old, int neu)
+{
+	switch (q.op) {
+	case Quad::NEG2:
+	case Quad::MOV:
+	case Quad::LEA:
+	case Quad::SEX:
+		if (q.c->ismem())
+			replace_mem(static_cast<MemOperand*>(q.c), old, neu);
+		replace(q.a, old, neu);
+		break;
+	case Quad::BEQ:
+	case Quad::BNE:
+	case Quad::BLT:
+	case Quad::BGE:
+	case Quad::BGT:
+	case Quad::BLE:
+		replace(q.a, old, neu);
+		replace(q.b, old, neu);
+		break;
+	case Quad::ADD3:
+	case Quad::SUB3:
+	case Quad::MUL3:
+	case Quad::DIV3:
+		if (q.c->ismem())
+			replace_mem(static_cast<MemOperand*>(q.c), old, neu);
+		replace(q.a, old, neu);
+		replace(q.b, old, neu);
+		break;
+	case Quad::PUSH:
+		replace(q.c, old, neu);
+		break;
+	case Quad::JMP:
+	case Quad::CALL:
+	case Quad::LABEL:
+		break;
+	default:
+		assert(0);
+	}
 }

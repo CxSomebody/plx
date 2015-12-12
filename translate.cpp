@@ -130,6 +130,9 @@ std::string Quad::tostr() const
 	case Quad::NEG:
 		ss << "neg " << c->tostr();
 		break;
+	case Quad::NEG2:
+		ss << c->tostr() << " = -" << a->tostr();
+		break;
 	case Quad::MOV:
 		ss << c->tostr() << " = " << a->tostr();
 		break;
@@ -441,16 +444,24 @@ Operand *IndexExpr::translate(TranslateEnv &env) const
 
 Operand *UnaryExpr::translate(TranslateEnv &env) const
 {
-	Quad::Op qop;
-	switch (op) {
-	case NEG: qop = Quad::NEG; break;
-	default: assert(0);
-	}
 	Operand *c = env.newtemp(type->size());
 	Operand *a = sub->translate(env);
 	assert(c->size == a->size);
-	env.quads.emplace_back(Quad::MOV, c, a);
-	env.quads.emplace_back(qop, c);
+	Quad::Op qop;
+	if (env.opt->optimize) {
+		switch (op) {
+		case NEG: qop = Quad::NEG2; break;
+		default: assert(0);
+		}
+		env.quads.emplace_back(qop, c, a);
+	} else {
+		switch (op) {
+		case NEG: qop = Quad::NEG; break;
+		default: assert(0);
+		}
+		env.quads.emplace_back(Quad::MOV, c, a);
+		env.quads.emplace_back(qop, c);
+	}
 	return c;
 }
 
@@ -545,7 +556,12 @@ void ForStmt::translate(TranslateEnv &env) const
 	env.quads.emplace_back(down ? Quad::BLT : Quad::BGT, lend, o_indvar, lim);
 	// <cond>
 	body->translate(env);
-	env.quads.emplace_back(down ? Quad::DEC : Quad::INC, o_indvar);
+	if (env.opt->optimize) {
+		env.quads.emplace_back(down ? Quad::SUB3 : Quad::ADD3,
+				       o_indvar, o_indvar, new ImmOperand(1));
+	} else {
+		env.quads.emplace_back(down ? Quad::DEC : Quad::INC, o_indvar);
+	}
 	env.quads.emplace_back(Quad::JMP, lstart);
 	env.quads.emplace_back(Quad::LABEL, lend);
 }
@@ -676,7 +692,7 @@ void TranslateEnv::allocaddr()
 
 void TranslateEnv::assign_scalar_id()
 {
-	fprintf(stderr, "assign scalar id\n");
+	fprintf(stderr, "assign scalar id: %s\n", procname.c_str());
 	if (up) {
 		scalar_temp = up->scalar_temp;
 		temps = scalar_temp;

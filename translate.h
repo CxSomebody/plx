@@ -95,7 +95,7 @@ struct Quad {
 		NEG2,
 		LABEL,
 		PHI,
-		DEF, // TODO explain; used with CALL
+		SYNC, // TODO explain; used with CALL
 	} op;
 	Operand *c;
 	union {
@@ -171,7 +171,7 @@ class TranslateEnv {
 	std::vector<VarSymbol*> scalar_var;
 	std::vector<TempOperand*> temps;
 	TranslateEnv *up;
-	int scalar_id;
+	int scalar_id; // after construction, number of visible scalars (explicitly defined)
 
 	void emit(const char *ins, Operand *dst, Operand *src);
 	void emit(const char *ins, Operand *dst);
@@ -208,6 +208,7 @@ public:
 	void assign_scalar_id();
 	void optimize();
 	void load_scalars();
+	void final_sync();
 };
 
 extern const char *regname4[8];

@@ -102,6 +102,7 @@ void compute_def(const Quad &q, dynbitset &ret)
 	case Quad::JMP:
 	case Quad::PUSH:
 	case Quad::LABEL:
+	case Quad::SYNC:
 		break;
 	case Quad::CALL:
 		def(eax);
@@ -110,10 +111,6 @@ void compute_def(const Quad &q, dynbitset &ret)
 		break;
 	case Quad::CDQ:
 		def(edx);
-		break;
-	case Quad::DEF:
-		for (int i=0; q.args[i]; i++)
-			def(q.args[i]);
 		break;
 	default:
 		assert(0);
@@ -158,6 +155,7 @@ int compute_def_temp(const Quad &q)
 	case Quad::PUSH:
 	case Quad::CDQ:
 	case Quad::LABEL:
+	case Quad::SYNC:
 		return -1;
 	default:
 		assert(0);
@@ -227,7 +225,7 @@ void compute_use(const Quad &q, dynbitset &ret, bool exclude_physreg)
 	case Quad::JMP:
 	case Quad::CALL:
 	case Quad::LABEL:
-	case Quad::DEF:
+	case Quad::SYNC: // TODO does not count as use really?
 		break;
 	case Quad::NEG:
 	case Quad::PUSH:
@@ -360,11 +358,7 @@ void replace_def(Quad &q, int old, int neu)
 	case Quad::SEX:
 	case Quad::PHI:
 		replace(q.c);
-		break;
-	case Quad::DEF:
-		for (int i=0; q.args[i]; i++)
-			replace(q.args[i]);
-		break;
+		/* fallthrough */
 	case Quad::BEQ:
 	case Quad::BNE:
 	case Quad::BLT:
@@ -375,6 +369,7 @@ void replace_def(Quad &q, int old, int neu)
 	case Quad::PUSH:
 	case Quad::LABEL:
 	case Quad::CALL:
+	case Quad::SYNC:
 		break;
 	default:
 		assert(0);

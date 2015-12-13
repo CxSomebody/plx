@@ -9,6 +9,7 @@
 #include <vector>
 #include "semant.h"
 #include "translate.h"
+#include "dynbitset.h"
 
 using namespace std;
 
@@ -184,8 +185,8 @@ std::string Quad::tostr() const
 	case Quad::PHI:
 		ss << c->tostr() << " = φ" << args_tostr(args);
 		break;
-	case Quad::DEF:
-		ss << "def" << args_tostr(args);
+	case Quad::SYNC:
+		ss << "sync" << args_tostr(args);
 		break;
 	default:
 		assert(0);
@@ -334,11 +335,23 @@ Operand *TranslateEnv::translate_sym(const Symbol *sym)
 
 void TranslateEnv::translate_call(ProcSymbol *proc, const vector<unique_ptr<Expr>> &args)
 {
+	dynbitset visible_scalars(scalar_id);
 	int i=0;
 	for (auto it = args.rbegin(); it != args.rend(); it++) {
 		Expr *arg = it->get();
 		Operand *o;
 		if (proc->params[i].byref) {
+			if (opt->optimize) {
+				if (arg->kind == Expr::SYM) {
+					Symbol *sym = static_cast<SymExpr*>(arg)->sym;
+					if (sym->kind == Symbol::VAR) {
+						VarSymbol *varsym = static_cast<VarSymbol*>(sym);
+						if (varsym->scalar_id >= 0) {
+							visible_scalars.set(varsym->scalar_id);
+						}
+					}
+				}
+			}
 			MemOperand *m = translate_lvalue(arg);
 			TempOperand *addr = newtemp(4);
 			m->size = 0;
@@ -357,24 +370,25 @@ void TranslateEnv::translate_call(ProcSymbol *proc, const vector<unique_ptr<Expr
 				   static_cast<Operand*>(new MemOperand(4, ebp, 8+(i-1)*4)));
 	//printf("proc %s level=%d\n", proc->name.c_str(), proc->level);
 	int spinc = (args.size()+(proc->level-1))*4;
-	quads.emplace_back(Quad::CALL, translate_sym(proc));
 	if (opt->optimize) {
 #if 1
 		fprintf(stderr, "%s(%d) calls %s(%d)\n",
 			procname.c_str(), level,
 			proc->name.c_str(), proc->level);
 #endif
-#if 0
 		bool is_inner = proc->level > level;
-		int n_visible_scalars = is_inner ?
-			int(scalar_temp.size()) :
-			num_scalars_inherited();
-		for (int i=0; i<n_visible_scalars; i++) {
-			TempOperand *t = scalar_temp[i];
-			quads.emplace_back(Quad::MOV, t, translate_varsym(scalar_var[i]));
-		}
-#endif
+		int n = is_inner ? scalar_id : num_scalars_inherited();
+		for (int i=0; i<n; i++)
+			visible_scalars.set(i);
+		vector<int> vec_visible_scalars = visible_scalars.to_vector();
+		
+		Operand **args = (Operand **) calloc(vec_visible_scalars.size()+1, sizeof *args);
+		n = vec_visible_scalars.size();
+		for (int i=0; i<n; i++)
+			args[i] = scalar_temp[vec_visible_scalars[i]];
+		quads.emplace_back(Quad::SYNC, nullptr, args);
 	}
+	quads.emplace_back(Quad::CALL, translate_sym(proc));
 	if (spinc)
 		quads.emplace_back(Quad::ADD, esp, new ImmOperand(spinc));
 }
@@ -752,6 +766,8 @@ void translate_block(const Block &blk, FILE *outfp, TranslateEnv *up, const Tran
 #endif
 	for (const unique_ptr<Stmt> &stmt: blk.stmts)
 		stmt->translate(env);
+	if (opt->optimize)
+		env.final_sync();
 	if (blk.proc) {
 		Symbol *retval = blk.symtab->lookup(blk.proc->name+'$');
 		if (retval) {
@@ -910,5 +926,16 @@ void TranslateEnv::load_scalars()
 {
 	for (int i=0; i<scalar_id; i++) {
 		quads.emplace_back(Quad::MOV, scalar_temp[i], translate_varsym(scalar_var[i]));
+	}
+}
+
+void TranslateEnv::final_sync()
+{
+	if (up) {
+		int n = up->scalar_id;
+		Operand **args = (Operand **) calloc(n+1, sizeof *args);
+		for (int i=0; i<n; i++)
+			args[i] = scalar_temp[i];
+		quads.emplace_back(Quad::SYNC, nullptr, args);
 	}
 }

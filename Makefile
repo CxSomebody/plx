@@ -21,7 +21,7 @@ symtab.o: symtab.cpp semant.h
 parser.o: parser.cpp semant.h lexer.h tokens.h
 plx.o: plx.cpp semant.h lexer.h tokens.h translate.h
 regalloc.o: regalloc.cpp dynbitset.h dataflow.h translate.h
-translate.o: translate.cpp translate.h semant.h
+translate.o: translate.cpp translate.h semant.h dynbitset.h
 type.o: type.cpp semant.h
 
 clean:

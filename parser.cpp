@@ -216,7 +216,11 @@ static unique_ptr<Block> program()
 	X _{0};
 	try {
 		unique_ptr<Block> blk(block(nullptr));
-		check('.'); getsym();
+		if (tok.sym == '.') {
+			getsym();
+		} else if (tok.sym == 0) {
+			missing('.');
+		}
 		check(0);
 		return blk;
 	} CATCH_R(nullptr)
@@ -251,7 +255,7 @@ static unique_ptr<Block> block(ProcSymbol *proc)
 			 move(subs),
 			 move(params),
 			 move(vars),
-			 move(body->body),
+			 body ? move(body->body) : vector<unique_ptr<Stmt>>(),
 			 symtab);
 	} CATCH_R(nullptr)
 }

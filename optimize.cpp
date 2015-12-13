@@ -35,6 +35,7 @@ void TranslateEnv::insert_writeback()
 	vector<vector<int>> scalar_defsites(scalar_id);
 	vector<int> gen(n, -1);
 	vector<int> def_loc;
+	vector<int> def_scalar;
 	for (int i=0; i<n; i++) {
 		const Quad &q(quads[i]);
 		if (q.op == Quad::LABEL) {
@@ -44,6 +45,7 @@ void TranslateEnv::insert_writeback()
 			if (a >= 0 && a < scalar_id) {
 				int def = def_loc.size();
 				def_loc.push_back(i);
+				def_scalar.push_back(a);
 				scalar_defsites[a].push_back(def);
 				gen[i] = def;
 			}
@@ -99,13 +101,47 @@ void TranslateEnv::insert_writeback()
 			vector_int_tostr(in2).c_str());
 	}
 #endif
+	dynbitset writeback_def(def_loc.size());
+	for (int i=0; i<n; i++) {
+		if (quads[i].op == Quad::SYNC) {
+			Operand **args = quads[i].args;
+			dynbitset sync_scalars(scalar_id);
+			for (int j=0; args[j]; j++) {
+				assert(args[j]->istemp());
+				int id = astemp(args[j])->id;
+				sync_scalars.set(id);
+			}
+			in[i].foreach([&](int def){
+				if (sync_scalars.get(def_scalar[def]))
+					writeback_def.set(def);
+			});
+		}
+	}
+	dynbitset writeback_loc(n);
+	writeback_def.foreach([&](int def){
+		writeback_loc.set(def_loc[def]);
+	});
+	fprintf(stderr, "insert writeback after: %s\n",
+		vector_int_tostr(writeback_loc.to_vector()).c_str());
+	vector<Quad> oldquads(move(quads));
+	quads.clear();
+	for (int i=0; i<n; i++) {
+		const Quad &q = oldquads[i];
+		if (q.op != Quad::SYNC)
+			quads.push_back(q);
+		if (writeback_loc.get(i)) {
+			int a = compute_def_temp(q);
+			assert(a >= 0 && a < scalar_id);
+			quads.emplace_back(Quad::MOV, translate_varsym(scalar_var[a]), scalar_temp[a]);
+		}
+	}
 }
 
 void TranslateEnv::optimize()
 {
 	fprintf(stderr, "optimize: %s\n", procname.c_str());
-	vector<unique_ptr<BB>> blocks = partition(quads);
 	insert_writeback();
+	vector<unique_ptr<BB>> blocks = partition(quads);
 	char fname[80];
 	sprintf(fname, "cfg-%s0.dot", procname.c_str());
 	blocks_to_dot(blocks, fname);
@@ -196,9 +232,11 @@ void TranslateEnv::optimize()
 			defsites[a].set(bb->id);
 		});
 	}
+#if 0
 	for (int a=0; a<tempid; a++) {
 		fprintf(stderr, "defsites[%d]=%s\n", a, defsites[a].tostr().c_str());
 	}
+#endif
 	// place phi functions
 	// for each scalar a
 	for (int a=0; a<tempid; a++) {
@@ -212,7 +250,7 @@ void TranslateEnv::optimize()
 					BB &block_y(*blocks[y]);
 					// insert phi at block y
 					int npred = block_y.pred.size();
-					Operand **args = (Operand **) calloc(sizeof *args, npred+1);
+					Operand **args = (Operand **) calloc(npred+1, sizeof *args);
 #if 1
 					for (int i=0; i<npred; i++)
 						args[i] = temps[a];

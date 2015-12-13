@@ -5,8 +5,8 @@
 #include <sstream>
 #include <string>
 #include <vector>
-#include "translate.h"
 #include "dynbitset.h"
+#include "translate.h"
 #include "dataflow.h"
 
 #define astemp static_cast<TempOperand*>
@@ -245,7 +245,7 @@ string TempOperand::tostr() const
 		assert(0);
 	} else {
 		char tmp[12];
-		sprintf(tmp, "$%d", id);
+		sprintf(tmp, "%d$%d", size, id);
 		return string(tmp);
 	}
 }

@@ -185,8 +185,11 @@ std::string Quad::tostr() const
 	case Quad::PHI:
 		ss << c->tostr() << " = φ" << args_tostr(args);
 		break;
-	case Quad::SYNC:
-		ss << "sync" << args_tostr(args);
+	case Quad::SYNCM:
+		ss << "sync_mem" << args_tostr(args);
+		break;
+	case Quad::SYNCR:
+		ss << "sync_reg" << args_tostr(args);
 		break;
 	default:
 		assert(0);
@@ -337,6 +340,7 @@ void TranslateEnv::translate_call(ProcSymbol *proc, const vector<unique_ptr<Expr
 {
 	dynbitset visible_scalars(scalar_id);
 	int i=0;
+	assert(proc->params.size() == args.size());
 	for (auto it = args.rbegin(); it != args.rend(); it++) {
 		Expr *arg = it->get();
 		Operand *o;
@@ -370,6 +374,7 @@ void TranslateEnv::translate_call(ProcSymbol *proc, const vector<unique_ptr<Expr
 				   static_cast<Operand*>(new MemOperand(4, ebp, 8+(i-1)*4)));
 	//printf("proc %s level=%d\n", proc->name.c_str(), proc->level);
 	int spinc = (args.size()+(proc->level-1))*4;
+	Operand **synclist;
 	if (opt->optimize) {
 #if 1
 		fprintf(stderr, "%s(%d) calls %s(%d)\n",
@@ -382,13 +387,16 @@ void TranslateEnv::translate_call(ProcSymbol *proc, const vector<unique_ptr<Expr
 			visible_scalars.set(i);
 		vector<int> vec_visible_scalars = visible_scalars.to_vector();
 		
-		Operand **args = (Operand **) calloc(vec_visible_scalars.size()+1, sizeof *args);
+		synclist = (Operand **) calloc(vec_visible_scalars.size()+1, sizeof *synclist);
 		n = vec_visible_scalars.size();
 		for (int i=0; i<n; i++)
-			args[i] = scalar_temp[vec_visible_scalars[i]];
-		quads.emplace_back(Quad::SYNC, nullptr, args);
+			synclist[i] = scalar_temp[vec_visible_scalars[i]];
+		quads.emplace_back(Quad::SYNCM, nullptr, synclist);
 	}
 	quads.emplace_back(Quad::CALL, translate_sym(proc));
+	if (opt->optimize) {
+		quads.emplace_back(Quad::SYNCR, nullptr, synclist);
+	}
 	if (spinc)
 		quads.emplace_back(Quad::ADD, esp, new ImmOperand(spinc));
 }
@@ -409,39 +417,15 @@ Operand *BinaryExpr::translate(TranslateEnv &env) const
 	c = env.newtemp(type->size());
 	a = env.resize(c->size, left ->translate(env));
 	b = env.resize(c->size, right->translate(env));
-	if (env.opt->optimize) {
-		Quad::Op qop;
-		switch (op) {
-		case ADD: qop = Quad::ADD3; break;
-		case SUB: qop = Quad::SUB3; break;
-		case MUL: qop = Quad::MUL3; break;
-		case DIV: qop = Quad::DIV3; break;
-		default: assert(0);
-		}
-		env.quads.emplace_back(qop, c, a, b);
-	} else {
-		if (op == DIV) {
-			if (c->size == 4) {
-				env.quads.emplace_back(Quad::MOV, eax, a);
-				env.quads.emplace_back(Quad::CDQ);
-				env.quads.emplace_back(Quad::DIV, b);
-				env.quads.emplace_back(Quad::MOV, c, eax);
-			} else {
-				TODO("DIV with size(c) != 4");
-			}
-		} else {
-			Quad::Op qop;
-			switch (op) {
-			case ADD: qop = Quad::ADD; break;
-			case SUB: qop = Quad::SUB; break;
-			case MUL: qop = Quad::MUL; break;
-			case DIV: qop = Quad::DIV; break;
-			default: assert(0);
-			}
-			env.quads.emplace_back(Quad::MOV, c, a);
-			env.quads.emplace_back(qop, c, b);
-		}
+	Quad::Op qop;
+	switch (op) {
+	case ADD: qop = Quad::ADD3; break;
+	case SUB: qop = Quad::SUB3; break;
+	case MUL: qop = Quad::MUL3; break;
+	case DIV: qop = Quad::DIV3; break;
+	default: assert(0);
 	}
+	env.quads.emplace_back(qop, c, a, b);
 	return c;
 }
 
@@ -482,20 +466,11 @@ Operand *UnaryExpr::translate(TranslateEnv &env) const
 	Operand *a = sub->translate(env);
 	assert(c->size == a->size);
 	Quad::Op qop;
-	if (env.opt->optimize) {
-		switch (op) {
-		case NEG: qop = Quad::NEG2; break;
-		default: assert(0);
-		}
-		env.quads.emplace_back(qop, c, a);
-	} else {
-		switch (op) {
-		case NEG: qop = Quad::NEG; break;
-		default: assert(0);
-		}
-		env.quads.emplace_back(Quad::MOV, c, a);
-		env.quads.emplace_back(qop, c);
+	switch (op) {
+	case NEG: qop = Quad::NEG2; break;
+	default: assert(0);
 	}
+	env.quads.emplace_back(qop, c, a);
 	return c;
 }
 
@@ -590,12 +565,8 @@ void ForStmt::translate(TranslateEnv &env) const
 	env.quads.emplace_back(down ? Quad::BLT : Quad::BGT, lend, o_indvar, lim);
 	// <cond>
 	body->translate(env);
-	if (env.opt->optimize) {
-		env.quads.emplace_back(down ? Quad::SUB3 : Quad::ADD3,
-				       o_indvar, o_indvar, new ImmOperand(1));
-	} else {
-		env.quads.emplace_back(down ? Quad::DEC : Quad::INC, o_indvar);
-	}
+	env.quads.emplace_back(down ? Quad::SUB3 : Quad::ADD3,
+			       o_indvar, o_indvar, new ImmOperand(1));
 	env.quads.emplace_back(Quad::JMP, lstart);
 	env.quads.emplace_back(Quad::LABEL, lend);
 }
@@ -604,21 +575,33 @@ void ReadStmt::translate(TranslateEnv &env) const
 {
 	static LabelOperand o_scanf(EP "scanf");
 	for (const unique_ptr<Expr> &var: vars) {
-		MemOperand *m = env.translate_lvalue(var.get());
+		Expr *e = var.get();
+		MemOperand *m = env.translate_lvalue(e);
 		// nasm does not allow size prefix here
 		m->size = 0;
 		Operand *addr = env.newtemp(4);
 		env.quads.emplace_back(Quad::LEA, addr, m);
 		Operand *fmtstr;
-		if (var->type == int_type())
+		if (e->type == int_type())
 			fmtstr = new LabelOperand("_$fmtsd");
-		else if (var->type == char_type())
+		else if (e->type == char_type())
 			fmtstr = new LabelOperand("_$fmtsc");
 		else
 			assert(0);
 		env.quads.emplace_back(Quad::PUSH, addr);
 		env.quads.emplace_back(Quad::PUSH, fmtstr);
 		env.quads.emplace_back(Quad::CALL, &o_scanf);
+		if (env.opt->optimize) {
+			if (e->kind == Expr::SYM) {
+				Symbol *s = static_cast<SymExpr*>(e)->sym;
+				assert(s->kind == Symbol::VAR);
+				int a = static_cast<VarSymbol*>(s)->scalar_id;
+				assert(a >= 0);
+				Operand **synclist = (Operand **) calloc(2, sizeof *synclist);
+				synclist[0] = env.scalar_temp[a];
+				env.quads.emplace_back(Quad::SYNCR, nullptr, synclist);
+			}
+		}
 		env.quads.emplace_back(Quad::ADD, esp, new ImmOperand(8));
 	}
 }
@@ -760,14 +743,12 @@ void translate_block(const Block &blk, FILE *outfp, TranslateEnv *up, const Tran
 		env.assign_scalar_id();
 	for (const unique_ptr<Block> &sub: blk.subs)
 		translate_block(*sub, outfp, &env, opt);
-#if 0
 	if (opt->optimize)
-		env.load_scalars();
-#endif
+		env.sync(Quad::SYNCR);
 	for (const unique_ptr<Stmt> &stmt: blk.stmts)
 		stmt->translate(env);
 	if (opt->optimize)
-		env.final_sync();
+		env.sync(Quad::SYNCM);
 	if (blk.proc) {
 		Symbol *retval = blk.symtab->lookup(blk.proc->name+'$');
 		if (retval) {
@@ -779,9 +760,11 @@ void translate_block(const Block &blk, FILE *outfp, TranslateEnv *up, const Tran
 		}
 	}
 	if (opt->optimize)
-		env.optimize();
-	// FIXME re-enable code generation
-	if (!opt->optimize) env.gencode();
+		env.insert_sync();
+		//env.optimize();
+	env.dump_cfg();
+	env.lower();
+	env.gencode();
 	//printf("end %s\n", block_name);
 }
 
@@ -922,20 +905,62 @@ int TranslateEnv::num_scalars_inherited() const
 	return up ? int(up->scalar_temp.size()) : int(scalar_temp.size());
 }
 
-void TranslateEnv::load_scalars()
-{
-	for (int i=0; i<scalar_id; i++) {
-		quads.emplace_back(Quad::MOV, scalar_temp[i], translate_varsym(scalar_var[i]));
-	}
-}
-
-void TranslateEnv::final_sync()
+void TranslateEnv::sync(Quad::Op op)
 {
 	if (up) {
 		int n = up->scalar_id;
-		Operand **args = (Operand **) calloc(n+1, sizeof *args);
+		vector<int> byref_scalars;
+		for (VarSymbol *vs: params) {
+			assert(vs->scalar_id >= 0);
+			byref_scalars.push_back(vs->scalar_id);
+		}
+		int m = byref_scalars.size();
+		Operand **args = (Operand **) calloc(n+m+1, sizeof *args);
 		for (int i=0; i<n; i++)
 			args[i] = scalar_temp[i];
-		quads.emplace_back(Quad::SYNC, nullptr, args);
+		for (int i=0; i<m; i++)
+			args[n+i] = scalar_temp[byref_scalars[i]];
+		quads.emplace_back(op, nullptr, args);
 	}
+}
+
+void TranslateEnv::lower()
+{
+	vector<Quad> oldquads(move(quads));
+	for (const Quad &q: oldquads) {
+		switch (q.op) {
+		case Quad::ADD3:
+		case Quad::SUB3:
+		case Quad::MUL3:
+			quads.emplace_back(Quad::MOV, q.c, q.a);
+			quads.emplace_back(Quad::Op(Quad::ADD+(q.op-Quad::ADD3)), q.c, q.b);
+			break;
+		case Quad::DIV3:
+			if (q.c->size == 4) {
+				quads.emplace_back(Quad::MOV, eax, q.a);
+				quads.emplace_back(Quad::CDQ);
+				quads.emplace_back(Quad::DIV, q.b);
+				quads.emplace_back(Quad::MOV, q.c, eax);
+			} else {
+				TODO("DIV with size(c) != 4");
+			}
+			break;
+		case Quad::NEG2:
+			quads.emplace_back(Quad::MOV, q.c, q.a);
+			quads.emplace_back(Quad::NEG, q.c);
+			break;
+		default:
+			quads.push_back(q);
+		}
+	}
+}
+
+void TranslateEnv::sync_mem(int a)
+{
+	quads.emplace_back(Quad::MOV, scalar_temp[a], translate_varsym(scalar_var[a]));
+}
+
+void TranslateEnv::sync_reg(int a)
+{
+	quads.emplace_back(Quad::MOV, translate_varsym(scalar_var[a]), scalar_temp[a]);
 }

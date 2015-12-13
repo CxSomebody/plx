@@ -95,7 +95,8 @@ struct Quad {
 		NEG2,
 		LABEL,
 		PHI,
-		SYNC, // TODO explain; used with CALL
+		SYNCM,
+		SYNCR,
 	} op;
 	Operand *c;
 	union {
@@ -167,7 +168,6 @@ class TranslateEnv {
 	std::vector<int> temp_reg;
 	std::vector<VarSymbol*> params;
 	std::vector<VarSymbol*> vars; // local vars
-	std::vector<TempOperand*> scalar_temp;
 	std::vector<VarSymbol*> scalar_var;
 	std::vector<TempOperand*> temps;
 	TranslateEnv *up;
@@ -180,9 +180,12 @@ class TranslateEnv {
 	Operand *resolve(Operand *o);
 	TempOperand *totemp(Operand *o);
 	int num_scalars_inherited() const;
-	void insert_writeback();
+	void sync_mem(int a);
+	void sync_reg(int a);
+
 public:
 	std::vector<Quad> quads;
+	std::vector<TempOperand*> scalar_temp;
 	const TranslateOptions *opt;
 
 	TempOperand *newtemp(int size);
@@ -207,8 +210,10 @@ public:
 	void allocaddr();
 	void assign_scalar_id();
 	void optimize();
-	void load_scalars();
-	void final_sync();
+	void sync(Quad::Op op);
+	void insert_sync();
+	void lower();
+	void dump_cfg();
 };
 
 extern const char *regname4[8];

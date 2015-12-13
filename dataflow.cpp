@@ -6,8 +6,8 @@
 #include <sstream>
 #include <string>
 #include <vector>
-#include "translate.h"
 #include "dynbitset.h"
+#include "translate.h"
 #include "dataflow.h"
 
 using namespace std;
@@ -102,7 +102,8 @@ void compute_def(const Quad &q, dynbitset &ret)
 	case Quad::JMP:
 	case Quad::PUSH:
 	case Quad::LABEL:
-	case Quad::SYNC:
+	case Quad::SYNCM:
+	case Quad::SYNCR:
 		break;
 	case Quad::CALL:
 		def(eax);
@@ -155,7 +156,8 @@ int compute_def_temp(const Quad &q)
 	case Quad::PUSH:
 	case Quad::CDQ:
 	case Quad::LABEL:
-	case Quad::SYNC:
+	case Quad::SYNCM:
+	case Quad::SYNCR:
 		return -1;
 	default:
 		assert(0);
@@ -225,7 +227,8 @@ void compute_use(const Quad &q, dynbitset &ret, bool exclude_physreg)
 	case Quad::JMP:
 	case Quad::CALL:
 	case Quad::LABEL:
-	case Quad::SYNC: // TODO does not count as use really?
+	case Quad::SYNCM:
+	case Quad::SYNCR:
 		break;
 	case Quad::NEG:
 	case Quad::PUSH:
@@ -287,6 +290,7 @@ vector<int> Graph::remove(int v)
 	return ret;
 }
 
+// TODO rename
 Graph global_livevar(const vector<Quad> &quads, int ntemp)
 {
 	size_t n = quads.size();
@@ -369,7 +373,8 @@ void replace_def(Quad &q, int old, int neu)
 	case Quad::PUSH:
 	case Quad::LABEL:
 	case Quad::CALL:
-	case Quad::SYNC:
+	case Quad::SYNCM:
+	case Quad::SYNCR:
 		break;
 	default:
 		assert(0);
@@ -441,4 +446,83 @@ void replace_use(Quad &q, int old, int neu)
 	default:
 		assert(0);
 	}
+}
+
+#if 0
+in_out TranslateEnv::livevar()
+{
+	int n = quads.size();
+	map<string, int> labelmap;
+	vector<dynbitset> def(n, dynbitset(scalar_id));
+	vector<dynbitset> use(n, dynbitset(scalar_id));
+	vector<dynbitset> out(n, dynbitset(scalar_id));
+	vector<dynbitset> in (n, dynbitset(scalar_id));
+	vector<vector<int>> succ(n);
+	for (int i=0; i<n; i++) {
+		const Quad &q = quads[i];
+		if (q.op == Quad::LABEL) {
+			labelmap[static_cast<LabelOperand*>(q.c)->label] = i;
+		} else {
+			int a = compute_def_temp(q);
+			if (a >= 0 && a < scalar_id)
+				def[i].set(a);
+			compute_use(q, use[i]);
+		}
+	}
+	for (int i=0; i<n; i++) {
+		const Quad &q = quads[i];
+		if (q.is_jump_or_branch())
+			succ[i].push_back(labelmap[static_cast<LabelOperand*>(q.c)->label]);
+		if (!q.isjump() && i != n-1)
+			succ[i].push_back(i+1);
+	}
+	bool changed;
+	do {
+		changed = false;
+		for (int j=n; j; j--) {
+			int i = j-1;
+			in[i] = use[i] | (out[i]-def[i]);
+		}
+		for (int i=0; i<n; i++) {
+			for (int s: succ[i]) {
+				if (out[i].add_all(in[s]))
+					changed = true;
+			}
+		}
+	} while (changed);
+	return in_out(move(in), move(out));
+}
+#endif
+
+void TranslateEnv::dump_cfg()
+{
+	char fname[80];
+	sprintf(fname, "cfg-%s0.dot", procname.c_str());
+	vector<unique_ptr<BB>> blocks = partition(quads);
+	FILE *fp = fopen(fname, "w");
+	if (!fp) {
+		perror(fname);
+		return;
+	}
+	fprintf(fp, "digraph {\n");
+	// declare all basic blocks
+	for (auto it = blocks.begin(); it != blocks.end(); it++) {
+		const BB *bb = it->get();
+		stringstream ss;
+		for (const Quad &q: bb->quads) {
+			ss << q.tostr() << "\\n";
+		}
+		fprintf(fp, "\tB%d [shape=box label=\"Block %d:\\n%s\"];\n", bb->id, bb->id, ss.str().c_str());
+	}
+	// arcs
+	for (auto it = blocks.begin(); it != blocks.end(); it++) {
+		const BB *bb = it->get();
+		for (const BB *succ: bb->succ) {
+			const vector<BB*> &pred(succ->pred);
+			int j = find(pred.begin(), pred.end(), bb)-pred.begin();
+			fprintf(fp, "\tB%d -> B%d [label=\"%d\"];\n", bb->id, succ->id, j);
+		}
+	}
+	fprintf(fp, "}\n");
+	fclose(fp);
 }

@@ -6,8 +6,8 @@
 #include <sstream>
 #include <string>
 #include <vector>
-#include "translate.h"
 #include "dynbitset.h"
+#include "translate.h"
 #include "dataflow.h"
 
 using namespace std;
@@ -27,13 +27,17 @@ string vector_int_tostr(const vector<int> &v)
 	return ss.str();
 }
 
-void TranslateEnv::insert_writeback()
+void TranslateEnv::insert_sync()
 {
 	int n = quads.size();
 	map<string, int> labelmap;
-	vector<vector<int>> pred(n);
+	vector<vector<int>> pred(n), succ(n);
 	vector<vector<int>> scalar_defsites(scalar_id);
+	vector<dynbitset> live_out(n, dynbitset(scalar_id));
+	vector<dynbitset> live_in (n, dynbitset(scalar_id));
+	vector<dynbitset> use     (n, dynbitset(scalar_id));
 	vector<int> gen(n, -1);
+	vector<int> def(n, -1);
 	vector<int> def_loc;
 	vector<int> def_scalar;
 	for (int i=0; i<n; i++) {
@@ -43,27 +47,39 @@ void TranslateEnv::insert_writeback()
 		} else {
 			int a = compute_def_temp(q);
 			if (a >= 0 && a < scalar_id) {
-				int def = def_loc.size();
+				int d = def_loc.size();
 				def_loc.push_back(i);
 				def_scalar.push_back(a);
-				scalar_defsites[a].push_back(def);
-				gen[i] = def;
+				scalar_defsites[a].push_back(d);
+				gen[i] = d;
+				def[i] = a;
 			}
+			dynbitset u(tempid);
+			compute_use(q, u, true);
+			u.foreach([&](int a){
+				if (a < scalar_id)
+					use[i].set(a);
+			});
 		}
 	}
 	vector<dynbitset> kill(n, dynbitset(def_loc.size()));
 	for (int i=0; i<n; i++) {
 		const Quad &q = quads[i];
-		if (q.is_jump_or_branch())
-			pred[labelmap[static_cast<LabelOperand*>(q.c)->label]].push_back(i);
-		if (!q.isjump() && i != n-1)
+		if (q.is_jump_or_branch()) {
+			int dst = labelmap[static_cast<LabelOperand*>(q.c)->label];
+			pred[dst].push_back(i);
+			succ[i].push_back(dst);
+		}
+		if (!q.isjump() && i != n-1) {
 			pred[i+1].push_back(i);
+			succ[i].push_back(i+1);
+		}
 		int a = compute_def_temp(q);
 		if (a >= 0 && a < scalar_id) {
 			int g = gen[i];
-			for (int def: scalar_defsites[a]) {
-				if (def != g)
-					kill[i].set(def);
+			for (int d: scalar_defsites[a]) {
+				if (d != g)
+					kill[i].set(d);
 			}
 		}
 	}
@@ -74,26 +90,43 @@ void TranslateEnv::insert_writeback()
 			gen[i], kill[i].tostr().c_str());
 	}
 #endif
-	vector<dynbitset> out(n, dynbitset(def_loc.size()));
-	vector<dynbitset> in (n, dynbitset(def_loc.size()));
+	vector<dynbitset> rd_out(n, dynbitset(def_loc.size()));
+	vector<dynbitset> rd_in (n, dynbitset(def_loc.size()));
 	bool changed;
+	// reaching def
 	do {
 		changed = false;
 		for (int i=0; i<n; i++) {
-			dynbitset s = in[i]-kill[i];
+			dynbitset s = rd_in[i]-kill[i];
 			if (gen[i] >= 0)
 				s.set(gen[i]);
-			if (out[i].update(s))
+			if (rd_out[i].update(s))
 				changed = true;
 		}
 		for (int i=0; i<n; i++) {
 			for (int j: pred[i])
-				in[i] |= out[j];
+				rd_in[i] |= rd_out[j];
+		}
+	} while (changed);
+	// live var
+	do {
+		changed = false;
+		for (int i=n-1; i>=0; i--) {
+			dynbitset s = live_out[i];
+			if (def[i] >= 0)
+				s.clear(def[i]);
+			s |= use[i];
+			if (live_in[i].update(s))
+				changed = true;
+		}
+		for (int i=0; i<n; i++) {
+			for (int j: succ[i])
+				live_out[i] |= live_in[j];
 		}
 	} while (changed);
 #if 1
 	for (int i=0; i<n; i++) {
-		vector<int> in2(in[i].to_vector());
+		vector<int> in2(rd_in[i].to_vector());
 		for (int &x: in2)
 			x = def_loc[x];
 		fprintf(stderr, "[%d] %s\tin=%s\n", i,
@@ -102,37 +135,52 @@ void TranslateEnv::insert_writeback()
 	}
 #endif
 	dynbitset writeback_def(def_loc.size());
+	auto sync_scalars = [this](const Quad &q) {
+		Operand **args = q.args;
+		dynbitset s(scalar_id);
+		for (int j=0; args[j]; j++) {
+			assert(args[j]->istemp());
+			int id = astemp(args[j])->id;
+			s.set(id);
+		}
+		return s;
+	};
 	for (int i=0; i<n; i++) {
-		if (quads[i].op == Quad::SYNC) {
-			Operand **args = quads[i].args;
-			dynbitset sync_scalars(scalar_id);
-			for (int j=0; args[j]; j++) {
-				assert(args[j]->istemp());
-				int id = astemp(args[j])->id;
-				sync_scalars.set(id);
-			}
-			in[i].foreach([&](int def){
-				if (sync_scalars.get(def_scalar[def]))
-					writeback_def.set(def);
+		const Quad &q = quads[i];
+		if (q.op == Quad::SYNCM) {
+			dynbitset syncset = sync_scalars(q);
+			rd_in[i].foreach([&](int d){
+				if (syncset.get(def_scalar[d]))
+					writeback_def.set(d);
 			});
 		}
 	}
 	dynbitset writeback_loc(n);
-	writeback_def.foreach([&](int def){
-		writeback_loc.set(def_loc[def]);
+	writeback_def.foreach([&](int d){
+		writeback_loc.set(def_loc[d]);
 	});
 	fprintf(stderr, "insert writeback after: %s\n",
 		vector_int_tostr(writeback_loc.to_vector()).c_str());
+
 	vector<Quad> oldquads(move(quads));
 	quads.clear();
 	for (int i=0; i<n; i++) {
 		const Quad &q = oldquads[i];
-		if (q.op != Quad::SYNC)
-			quads.push_back(q);
+		if (q.op != Quad::SYNCM) {
+			if (q.op == Quad::SYNCR) {
+				dynbitset syncset = sync_scalars(q);
+				live_out[i].foreach([&](int a){
+					if (syncset.get(a))
+						sync_mem(a);
+				});
+			} else {
+				quads.push_back(q);
+			}
+		}
 		if (writeback_loc.get(i)) {
 			int a = compute_def_temp(q);
 			assert(a >= 0 && a < scalar_id);
-			quads.emplace_back(Quad::MOV, translate_varsym(scalar_var[a]), scalar_temp[a]);
+			sync_reg(a);
 		}
 	}
 }
@@ -140,11 +188,8 @@ void TranslateEnv::insert_writeback()
 void TranslateEnv::optimize()
 {
 	fprintf(stderr, "optimize: %s\n", procname.c_str());
-	insert_writeback();
+	insert_sync();
 	vector<unique_ptr<BB>> blocks = partition(quads);
-	char fname[80];
-	sprintf(fname, "cfg-%s0.dot", procname.c_str());
-	blocks_to_dot(blocks, fname);
 	// compute dominator tree and dominance frontier
 	int n = blocks.size();
 	vector<dynbitset> dom(n, dynbitset(n));
@@ -309,37 +354,4 @@ void TranslateEnv::optimize()
 	for (int a=0; a<tempid; a++)
 		stack[a].push_back(a);
 	rename(0, stack);
-	sprintf(fname, "cfg-%s.dot", procname.c_str());
-	blocks_to_dot(blocks, fname);
-}
-
-bool blocks_to_dot(const vector<unique_ptr<BB>> &blocks, const char *fpath)
-{
-	FILE *fp = fopen(fpath, "w");
-	if (!fp) {
-		perror(fpath);
-		return false;
-	}
-	fprintf(fp, "digraph {\n");
-	// declare all basic blocks
-	for (auto it = blocks.begin(); it != blocks.end(); it++) {
-		const BB *bb = it->get();
-		stringstream ss;
-		for (const Quad &q: bb->quads) {
-			ss << q.tostr() << "\\n";
-		}
-		fprintf(fp, "\tB%d [shape=box label=\"Block %d:\\n%s\"];\n", bb->id, bb->id, ss.str().c_str());
-	}
-	// arcs
-	for (auto it = blocks.begin(); it != blocks.end(); it++) {
-		const BB *bb = it->get();
-		for (const BB *succ: bb->succ) {
-			const vector<BB*> &pred(succ->pred);
-			int j = find(pred.begin(), pred.end(), bb)-pred.begin();
-			fprintf(fp, "\tB%d -> B%d [label=\"%d\"];\n", bb->id, succ->id, j);
-		}
-	}
-	fprintf(fp, "}\n");
-	fclose(fp);
-	return true;
 }

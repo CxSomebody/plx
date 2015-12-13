@@ -181,16 +181,8 @@ void use_operand(Operand *o, function<void(int)> f)
 	}
 }
 
-void compute_use(const Quad &q, dynbitset &ret, bool exclude_physreg)
+void for_each_use(const Quad &q, function<void(int)> f)
 {
-	auto f = [&](int id) {
-		if (exclude_physreg) {
-			if (id >= 0)
-				ret.set(id);
-		} else {
-			ret.set(8+id);
-		}
-	};
 	switch (q.op) {
 	case Quad::ADD:
 	case Quad::SUB:
@@ -303,7 +295,7 @@ Graph global_livevar(const vector<Quad> &quads, int ntemp)
 			labelmap[static_cast<LabelOperand*>(q.c)->label] = i;
 		} else {
 			compute_def(q, def[i]);
-			compute_use(q, use[i]);
+			for_each_use(q, [&](int id){use[i].set(8+id);});
 		}
 	}
 	for (size_t i=0; i<n; i++) {
@@ -444,52 +436,6 @@ void replace_use(Quad &q, int old, int neu)
 		assert(0);
 	}
 }
-
-#if 0
-in_out TranslateEnv::livevar()
-{
-	int n = quads.size();
-	map<string, int> labelmap;
-	vector<dynbitset> def(n, dynbitset(scalar_id));
-	vector<dynbitset> use(n, dynbitset(scalar_id));
-	vector<dynbitset> out(n, dynbitset(scalar_id));
-	vector<dynbitset> in (n, dynbitset(scalar_id));
-	vector<vector<int>> succ(n);
-	for (int i=0; i<n; i++) {
-		const Quad &q = quads[i];
-		if (q.op == Quad::LABEL) {
-			labelmap[static_cast<LabelOperand*>(q.c)->label] = i;
-		} else {
-			int a = compute_def_temp(q);
-			if (a >= 0 && a < scalar_id)
-				def[i].set(a);
-			compute_use(q, use[i]);
-		}
-	}
-	for (int i=0; i<n; i++) {
-		const Quad &q = quads[i];
-		if (q.is_jump_or_branch())
-			succ[i].push_back(labelmap[static_cast<LabelOperand*>(q.c)->label]);
-		if (!q.isjump() && i != n-1)
-			succ[i].push_back(i+1);
-	}
-	bool changed;
-	do {
-		changed = false;
-		for (int j=n; j; j--) {
-			int i = j-1;
-			in[i] = use[i] | (out[i]-def[i]);
-		}
-		for (int i=0; i<n; i++) {
-			for (int s: succ[i]) {
-				if (out[i].add_all(in[s]))
-					changed = true;
-			}
-		}
-	} while (changed);
-	return in_out(move(in), move(out));
-}
-#endif
 
 void TranslateEnv::dump_cfg()
 {

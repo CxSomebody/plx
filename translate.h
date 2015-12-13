@@ -160,13 +160,15 @@ struct TranslateOptions {
 struct VarSymbol;
 class TranslateEnv {
 	SymbolTable *symtab;
-	std::string procname;
+	std::string procname; // decorated name
 	FILE *outfp;
 	int framesize = 0;
-	int level;
+	int level; // 1 for top level
 	int tempid = 0;
 	int labelid = 0;
 	std::vector<int> temp_reg;
+	std::vector<int> temp_scalar;
+	std::vector<int> temp_offset; // for spilled temporaries
 	std::vector<VarSymbol*> params;
 	std::vector<VarSymbol*> vars; // local vars
 	std::vector<VarSymbol*> scalar_var;
@@ -177,9 +179,8 @@ class TranslateEnv {
 	void emit(const char *ins, Operand *dst, Operand *src);
 	void emit(const char *ins, Operand *dst);
 	void emit(const char *ins);
-	void emit_mov(Operand *dst, Operand *src);
 	Operand *resolve(Operand *o);
-	TempOperand *totemp(Operand *o);
+	TempOperand *totemp(Operand *o); // emit quads to load o into a temporary
 	void sync_mem(int a);
 	void sync_reg(int a);
 
@@ -189,6 +190,7 @@ public:
 	const TranslateOptions *opt;
 
 	TempOperand *newtemp(int size);
+	TempOperand *newtemp_scalar(int size, int scalar);
 	LabelOperand *newlabel();
 	Symbol *lookup(const std::string &name) const;
 	Operand *translate_sym(const Symbol *sym);
@@ -207,6 +209,7 @@ public:
 	void gencode();
 	void rewrite();
 	void rewrite_mem(MemOperand *m);
+	void try_rewrite_mem(Operand *o);
 	void allocaddr();
 	void assign_scalar_id();
 	void optimize();

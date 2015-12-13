@@ -199,9 +199,16 @@ std::string Quad::tostr() const
 
 TempOperand *TranslateEnv::newtemp(int size)
 {
+	return newtemp_scalar(size, -1);
+}
+
+TempOperand *TranslateEnv::newtemp_scalar(int size, int scalar)
+{
 	assert(int(temps.size()) == tempid);
+	assert(int(temp_scalar.size()) == tempid);
 	TempOperand *t = new TempOperand(size, tempid++);
 	temps.push_back(t);
+	temp_scalar.push_back(scalar);
 	return t;
 }
 
@@ -376,7 +383,7 @@ void TranslateEnv::translate_call(ProcSymbol *proc, const vector<unique_ptr<Expr
 	int spinc = (args.size()+(proc->level-1))*4;
 	Operand **synclist;
 	if (opt->optimize) {
-#if 1
+#if 0
 		fprintf(stderr, "%s(%d) calls %s(%d)\n",
 			procname.c_str(), level,
 			proc->name.c_str(), proc->level);
@@ -702,21 +709,26 @@ void TranslateEnv::allocaddr()
 
 void TranslateEnv::assign_scalar_id()
 {
+#if 0
 	fprintf(stderr, "assign scalar id: %s\n", procname.c_str());
+#endif
 	if (up) {
 		scalar_temp = up->scalar_temp;
 		scalar_var = up->scalar_var;
 		temps = scalar_temp;
 		tempid = scalar_id;
+		for (int i=0; i<tempid; i++)
+			temp_scalar.push_back(i);
 	}
 	auto do_var = [&](VarSymbol *vs) {
 		if (vs->type->is_scalar()) {
 			assert(scalar_id == (int)scalar_temp.size());
-			fprintf(stderr, "%s %d\n", vs->name.c_str(),
-				scalar_id);
-			vs->scalar_id = scalar_id++;
-			scalar_temp.push_back(newtemp(vs->type->size()));
+#if 0
+			fprintf(stderr, "%s %d\n", vs->name.c_str(), scalar_id);
+#endif
+			scalar_temp.push_back(newtemp_scalar(vs->type->size(), scalar_id));
 			scalar_var.push_back(vs);
+			vs->scalar_id = scalar_id++;
 		}
 	};
 	for_each(params.begin(), params.end(), do_var);
@@ -825,6 +837,12 @@ void TranslateEnv::rewrite_mem(MemOperand *m)
 	check(m->index);
 };
 
+void TranslateEnv::try_rewrite_mem(Operand *o)
+{
+	if (o && o->ismem())
+		rewrite_mem(asmem(o));
+};
+
 // eliminate invalid combination of opcode and operands, such as
 //   mov     MEM, MEM
 //   idiv    IMM
@@ -835,9 +853,9 @@ void TranslateEnv::rewrite()
 	quads.clear();
 	// no const here, we may modify q
 	for (Quad &q: oldquads) {
-		if (q.c && q.c->ismem()) rewrite_mem(asmem(q.c));
-		if (q.a && q.a->ismem()) rewrite_mem(asmem(q.a));
-		if (q.b && q.b->ismem()) rewrite_mem(asmem(q.b));
+		try_rewrite_mem(q.c);
+		try_rewrite_mem(q.a);
+		try_rewrite_mem(q.b);
 		switch (q.op) {
 		case Quad::ADD:
 		case Quad::SUB:
@@ -899,7 +917,6 @@ void TranslateEnv::rewrite()
 		default:
 			assert(0);
 		}
-		assert(!(q.op == Quad::MOV && q.c->ismem() && q.a->ismem()));
 		quads.emplace_back(q);
 	}
 }

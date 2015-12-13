@@ -54,10 +54,8 @@ void TranslateEnv::insert_sync()
 				gen[i] = d;
 				def[i] = a;
 			}
-			dynbitset u(tempid);
-			compute_use(q, u, true);
-			u.foreach([&](int a){
-				if (a < scalar_id)
+			for_each_use(q, [&](int a) {
+				if (a >= 0 && a < scalar_id)
 					use[i].set(a);
 			});
 		}
@@ -159,8 +157,10 @@ void TranslateEnv::insert_sync()
 	writeback_def.foreach([&](int d){
 		writeback_loc.set(def_loc[d]);
 	});
+#if 1
 	fprintf(stderr, "insert writeback after: %s\n",
 		vector_int_tostr(writeback_loc.to_vector()).c_str());
+#endif
 
 	vector<Quad> oldquads(move(quads));
 	quads.clear();
@@ -187,7 +187,9 @@ void TranslateEnv::insert_sync()
 
 void TranslateEnv::optimize()
 {
+#if 0
 	fprintf(stderr, "optimize: %s\n", procname.c_str());
+#endif
 	insert_sync();
 	vector<unique_ptr<BB>> blocks = partition(quads);
 	// compute dominator tree and dominance frontier
@@ -314,7 +316,10 @@ void TranslateEnv::optimize()
 			// rename variables used in each non-phi quad
 			if (q.op != Quad::PHI) {
 				dynbitset use(tempid);
-				compute_use(q, use, true);
+				for_each_use(q, [&](int a){
+					if (a >= 0)
+						use.set(a);
+				});
 				use.foreach([&](int a){
 					int newa = stack[a].back();
 					replace_use(q, a, newa);

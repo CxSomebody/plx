@@ -34,7 +34,7 @@ Graph global_livevar(const std::vector<Quad> &quads, int ntemp);
 bool blocks_to_dot(const std::vector<std::unique_ptr<BB>> &blocks,
 		   const char *fpath);
 void compute_def(const Quad &q, dynbitset &ret);
-void compute_use(const Quad &q, dynbitset &ret, bool exclude_physreg = false);
+void for_each_use(const Quad &q, std::function<void(int)> f);
 int compute_def_temp(const Quad &q);
 void replace_def(Quad &q, int old, int neu);
 void replace_use(Quad &q, int old, int neu);

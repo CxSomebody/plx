@@ -1,10 +1,12 @@
 #include <cassert>
 #include <cctype>
 #include <cstdio>
+#include <map>
 #include <memory>
 #include <sstream>
 #include <string>
 #include <vector>
+#include "semant.h"
 #include "dynbitset.h"
 #include "translate.h"
 #include "dataflow.h"
@@ -76,7 +78,7 @@ Operand *TranslateEnv::resolve(Operand *o)
 			int color = temp_reg[t->id];
 			if (color < 0) {
 				// spilled
-				return new MemOperand(t->size, ebp, color);
+				return new MemOperand(t->size, ebp, temp_offset[t->id]);
 			}
 			return getphysreg(t->size, color);
 		}
@@ -92,31 +94,12 @@ Operand *TranslateEnv::resolve(Operand *o)
 
 void TranslateEnv::gencode()
 {
-#if 0
-	auto bblisttostr = [](const vector<BB*> &list) {
-		stringstream ss;
-		ss << '[';
-		bool sep = false;
-		for (BB *bb: list) {
-			if (sep)
-				ss << ',';
-			ss << bb->id;
-			sep = true;
-		}
-		ss << ']';
-		return ss.str();
-	};
-	vector<unique_ptr<BB>> bbs = partition(quads);
-	for (const unique_ptr<BB> &bb: bbs) {
-		printf("=== BLOCK %d pred=%s succ=%s ===\n", bb->id,
-		       bblisttostr(bb->pred).c_str(),
-		       bblisttostr(bb->succ).c_str());
-		printf("tempid=%d\n", tempid);
-	}
-#endif
+	fprintf(stderr, "gencode: %s\n", procname.c_str());
+	temp_offset.resize(tempid);
 	int offset = -framesize;
 	int maxphysreg = -1;
 	bool spill;
+	int iter = 0;
 	do {
 		spill = false;
 		rewrite();
@@ -130,10 +113,17 @@ void TranslateEnv::gencode()
 		for (int i=0; i<tempid; i++) {
 			if (temp_reg[i] < 0) {
 				spill = true;
-				int size = temps[i]->size;
-				int align = size;
-				offset = (offset-size) & ~(align-1);
-				temp_reg[i] = offset;
+				int scalar = temp_scalar[i];
+				fprintf(stderr, "spill: %d\n", i);
+				if (scalar >= 0) {
+					fprintf(stderr, "scalar\n");
+					temp_offset[i] = scalar_var[scalar]->offset;
+				} else {
+					int size = temps[i]->size;
+					int align = size;
+					offset = (offset-size) & ~(align-1);
+					temp_offset[i] = offset;
+				}
 			}
 		}
 		for (Quad &q: quads) {
@@ -141,7 +131,9 @@ void TranslateEnv::gencode()
 			q.a = resolve(q.a);
 			q.b = resolve(q.b);
 		}
+		iter++;
 	} while (spill);
+	fprintf(stderr, "rewrites: %d\n", iter);
 	offset &= ~3;
 	framesize = -offset;
 	fprintf(outfp, "$%s:\n", procname.c_str());

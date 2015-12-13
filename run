@@ -1,9 +1,11 @@
 set -e
-./plx tests/$1
-nasm -felf32 out.s
-gcc -m32 out.o
-if [ -f tests/$1.in ]; then
-	exec ./a.out < tests/$1.in
+file=$1
+shift
+./plx -o $file.s "$@" tests/$file
+nasm -felf32 $file.s
+gcc -m32 $file.o
+if [ -f tests/$file.in ]; then
+	exec ./a.out < tests/$file.in
 else
 	exec ./a.out
 fi

@@ -154,6 +154,7 @@ struct Expr;
 
 struct TranslateOptions {
 	int optimize = 0; // optimization level
+	std::string out_fname;
 };
 
 struct VarSymbol;
@@ -179,7 +180,6 @@ class TranslateEnv {
 	void emit_mov(Operand *dst, Operand *src);
 	Operand *resolve(Operand *o);
 	TempOperand *totemp(Operand *o);
-	int num_scalars_inherited() const;
 	void sync_mem(int a);
 	void sync_reg(int a);
 
@@ -229,6 +229,7 @@ void todo(const char *file, int line, const char *msg);
 #define TODO(msg) todo(__FILE__, __LINE__, msg)
 
 #define astemp static_cast<TempOperand*>
+#define asmem  static_cast<MemOperand*>
 
 #ifdef __CYGWIN__
 # define EP "_"

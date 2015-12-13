@@ -164,34 +164,31 @@ int compute_def_temp(const Quad &q)
 	}
 }
 
+void use_operand(Operand *o, function<void(int)> f);
+void usemem(MemOperand *m, function<void(int)> f)
+{
+	if (m->base)
+		use_operand(m->base, f);
+	if (m->index)
+		use_operand(m->index, f);
+}
+void use_operand(Operand *o, function<void(int)> f)
+{
+	if (o->istemp()) {
+		f(astemp(o)->id);
+	} else if (o->ismem()) {
+		usemem(static_cast<MemOperand*>(o), f);
+	}
+}
+
 void compute_use(const Quad &q, dynbitset &ret, bool exclude_physreg)
 {
-	auto usetemp = [&](TempOperand *t) {
-		int id = t->id;
+	auto f = [&](int id) {
 		if (exclude_physreg) {
 			if (id >= 0)
 				ret.set(id);
 		} else {
 			ret.set(8+id);
-		}
-	};
-	auto usemem = [&](MemOperand *m) {
-		if (m->base) {
-			if (!m->base->islabel()) {
-				assert(m->base->istemp());
-				usetemp(astemp(m->base));
-			}
-		}
-		if (m->index) {
-			assert(m->index->istemp());
-			usetemp(astemp(m->index));
-		}
-	};
-	auto use = [&](Operand *o) {
-		if (o->istemp()) {
-			usetemp(astemp(o));
-		} else if (o->ismem()) {
-			usemem(static_cast<MemOperand*>(o));
 		}
 	};
 	switch (q.op) {
@@ -203,13 +200,13 @@ void compute_use(const Quad &q, dynbitset &ret, bool exclude_physreg)
 	case Quad::LEA:
 	case Quad::SEX:
 		if (q.c->ismem())
-			usemem(static_cast<MemOperand*>(q.c));
-		use(q.a);
+			usemem(static_cast<MemOperand*>(q.c), f);
+		use_operand(q.a, f);
 		break;
 	case Quad::DIV:
-		use(eax);
-		use(edx);
-		use(q.c);
+		use_operand(eax, f);
+		use_operand(edx, f);
+		use_operand(q.c, f);
 		break;
 	case Quad::BEQ:
 	case Quad::BNE:
@@ -221,8 +218,8 @@ void compute_use(const Quad &q, dynbitset &ret, bool exclude_physreg)
 	case Quad::SUB3:
 	case Quad::MUL3:
 	case Quad::DIV3:
-		use(q.a);
-		use(q.b);
+		use_operand(q.a, f);
+		use_operand(q.b, f);
 		break;
 	case Quad::JMP:
 	case Quad::CALL:
@@ -234,10 +231,10 @@ void compute_use(const Quad &q, dynbitset &ret, bool exclude_physreg)
 	case Quad::PUSH:
 	case Quad::INC:
 	case Quad::DEC:
-		use(q.c);
+		use_operand(q.c, f);
 		break;
 	case Quad::CDQ:
-		use(eax);
+		use_operand(eax, f);
 		break;
 	default:
 		assert(0);

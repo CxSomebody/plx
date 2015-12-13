@@ -382,7 +382,7 @@ void TranslateEnv::translate_call(ProcSymbol *proc, const vector<unique_ptr<Expr
 			proc->name.c_str(), proc->level);
 #endif
 		bool is_inner = proc->level > level;
-		int n = is_inner ? scalar_id : num_scalars_inherited();
+		int n = is_inner ? scalar_id : up ? int(up->scalar_temp.size()) : int(scalar_temp.size());
 		for (int i=0; i<n; i++)
 			visible_scalars.set(i);
 		vector<int> vec_visible_scalars = visible_scalars.to_vector();
@@ -440,22 +440,15 @@ Operand *IndexExpr::translate(TranslateEnv &env) const
 	int scale = static_cast<ArrayType*>(arrayty)->elemtype->size();
 	c = array->translate(env);
 	assert(c->kind == Operand::MEM);
-	MemOperand *moarray = static_cast<MemOperand*>(c);
-	assert(!moarray->index);
-	moarray->size = type->size();
+	MemOperand *m_array = static_cast<MemOperand*>(c);
+	assert(!m_array->index);
+	m_array->size = type->size();
 	Operand *oindex = index->translate(env);
-	if (oindex->kind == Operand::MEM) {
-		TempOperand *tmp = env.newtemp(index->type->size());
-		env.quads.emplace_back(Quad::MOV, tmp, oindex);
-		oindex = tmp;
-	}
 	if (oindex->kind == Operand::IMM) {
-		moarray->offset += static_cast<ImmOperand*>(oindex)->val * scale;
-	} else if (oindex->kind == Operand::TEMP) {
-		moarray->index = static_cast<TempOperand*>(oindex);
-		moarray->scale = scale;
+		m_array->offset += static_cast<ImmOperand*>(oindex)->val * scale;
 	} else {
-		assert(0);
+		m_array->index = oindex;
+		m_array->scale = scale;
 	}
 	return c;
 }
@@ -781,7 +774,8 @@ static char sizechar(int size)
 
 void translate_all(unique_ptr<Block> &&blk, const TranslateOptions *opt)
 {
-	FILE *outfp = fopen("out.s", "w");
+	const char *out_fname = opt->out_fname.empty() ? "out.s" : opt->out_fname.c_str();
+	FILE *outfp = fopen(out_fname, "w");
 	fputs("\tglobal\t" EP "main\n"
 	      "\textern\t" EP "printf, " EP "scanf, " EP "putchar\n"
 	      "\n"
@@ -818,7 +812,7 @@ void translate_all(unique_ptr<Block> &&blk, const TranslateOptions *opt)
 void TranslateEnv::rewrite_mem(MemOperand *m)
 {
 	auto check = [this](Operand *&o) {
-		if (o->ismem()) {
+		if (o && o->ismem()) {
 			MemOperand *m = static_cast<MemOperand*>(o);
 			rewrite_mem(m);
 			assert(m->size == 4);
@@ -834,12 +828,16 @@ void TranslateEnv::rewrite_mem(MemOperand *m)
 // eliminate invalid combination of opcode and operands, such as
 //   mov     MEM, MEM
 //   idiv    IMM
+//   cmp     IMM, _
 void TranslateEnv::rewrite()
 {
 	vector<Quad> oldquads = move(quads);
 	quads.clear();
 	// no const here, we may modify q
 	for (Quad &q: oldquads) {
+		if (q.c && q.c->ismem()) rewrite_mem(asmem(q.c));
+		if (q.a && q.a->ismem()) rewrite_mem(asmem(q.a));
+		if (q.b && q.b->ismem()) rewrite_mem(asmem(q.b));
 		switch (q.op) {
 		case Quad::ADD:
 		case Quad::SUB:
@@ -867,8 +865,14 @@ void TranslateEnv::rewrite()
 		case Quad::BLE:
 			// bcc c,a,b
 			assert(q.c->islabel());
-			if (q.a->ismem() && q.b->ismem())
+			if (q.a->ismem() && q.b->ismem()) {
 				q.a = totemp(q.a);
+			} else if (q.a->isimm()) {
+				assert(!q.b->isimm());
+				swap(q.a, q.b);
+				if (q.op >= Quad::BLT)
+					q.op = Quad::Op(q.op^1);
+			}
 			break;
 		case Quad::SEX:
 			// movsx c,a
@@ -898,11 +902,6 @@ void TranslateEnv::rewrite()
 		assert(!(q.op == Quad::MOV && q.c->ismem() && q.a->ismem()));
 		quads.emplace_back(q);
 	}
-}
-
-int TranslateEnv::num_scalars_inherited() const
-{
-	return up ? int(up->scalar_temp.size()) : int(scalar_temp.size());
 }
 
 void TranslateEnv::sync(Quad::Op op)

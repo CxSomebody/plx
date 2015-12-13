@@ -28,8 +28,11 @@ int main(int argc, char **argv)
 {
 	int opt;
 	TranslateOptions tropt;
-	while ((opt = getopt(argc, argv, "O")) != -1) {
+	while ((opt = getopt(argc, argv, "o:O")) != -1) {
 		switch (opt) {
+		case 'o':
+			tropt.out_fname = optarg;
+			break;
 		case 'O':
 			tropt.optimize = 1;
 			break;

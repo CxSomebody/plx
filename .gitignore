@@ -6,6 +6,6 @@
 /plx
 /tokens.h
 /tokname.inc
-/out.s
+/*.s
 /out
 /a.out

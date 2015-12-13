@@ -115,11 +115,17 @@ void TranslateEnv::gencode()
 	}
 #endif
 	int offset = -framesize;
+	int maxphysreg = -1;
 	bool spill;
 	do {
+		spill = false;
 		rewrite();
 		temp_reg = color_graph(global_livevar(quads, tempid));
-		spill = false;
+		// must update maxphysreg after each iteration
+		for (int i=0; i<tempid; i++) {
+			if (maxphysreg < temp_reg[i])
+				maxphysreg = temp_reg[i];
+		}
 		// allocate address for spilled temporaries
 		for (int i=0; i<tempid; i++) {
 			if (temp_reg[i] < 0) {
@@ -138,11 +144,6 @@ void TranslateEnv::gencode()
 	} while (spill);
 	offset &= ~3;
 	framesize = -offset;
-	int maxphysreg = -1;
-	for (int i=0; i<tempid; i++) {
-		if (maxphysreg < temp_reg[i])
-			maxphysreg = temp_reg[i];
-	}
 	fprintf(outfp, "$%s:\n", procname.c_str());
 	// prologue
 	emit("push", ebp);

@@ -65,6 +65,7 @@ struct MemOperand: Operand
 	std::string tostr() const override;
 };
 
+// at most one temporary (non-physreg) is defined at a time
 struct Quad {
 	enum Op {
 		ADD,
@@ -94,11 +95,12 @@ struct Quad {
 		NEG2,
 		LABEL,
 		PHI,
+		DEF, // TODO explain; used with CALL
 	} op;
 	Operand *c;
 	union {
 		Operand *a;
-		Operand **args;
+		Operand **args; // NULL-terminated
 	};
 	Operand *b;
 	Quad(Op op, Operand *c, Operand *a, Operand *b):
@@ -164,8 +166,9 @@ class TranslateEnv {
 	int labelid = 0;
 	std::vector<int> temp_reg;
 	std::vector<VarSymbol*> params;
-	std::vector<VarSymbol*> vars;
+	std::vector<VarSymbol*> vars; // local vars
 	std::vector<TempOperand*> scalar_temp;
+	std::vector<VarSymbol*> scalar_var;
 	std::vector<TempOperand*> temps;
 	TranslateEnv *up;
 	int scalar_id;
@@ -176,6 +179,8 @@ class TranslateEnv {
 	void emit_mov(Operand *dst, Operand *src);
 	Operand *resolve(Operand *o);
 	TempOperand *totemp(Operand *o);
+	int num_scalars_inherited() const;
+	void insert_writeback();
 public:
 	std::vector<Quad> quads;
 	const TranslateOptions *opt;
@@ -184,7 +189,7 @@ public:
 	LabelOperand *newlabel();
 	Symbol *lookup(const std::string &name) const;
 	Operand *translate_sym(const Symbol *sym);
-	MemOperand *translate_sym_mem(const VarSymbol *sym);
+	MemOperand *translate_varsym(const VarSymbol *sym);
 	MemOperand *translate_lvalue(const Expr *e);
 	void translate_call(ProcSymbol *proc, const std::vector<std::unique_ptr<Expr>> &args);
 	int physreg(const TempOperand *t);
@@ -202,6 +207,7 @@ public:
 	void allocaddr();
 	void assign_scalar_id();
 	void optimize();
+	void load_scalars();
 };
 
 extern const char *regname4[8];

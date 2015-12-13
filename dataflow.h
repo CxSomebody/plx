@@ -33,7 +33,8 @@ std::vector<int> color_graph(Graph &&g);
 Graph global_livevar(const std::vector<Quad> &quads, int ntemp);
 bool blocks_to_dot(const std::vector<std::unique_ptr<BB>> &blocks,
 		   const char *fpath);
-void compute_def(const Quad &q, dynbitset &ret, bool exclude_physreg = false);
+void compute_def(const Quad &q, dynbitset &ret);
 void compute_use(const Quad &q, dynbitset &ret, bool exclude_physreg = false);
+int compute_def_temp(const Quad &q);
 void replace_def(Quad &q, int old, int neu);
 void replace_use(Quad &q, int old, int neu);

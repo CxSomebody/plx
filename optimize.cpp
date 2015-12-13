@@ -1,6 +1,7 @@
 #include <algorithm>
 #include <cassert>
 #include <cstdio>
+#include <map>
 #include <memory>
 #include <sstream>
 #include <string>
@@ -11,10 +12,100 @@
 
 using namespace std;
 
+string vector_int_tostr(const vector<int> &v)
+{
+	stringstream ss;
+	ss << '[';
+	bool sep = false;
+	for (int x: v) {
+		if (sep)
+			ss << ',';
+		ss << x;
+		sep = true;
+	}
+	ss << ']';
+	return ss.str();
+}
+
+void TranslateEnv::insert_writeback()
+{
+	int n = quads.size();
+	map<string, int> labelmap;
+	vector<vector<int>> pred(n);
+	vector<vector<int>> scalar_defsites(scalar_id);
+	vector<int> gen(n, -1);
+	vector<int> def_loc;
+	for (int i=0; i<n; i++) {
+		const Quad &q(quads[i]);
+		if (q.op == Quad::LABEL) {
+			labelmap[static_cast<LabelOperand*>(q.c)->label] = i;
+		} else {
+			int a = compute_def_temp(q);
+			if (a >= 0 && a < scalar_id) {
+				int def = def_loc.size();
+				def_loc.push_back(i);
+				scalar_defsites[a].push_back(def);
+				gen[i] = def;
+			}
+		}
+	}
+	vector<dynbitset> kill(n, dynbitset(def_loc.size()));
+	for (int i=0; i<n; i++) {
+		const Quad &q = quads[i];
+		if (q.is_jump_or_branch())
+			pred[labelmap[static_cast<LabelOperand*>(q.c)->label]].push_back(i);
+		if (!q.isjump() && i != n-1)
+			pred[i+1].push_back(i);
+		int a = compute_def_temp(q);
+		if (a >= 0 && a < scalar_id) {
+			int g = gen[i];
+			for (int def: scalar_defsites[a]) {
+				if (def != g)
+					kill[i].set(def);
+			}
+		}
+	}
+#if 0
+	for (int i=0; i<n; i++) {
+		fprintf(stderr, "%s\tgen=%d kill=%s\n",
+			quads[i].tostr().c_str(),
+			gen[i], kill[i].tostr().c_str());
+	}
+#endif
+	vector<dynbitset> out(n, dynbitset(def_loc.size()));
+	vector<dynbitset> in (n, dynbitset(def_loc.size()));
+	bool changed;
+	do {
+		changed = false;
+		for (int i=0; i<n; i++) {
+			dynbitset s = in[i]-kill[i];
+			if (gen[i] >= 0)
+				s.set(gen[i]);
+			if (out[i].update(s))
+				changed = true;
+		}
+		for (int i=0; i<n; i++) {
+			for (int j: pred[i])
+				in[i] |= out[j];
+		}
+	} while (changed);
+#if 1
+	for (int i=0; i<n; i++) {
+		vector<int> in2(in[i].to_vector());
+		for (int &x: in2)
+			x = def_loc[x];
+		fprintf(stderr, "[%d] %s\tin=%s\n", i,
+			quads[i].tostr().c_str(),
+			vector_int_tostr(in2).c_str());
+	}
+#endif
+}
+
 void TranslateEnv::optimize()
 {
 	fprintf(stderr, "optimize: %s\n", procname.c_str());
 	vector<unique_ptr<BB>> blocks = partition(quads);
+	insert_writeback();
 	char fname[80];
 	sprintf(fname, "cfg-%s0.dot", procname.c_str());
 	blocks_to_dot(blocks, fname);
@@ -97,7 +188,9 @@ void TranslateEnv::optimize()
 		const BB *bb = p.get();
 		dynbitset bdefs(tempid);
 		for (const Quad &q: bb->quads) {
-			compute_def(q, bdefs, true);
+			int def = compute_def_temp(q);
+			if (def >= 0)
+				bdefs.set(def);
 		}
 		bdefs.foreach([&](int a) {
 			defsites[a].set(bb->id);
@@ -145,14 +238,13 @@ void TranslateEnv::optimize()
 				});
 			}
 			// rename variables defined in each quad
-			dynbitset def(tempid);
-			compute_def(q, def, true);
-			def.foreach([&](int a){
+			int a = compute_def_temp(q);
+			if (a >= 0) {
 				int size = temps[a]->size;
 				int newa = newtemp(size)->id;
 				stack[a].push_back(newa);
 				replace_def(q, a, newa);
-			});
+			}
 		}
 		for (BB *succ: blocks[b]->succ) {
 			int y = succ->id;

@@ -82,7 +82,7 @@ L_after_B:
 这个scalar_id就是对应的temp的id
 
 synchronization points
-遇到call时，所有变量写回内存
+遇到call, return时，所有(which exactly? don't perform redundant stores)变量写回内存
 
 所谓SSA只针对temp
 
@@ -109,4 +109,6 @@ if () {
 	f(); // a here is a2
 }
 
-NOW COMPUTE DOMFRONT!
+最外层过程TranslateEnv的level为1
+
+通过 reaching def analysis 解决写回问题

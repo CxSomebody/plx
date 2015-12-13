@@ -184,6 +184,9 @@ std::string Quad::tostr() const
 	case Quad::PHI:
 		ss << c->tostr() << " = φ" << args_tostr(args);
 		break;
+	case Quad::DEF:
+		ss << "def" << args_tostr(args);
+		break;
 	default:
 		assert(0);
 	}
@@ -263,7 +266,7 @@ Operand *TranslateEnv::resize(int size, Operand *o)
 	}
 }
 
-MemOperand *TranslateEnv::translate_sym_mem(const VarSymbol *vs)
+MemOperand *TranslateEnv::translate_varsym(const VarSymbol *vs)
 {
 	MemOperand *m;
 	if (vs->level) {
@@ -298,7 +301,7 @@ MemOperand *TranslateEnv::translate_lvalue(const Expr *e)
 	case Expr::SYM:
 		se = static_cast<const SymExpr*>(e);
 		assert(se->sym->kind == Symbol::VAR);
-		return translate_sym_mem(static_cast<const VarSymbol*>(se->sym));
+		return translate_varsym(static_cast<const VarSymbol*>(se->sym));
 	case Expr::INDEX:
 		o = e->translate(*this);
 		assert(o->ismem());
@@ -319,7 +322,7 @@ Operand *TranslateEnv::translate_sym(const Symbol *sym)
 				return scalar_temp[vs->scalar_id];
 			}
 		}
-		return translate_sym_mem(vs);
+		return translate_varsym(vs);
 	}
 	if (sym->kind == Symbol::PROC) {
 		// address of function
@@ -355,6 +358,23 @@ void TranslateEnv::translate_call(ProcSymbol *proc, const vector<unique_ptr<Expr
 	//printf("proc %s level=%d\n", proc->name.c_str(), proc->level);
 	int spinc = (args.size()+(proc->level-1))*4;
 	quads.emplace_back(Quad::CALL, translate_sym(proc));
+	if (opt->optimize) {
+#if 1
+		fprintf(stderr, "%s(%d) calls %s(%d)\n",
+			procname.c_str(), level,
+			proc->name.c_str(), proc->level);
+#endif
+#if 0
+		bool is_inner = proc->level > level;
+		int n_visible_scalars = is_inner ?
+			int(scalar_temp.size()) :
+			num_scalars_inherited();
+		for (int i=0; i<n_visible_scalars; i++) {
+			TempOperand *t = scalar_temp[i];
+			quads.emplace_back(Quad::MOV, t, translate_varsym(scalar_var[i]));
+		}
+#endif
+	}
 	if (spinc)
 		quads.emplace_back(Quad::ADD, esp, new ImmOperand(spinc));
 }
@@ -695,6 +715,7 @@ void TranslateEnv::assign_scalar_id()
 	fprintf(stderr, "assign scalar id: %s\n", procname.c_str());
 	if (up) {
 		scalar_temp = up->scalar_temp;
+		scalar_var = up->scalar_var;
 		temps = scalar_temp;
 		tempid = scalar_id;
 	}
@@ -705,6 +726,7 @@ void TranslateEnv::assign_scalar_id()
 				scalar_id);
 			vs->scalar_id = scalar_id++;
 			scalar_temp.push_back(newtemp(vs->type->size()));
+			scalar_var.push_back(vs);
 		}
 	};
 	for_each(params.begin(), params.end(), do_var);
@@ -724,6 +746,10 @@ void translate_block(const Block &blk, FILE *outfp, TranslateEnv *up, const Tran
 		env.assign_scalar_id();
 	for (const unique_ptr<Block> &sub: blk.subs)
 		translate_block(*sub, outfp, &env, opt);
+#if 0
+	if (opt->optimize)
+		env.load_scalars();
+#endif
 	for (const unique_ptr<Stmt> &stmt: blk.stmts)
 		stmt->translate(env);
 	if (blk.proc) {
@@ -872,5 +898,17 @@ void TranslateEnv::rewrite()
 		}
 		assert(!(q.op == Quad::MOV && q.c->ismem() && q.a->ismem()));
 		quads.emplace_back(q);
+	}
+}
+
+int TranslateEnv::num_scalars_inherited() const
+{
+	return up ? int(up->scalar_temp.size()) : int(scalar_temp.size());
+}
+
+void TranslateEnv::load_scalars()
+{
+	for (int i=0; i<scalar_id; i++) {
+		quads.emplace_back(Quad::MOV, scalar_temp[i], translate_varsym(scalar_var[i]));
 	}
 }

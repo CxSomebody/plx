@@ -63,17 +63,12 @@ vector<unique_ptr<BB>> partition(const vector<Quad> &quads)
 	return blocks;
 }
 
-void compute_def(const Quad &q, dynbitset &ret, bool exclude_physreg)
+void compute_def(const Quad &q, dynbitset &ret)
 {
 	auto def = [&](Operand *o) {
 		if (o->istemp()) {
 			int id = astemp(o)->id;
-			if (exclude_physreg) {
-				if (id >= 0)
-					ret.set(id);
-			} else {
-				ret.set(8+id);
-			}
+			ret.set(8+id);
 		}
 	};
 	switch (q.op) {
@@ -116,6 +111,54 @@ void compute_def(const Quad &q, dynbitset &ret, bool exclude_physreg)
 	case Quad::CDQ:
 		def(edx);
 		break;
+	case Quad::DEF:
+		for (int i=0; q.args[i]; i++)
+			def(q.args[i]);
+		break;
+	default:
+		assert(0);
+	}
+}
+
+int compute_def_temp(const Quad &q)
+{
+	Operand *o;
+	switch (q.op) {
+	case Quad::ADD:
+	case Quad::SUB:
+	case Quad::MUL:
+	case Quad::NEG:
+	case Quad::MOV:
+	case Quad::LEA:
+	case Quad::INC:
+	case Quad::DEC:
+	case Quad::SEX:
+	case Quad::ADD3:
+	case Quad::SUB3:
+	case Quad::MUL3:
+	case Quad::DIV3:
+	case Quad::NEG2:
+	case Quad::PHI:
+		o = q.c;
+		if (o->istemp()) {
+			int id = astemp(o)->id;
+			if (id >= 0)
+				return id;
+		}
+		/* fallthrough */
+	case Quad::DIV:
+	case Quad::BEQ:
+	case Quad::BNE:
+	case Quad::BLT:
+	case Quad::BGE:
+	case Quad::BGT:
+	case Quad::BLE:
+	case Quad::JMP:
+	case Quad::CALL:
+	case Quad::PUSH:
+	case Quad::CDQ:
+	case Quad::LABEL:
+		return -1;
 	default:
 		assert(0);
 	}
@@ -184,6 +227,7 @@ void compute_use(const Quad &q, dynbitset &ret, bool exclude_physreg)
 	case Quad::JMP:
 	case Quad::CALL:
 	case Quad::LABEL:
+	case Quad::DEF:
 		break;
 	case Quad::NEG:
 	case Quad::PUSH:
@@ -316,6 +360,10 @@ void replace_def(Quad &q, int old, int neu)
 	case Quad::SEX:
 	case Quad::PHI:
 		replace(q.c);
+		break;
+	case Quad::DEF:
+		for (int i=0; q.args[i]; i++)
+			replace(q.args[i]);
 		break;
 	case Quad::BEQ:
 	case Quad::BNE:

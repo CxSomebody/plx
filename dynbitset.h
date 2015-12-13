@@ -15,6 +15,12 @@ class dynbitset {
 	size_t _size;
 public:
 	dynbitset(size_t size): data((size+wsize-1)>>lwsize), _size(size) {}
+	dynbitset(): _size(0) {}
+	void resize(size_t size)
+	{
+		_size = size;
+		data.resize((size+wsize-1)>>lwsize);
+	}
 	bool get(int index) const
 	{
 		assert(index >= 0 && size_t(index) < _size);
@@ -142,5 +148,13 @@ public:
 			if (get(i))
 				return i;
 		return -1;
+	}
+	std::vector<int> to_vector() const
+	{
+		std::vector<int> ret;
+		foreach([&](int x){
+			ret.push_back(x);
+		});
+		return ret;
 	}
 };

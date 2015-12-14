@@ -70,7 +70,7 @@ struct Quad {
 	enum Op {
 		ADD,
 		SUB,
-		MUL,
+		MULW,
 		DIV,
 		BEQ,
 		BNE,
@@ -93,6 +93,7 @@ struct Quad {
 		MUL3,
 		DIV3,
 		NEG2,
+		MULB,
 		LABEL,
 		PHI,
 		SYNCM,
@@ -158,6 +159,7 @@ struct TranslateOptions {
 };
 
 struct VarSymbol;
+struct Graph;
 class TranslateEnv {
 	SymbolTable *symtab;
 	std::string procname; // decorated name
@@ -169,9 +171,11 @@ class TranslateEnv {
 	std::vector<int> temp_reg;
 	std::vector<int> temp_scalar;
 	std::vector<int> temp_offset; // for spilled temporaries
+	std::vector<int> part_temps; // temporaries that must reside in e[acdb]x
 	std::vector<VarSymbol*> params;
 	std::vector<VarSymbol*> vars; // local vars
 	std::vector<VarSymbol*> scalar_var;
+	std::vector<MemOperand*> scalar_mem;
 	std::vector<TempOperand*> temps;
 	TranslateEnv *up;
 	int scalar_id; // after construction, number of visible scalars (explicitly defined)
@@ -218,12 +222,14 @@ public:
 	void lower();
 	void dump_cfg();
 	void dump_quads();
+	Graph build_interference_graph();
 };
 
 extern const char *regname4[8];
 extern const char *regname1[4];
 
 extern TempOperand *eax, *ecx, *edx, *ebx, *esp, *ebp, *esi, *edi;
+extern TempOperand *al;
 TempOperand *getphysreg(int size, int id);
 
 struct Block;

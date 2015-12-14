@@ -74,6 +74,8 @@ TempOperand *ebp = &physreg4[5];
 TempOperand *esi = &physreg4[6];
 TempOperand *edi = &physreg4[7];
 
+TempOperand *al = &physreg1[0];
+
 TempOperand *getphysreg(int size, int id)
 {
 	assert(id >= 0);
@@ -122,7 +124,7 @@ std::string Quad::tostr() const
 	switch (op) {
 	case Quad::ADD:
 	case Quad::SUB:
-	case Quad::MUL:
+	case Quad::MULW:
 		ss << c->tostr() << ' ' << opstr[op] << ' ' << a->tostr();
 		break;
 	case Quad::DIV:
@@ -173,6 +175,9 @@ std::string Quad::tostr() const
 	case Quad::CDQ:
 		ss << "cdq";
 		break;
+	case Quad::MULB:
+		ss << "mulb " << c->tostr();
+		break;
 	case Quad::ADD3:
 	case Quad::SUB3:
 	case Quad::MUL3:
@@ -206,6 +211,8 @@ TempOperand *TranslateEnv::newtemp_scalar(int size, int scalar)
 {
 	assert(int(temps.size()) == tempid);
 	assert(int(temp_scalar.size()) == tempid);
+	if (size < 4)
+		part_temps.push_back(tempid);
 	TempOperand *t = new TempOperand(size, tempid++);
 	temps.push_back(t);
 	temp_scalar.push_back(scalar);
@@ -260,9 +267,10 @@ Operand *TranslateEnv::resize(int size, Operand *o)
 			return i;
 		}
 	case Operand::TEMP:
-		// TODO what if physreg for t is none of e[acdb]x
 		{
-			TempOperand *t = new TempOperand(size, static_cast<TempOperand*>(o)->id);
+			int id = astemp(o)->id;
+			part_temps.push_back(id);
+			TempOperand *t = new TempOperand(size, id);
 			t->size = size;
 			return t;
 		}
@@ -280,26 +288,23 @@ Operand *TranslateEnv::resize(int size, Operand *o)
 MemOperand *TranslateEnv::translate_varsym(const VarSymbol *vs)
 {
 	MemOperand *m;
+	int size = vs->type->size();
 	if (vs->level) {
 		// local var
-		TempOperand *bp;
+		Operand *bp;
 		if (vs->level == level) {
 			bp = ebp;
 		} else {
-			int leveldiff = level-vs->level;
-			bp = newtemp(4);
-			quads.emplace_back(Quad::MOV, bp, new MemOperand(4, ebp, 8+4*(leveldiff-1)));
+			bp = new MemOperand(4, ebp, 8+4*(level-vs->level-1));
 		}
-		m = new MemOperand(vs->isref ? 4 : vs->type->size(), bp, vs->offset);
+		m = new MemOperand(vs->isref ? 4 : size, bp, vs->offset);
 		if (vs->isref) {
 			// m is a pointer
-			TempOperand *t = newtemp(4);
-			quads.emplace_back(Quad::MOV, t, m);
-			m = new MemOperand(vs->type->size(), t);
+			m = new MemOperand(size, m);
 		}
 	} else {
 		// global var
-		m = new MemOperand(vs->type->size(), new LabelOperand('$'+vs->name));
+		m = new MemOperand(size, new LabelOperand('$'+vs->name));
 	}
 	return m;
 }
@@ -450,7 +455,7 @@ Operand *IndexExpr::translate(TranslateEnv &env) const
 	MemOperand *m_array = static_cast<MemOperand*>(c);
 	assert(!m_array->index);
 	m_array->size = type->size();
-	Operand *oindex = index->translate(env);
+	Operand *oindex = env.resize(4, index->translate(env));
 	if (oindex->kind == Operand::IMM) {
 		m_array->offset += static_cast<ImmOperand*>(oindex)->val * scale;
 	} else {
@@ -477,7 +482,10 @@ Operand *UnaryExpr::translate(TranslateEnv &env) const
 Operand *ApplyExpr::translate(TranslateEnv &env) const
 {
 	env.translate_call(func, args);
-	return eax;
+	int size = type->size();
+	TempOperand *t = env.newtemp(size);
+	env.quads.emplace_back(Quad::MOV, t, env.resize(size, eax));
+	return t;
 }
 
 void EmptyStmt::translate(TranslateEnv &env) const
@@ -715,6 +723,7 @@ void TranslateEnv::assign_scalar_id()
 	if (up) {
 		scalar_temp = up->scalar_temp;
 		scalar_var = up->scalar_var;
+		scalar_mem = up->scalar_mem;
 		temps = scalar_temp;
 		tempid = scalar_id;
 		for (int i=0; i<tempid; i++)
@@ -726,7 +735,8 @@ void TranslateEnv::assign_scalar_id()
 #if 0
 			fprintf(stderr, "%s %d\n", vs->name.c_str(), scalar_id);
 #endif
-			scalar_temp.push_back(newtemp_scalar(vs->type->size(), scalar_id));
+			int size = vs->type->size();
+			scalar_temp.push_back(newtemp_scalar(size, scalar_id));
 			scalar_var.push_back(vs);
 			vs->scalar_id = scalar_id++;
 		}
@@ -861,7 +871,7 @@ void TranslateEnv::rewrite()
 		switch (q.op) {
 		case Quad::ADD:
 		case Quad::SUB:
-		case Quad::MUL:
+		case Quad::MULW:
 		case Quad::MOV:
 			// op c,a
 			assert(q.c->istemp() || q.c->ismem());
@@ -888,10 +898,13 @@ void TranslateEnv::rewrite()
 			if (q.a->ismem() && q.b->ismem()) {
 				q.a = totemp(q.a);
 			} else if (q.a->isimm()) {
-				assert(!q.b->isimm());
-				swap(q.a, q.b);
-				if (q.op >= Quad::BLT)
-					q.op = Quad::Op(q.op^1);
+				if (q.b->isimm()) {
+					q.a = totemp(q.a);
+				} else {
+					swap(q.a, q.b);
+					if (q.op >= Quad::BLT)
+						q.op = Quad::Op(q.op^1);
+				}
 			}
 			break;
 		case Quad::SEX:
@@ -911,6 +924,13 @@ void TranslateEnv::rewrite()
 		case Quad::PUSH:
 			// push c
 			// c can be anything, including LABEL
+			break;
+		case Quad::MULB:
+			// imul c
+			// c is r/m8
+			assert(q.c->size == 1);
+			if (q.c->isimm())
+				q.c = totemp(q.c);
 			break;
 		case Quad::CDQ:
 		case Quad::LABEL:
@@ -950,8 +970,18 @@ void TranslateEnv::lower()
 		case Quad::ADD3:
 		case Quad::SUB3:
 		case Quad::MUL3:
-			quads.emplace_back(Quad::MOV, q.c, q.a);
-			quads.emplace_back(Quad::Op(Quad::ADD+(q.op-Quad::ADD3)), q.c, q.b);
+			if (q.op == Quad::MUL3 && q.c->size != 4) {
+				// mov al,a
+				// imul b
+				// mov c,al
+				assert(q.c->size == 1);
+				quads.emplace_back(Quad::MOV, al, q.a);
+				quads.emplace_back(Quad::MULB, q.b);
+				quads.emplace_back(Quad::MOV, q.c, al);
+			} else {
+				quads.emplace_back(Quad::MOV, q.c, q.a);
+				quads.emplace_back(Quad::Op(Quad::ADD+(q.op-Quad::ADD3)), q.c, q.b);
+			}
 			break;
 		case Quad::DIV3:
 			if (q.c->size == 4) {

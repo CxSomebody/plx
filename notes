@@ -112,3 +112,7 @@ if () {
 最外层过程TranslateEnv的level为1
 
 通过 reaching def analysis 解决写回问题
+
+if some scalar gets spilled
+related sync operations should be removed
+rewrite() will eliminate mov MEM1,MEM2 where MEM1 and MEM2 are the same

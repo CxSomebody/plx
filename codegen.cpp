@@ -80,7 +80,9 @@ Operand *TranslateEnv::resolve(Operand *o)
 			int color = temp_reg[t->id];
 			if (color < 0) {
 				// spilled
-				return new MemOperand(t->size, ebp, temp_offset[t->id]);
+				return t->id < scalar_id ?
+					translate_varsym(scalar_var[t->id]) :
+					new MemOperand(t->size, ebp, temp_offset[t->id]);
 			}
 			return getphysreg(t->size, color);
 		}
@@ -107,7 +109,9 @@ void TranslateEnv::gencode()
 		fprintf(stderr, "iter %d:\n", iter);
 		dump_quads();
 		rewrite();
-		temp_reg = color_graph(global_livevar(quads, tempid));
+		fprintf(stderr, "iter %d after rewrite:\n", iter);
+		dump_quads();
+		temp_reg = color_graph(build_interference_graph());
 		// must update maxphysreg after each iteration
 		for (int i=0; i<tempid; i++) {
 			if (maxphysreg < temp_reg[i])
@@ -121,7 +125,6 @@ void TranslateEnv::gencode()
 				fprintf(stderr, "spill: %d\n", i);
 				if (scalar >= 0) {
 					fprintf(stderr, "scalar\n");
-					temp_offset[i] = scalar_var[scalar]->offset;
 				} else {
 					int size = temps[i]->size;
 					int align = size;
@@ -165,7 +168,7 @@ void TranslateEnv::gencode()
 			if (!same_reg(q.c, q.a))
 		case Quad::ADD:
 		case Quad::SUB:
-		case Quad::MUL:
+		case Quad::MULW:
 		case Quad::LEA:
 		case Quad::SEX:
 				emit(opins[q.op], q.c, q.a);
@@ -190,6 +193,9 @@ void TranslateEnv::gencode()
 			break;
 		case Quad::CDQ:
 			emit(opins[q.op]);
+			break;
+		case Quad::MULB:
+			emit("imul", q.c);
 			break;
 		case Quad::LABEL:
 			fprintf(outfp, "%s:\n", static_cast<LabelOperand*>(q.c)->label.c_str());

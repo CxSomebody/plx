@@ -63,6 +63,25 @@ vector<unique_ptr<BB>> partition(const vector<Quad> &quads)
 	return blocks;
 }
 
+void split_edge(vector<unique_ptr<BB>> &blocks)
+{
+	for (const unique_ptr<BB> &p: blocks) {
+		BB *bb = p.get();
+		if (bb->succ.size() > 1) {
+			for (BB *&succ: bb->succ) {
+				if (succ->pred.size() > 1) {
+					auto it_pred = find(succ->pred.begin(), succ->pred.end(), bb);
+					assert(it_pred != succ->pred.end());
+					BB *newbb = new BB();
+					succ = newbb;
+					*it_pred = newbb;
+					blocks.emplace_back(newbb);
+				}
+			}
+		}
+	}
+}
+
 void compute_def(const Quad &q, dynbitset &ret)
 {
 	auto def = [&](Operand *o) {
@@ -78,7 +97,7 @@ void compute_def(const Quad &q, dynbitset &ret)
 		break;
 	case Quad::ADD:
 	case Quad::SUB:
-	case Quad::MUL:
+	case Quad::MULW:
 	case Quad::NEG:
 	case Quad::MOV:
 	case Quad::LEA:
@@ -113,6 +132,9 @@ void compute_def(const Quad &q, dynbitset &ret)
 	case Quad::CDQ:
 		def(edx);
 		break;
+	case Quad::MULB:
+		def(eax);
+		break;
 	default:
 		assert(0);
 	}
@@ -124,7 +146,7 @@ int compute_def_temp(const Quad &q)
 	switch (q.op) {
 	case Quad::ADD:
 	case Quad::SUB:
-	case Quad::MUL:
+	case Quad::MULW:
 	case Quad::NEG:
 	case Quad::MOV:
 	case Quad::LEA:
@@ -155,6 +177,7 @@ int compute_def_temp(const Quad &q)
 	case Quad::CALL:
 	case Quad::PUSH:
 	case Quad::CDQ:
+	case Quad::MULB:
 	case Quad::LABEL:
 	case Quad::SYNCM:
 	case Quad::SYNCR:
@@ -186,9 +209,12 @@ void for_each_use(const Quad &q, function<void(int)> f)
 	switch (q.op) {
 	case Quad::ADD:
 	case Quad::SUB:
-	case Quad::MUL:
-	case Quad::MOV:
+	case Quad::MULW:
+		use_operand(q.c, f);
+		use_operand(q.a, f);
+		break;
 	case Quad::NEG2:
+	case Quad::MOV:
 	case Quad::LEA:
 	case Quad::SEX:
 		if (q.c->ismem())
@@ -227,6 +253,10 @@ void for_each_use(const Quad &q, function<void(int)> f)
 		break;
 	case Quad::CDQ:
 		use_operand(eax, f);
+		break;
+	case Quad::MULB:
+		use_operand(eax, f);
+		use_operand(q.c, f);
 		break;
 	default:
 		assert(0);
@@ -279,15 +309,14 @@ vector<int> Graph::remove(int v)
 	return ret;
 }
 
-// TODO rename
-Graph global_livevar(const vector<Quad> &quads, int ntemp)
+Graph TranslateEnv::build_interference_graph()
 {
 	size_t n = quads.size();
 	map<string, int> labelmap;
-	vector<dynbitset> def(n, dynbitset(8+ntemp));
-	vector<dynbitset> use(n, dynbitset(8+ntemp));
-	vector<dynbitset> out(n, dynbitset(8+ntemp));
-	vector<dynbitset> in (n, dynbitset(8+ntemp));
+	vector<dynbitset> def(n, dynbitset(8+tempid));
+	vector<dynbitset> use(n, dynbitset(8+tempid));
+	vector<dynbitset> out(n, dynbitset(8+tempid));
+	vector<dynbitset> in (n, dynbitset(8+tempid));
 	vector<vector<int>> succ(n);
 	for (size_t i=0; i<n; i++) {
 		const Quad &q = quads[i];
@@ -319,7 +348,7 @@ Graph global_livevar(const vector<Quad> &quads, int ntemp)
 			}
 		}
 	} while (changed);
-	Graph ig(ntemp);
+	Graph ig(tempid);
 	for (size_t i=0; i<n; i++) {
 		def[i].foreach([&](int tdef) {
 			out[i].foreach([&](int tlive) {
@@ -328,6 +357,13 @@ Graph global_livevar(const vector<Quad> &quads, int ntemp)
 				}
 			});
 		});
+	}
+	for (int id: part_temps) {
+		fprintf(stderr, "part temp: %d\n", id);
+		ig.connect(id, ~4);
+		ig.connect(id, ~5);
+		ig.connect(id, ~6);
+		ig.connect(id, ~7);
 	}
 	return ig;
 }

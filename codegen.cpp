@@ -27,7 +27,7 @@ static const char *opins[] = {
 	"jg",
 	"jle",
 	"neg",
-	nullptr,
+	"mov",
 	"jmp",
 	"call",
 	"lea",
@@ -56,6 +56,7 @@ void TranslateEnv::emit(const char *ins)
 	fprintf(outfp, "\t%s\n", ins);
 }
 
+#if 1
 bool same_reg(Operand *a, Operand *b)
 {
 #if 0
@@ -67,6 +68,7 @@ bool same_reg(Operand *a, Operand *b)
 	return a == b;
 #endif
 }
+#endif
 
 Operand *TranslateEnv::resolve(Operand *o)
 {
@@ -102,6 +104,8 @@ void TranslateEnv::gencode()
 	int iter = 0;
 	do {
 		spill = false;
+		fprintf(stderr, "iter %d:\n", iter);
+		dump_quads();
 		rewrite();
 		temp_reg = color_graph(global_livevar(quads, tempid));
 		// must update maxphysreg after each iteration
@@ -133,7 +137,8 @@ void TranslateEnv::gencode()
 		}
 		iter++;
 	} while (spill);
-	fprintf(stderr, "rewrites: %d\n", iter);
+	fprintf(stderr, "final:\n");
+	dump_quads();
 	offset &= ~3;
 	framesize = -offset;
 	fprintf(outfp, "$%s:\n", procname.c_str());
@@ -156,12 +161,14 @@ void TranslateEnv::gencode()
 	// body
 	for (const Quad &q: quads) {
 		switch (q.op) {
+		case Quad::MOV:
+			if (!same_reg(q.c, q.a))
 		case Quad::ADD:
 		case Quad::SUB:
 		case Quad::MUL:
 		case Quad::LEA:
 		case Quad::SEX:
-			emit(opins[q.op], q.c, q.a);
+				emit(opins[q.op], q.c, q.a);
 			break;
 		case Quad::DIV:
 		case Quad::NEG:
@@ -180,11 +187,6 @@ void TranslateEnv::gencode()
 		case Quad::BLE:
 			emit("cmp", q.a, q.b);
 			emit(opins[q.op], q.c);
-			break;
-		case Quad::MOV:
-			assert(!(q.c->ismem() && q.a->ismem()));
-			if (!same_reg(q.c, q.a))
-				emit("mov", q.c, q.a);
 			break;
 		case Quad::CDQ:
 			emit(opins[q.op]);

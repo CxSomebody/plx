@@ -19,7 +19,7 @@ static const char *opstr[] = {
 	"*=",
 	nullptr,
 	"=",
-	"<>",
+	"!=",
 	"<",
 	">=",
 	">",
@@ -853,6 +853,8 @@ void TranslateEnv::rewrite()
 	quads.clear();
 	// no const here, we may modify q
 	for (Quad &q: oldquads) {
+		if (q.op == Quad::MOV && q.c->tostr() == q.a->tostr())
+			continue;
 		try_rewrite_mem(q.c);
 		try_rewrite_mem(q.a);
 		try_rewrite_mem(q.b);
@@ -979,4 +981,11 @@ void TranslateEnv::sync_mem(int a)
 void TranslateEnv::sync_reg(int a)
 {
 	quads.emplace_back(Quad::MOV, translate_varsym(scalar_var[a]), scalar_temp[a]);
+}
+
+void TranslateEnv::dump_quads()
+{
+	int n = quads.size();
+	for (int i=0; i<n; i++)
+		fprintf(stderr, "[%d] %s\n", i, quads[i].tostr().c_str());
 }

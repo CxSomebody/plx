@@ -122,16 +122,6 @@ void TranslateEnv::insert_sync()
 				live_out[i] |= live_in[j];
 		}
 	} while (changed);
-#if 1
-	for (int i=0; i<n; i++) {
-		vector<int> in2(rd_in[i].to_vector());
-		for (int &x: in2)
-			x = def_loc[x];
-		fprintf(stderr, "[%d] %s\tin=%s\n", i,
-			quads[i].tostr().c_str(),
-			vector_int_tostr(in2).c_str());
-	}
-#endif
 	dynbitset writeback_def(def_loc.size());
 	auto sync_scalars = [this](const Quad &q) {
 		Operand **args = q.args;
@@ -157,7 +147,7 @@ void TranslateEnv::insert_sync()
 	writeback_def.foreach([&](int d){
 		writeback_loc.set(def_loc[d]);
 	});
-#if 1
+#if 0
 	fprintf(stderr, "insert writeback after: %s\n",
 		vector_int_tostr(writeback_loc.to_vector()).c_str());
 #endif

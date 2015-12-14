@@ -217,6 +217,7 @@ public:
 	void insert_sync();
 	void lower();
 	void dump_cfg();
+	void dump_quads();
 };
 
 extern const char *regname4[8];

@@ -220,7 +220,6 @@ public:
 	void sync(Quad::Op op);
 	void insert_sync();
 	void lower();
-	void dump_cfg();
 	void dump_quads();
 	Graph build_interference_graph();
 };

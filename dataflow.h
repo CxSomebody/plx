@@ -2,6 +2,7 @@ struct BB {
 	std::vector<Quad> quads;
 	std::vector<BB*> pred, succ;
 	int id;
+	BB(int id): id(id) {}
 };
 
 class Graph
@@ -37,3 +38,5 @@ void for_each_use(const Quad &q, std::function<void(int)> f);
 int compute_def_temp(const Quad &q);
 void replace_def(Quad &q, int old, int neu);
 void replace_use(Quad &q, int old, int neu);
+void split_edges(std::vector<std::unique_ptr<BB>> &blocks);
+void dump_cfg(const std::string &procname, const std::vector<std::unique_ptr<BB>> &blocks);

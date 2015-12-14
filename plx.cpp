@@ -34,7 +34,7 @@ int main(int argc, char **argv)
 			tropt.out_fname = optarg;
 			break;
 		case 'O':
-			tropt.optimize = 1;
+			tropt.optimize++;
 			break;
 		default:
 			usage();

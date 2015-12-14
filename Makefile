@@ -25,7 +25,6 @@ translate.o: translate.cpp translate.h semant.h dynbitset.h
 type.o: type.cpp semant.h
 
 clean:
-	make -C ebnf_parser clean
 	rm plx *.o keywords.{c,gperf{,.h}} tokens.h tokname.inc
 
 .PHONY: clean

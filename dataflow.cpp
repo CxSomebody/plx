@@ -28,8 +28,7 @@ vector<unique_ptr<BB>> partition(const vector<Quad> &quads)
 			end++;
 		if (end == begin)
 			break;
-		BB bb;
-		bb.id = id++;
+		BB bb(id++);
 		bb.quads.insert(bb.quads.end(), begin, end);
 		blocks.push_back(make_unique<BB>(move(bb)));
 		begin = end;
@@ -63,8 +62,10 @@ vector<unique_ptr<BB>> partition(const vector<Quad> &quads)
 	return blocks;
 }
 
-void split_edge(vector<unique_ptr<BB>> &blocks)
+void split_edges(vector<unique_ptr<BB>> &blocks)
 {
+	int id = blocks.size();
+	vector<unique_ptr<BB>> newblocks;
 	for (const unique_ptr<BB> &p: blocks) {
 		BB *bb = p.get();
 		if (bb->succ.size() > 1) {
@@ -72,14 +73,17 @@ void split_edge(vector<unique_ptr<BB>> &blocks)
 				if (succ->pred.size() > 1) {
 					auto it_pred = find(succ->pred.begin(), succ->pred.end(), bb);
 					assert(it_pred != succ->pred.end());
-					BB *newbb = new BB();
+					BB *newbb = new BB(id++);
+					newbb->succ.push_back(succ);
+					newbb->pred.push_back(bb);
 					succ = newbb;
 					*it_pred = newbb;
-					blocks.emplace_back(newbb);
+					newblocks.emplace_back(newbb);
 				}
 			}
 		}
 	}
+	move(newblocks.begin(), newblocks.end(), inserter(blocks, blocks.end()));
 }
 
 void compute_def(const Quad &q, dynbitset &ret)
@@ -473,11 +477,10 @@ void replace_use(Quad &q, int old, int neu)
 	}
 }
 
-void TranslateEnv::dump_cfg()
+void dump_cfg(const string &procname, const vector<unique_ptr<BB>> &blocks)
 {
 	char fname[80];
-	sprintf(fname, "cfg-%s0.dot", procname.c_str());
-	vector<unique_ptr<BB>> blocks = partition(quads);
+	sprintf(fname, "cfg-%s.dot", procname.c_str());
 	FILE *fp = fopen(fname, "w");
 	if (!fp) {
 		perror(fname);

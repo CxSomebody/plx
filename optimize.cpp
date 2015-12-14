@@ -182,6 +182,10 @@ void TranslateEnv::optimize()
 #endif
 	insert_sync();
 	vector<unique_ptr<BB>> blocks = partition(quads);
+	dump_cfg(procname, blocks);
+	split_edges(blocks);
+	dump_cfg(procname+"-split", blocks);
+#if 1
 	// compute dominator tree and dominance frontier
 	int n = blocks.size();
 	vector<dynbitset> dom(n, dynbitset(n));
@@ -349,4 +353,6 @@ void TranslateEnv::optimize()
 	for (int a=0; a<tempid; a++)
 		stack[a].push_back(a);
 	rename(0, stack);
+	dump_cfg(procname+"-ssa", blocks);
+#endif
 }

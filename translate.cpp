@@ -774,10 +774,11 @@ void translate_block(const Block &blk, FILE *outfp, TranslateEnv *up, const Tran
 			env.quads.emplace_back(Quad::MOV, getphysreg(rvsize, 0), env.resize(rvsize, env.translate_sym(retval)));
 		}
 	}
-	if (opt->optimize)
+	if (opt->optimize) {
 		env.insert_sync();
-		//env.optimize();
-	env.dump_cfg();
+		if (opt->optimize >= 2)
+			env.optimize();
+	}
 	env.lower();
 	env.gencode();
 	//printf("end %s\n", block_name);

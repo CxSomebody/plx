@@ -3,4 +3,4 @@ STEM=cfg-$1
 if [ ! -f $STEM.png -o $STEM.dot -nt $STEM.png ]; then
 	dot -Tpng -o $STEM.png $STEM.dot
 fi
-exec display $STEM.png
+exec display $STEM.png &

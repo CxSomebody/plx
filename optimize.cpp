@@ -355,4 +355,17 @@ void TranslateEnv::optimize()
 	rename(0, stack);
 	dump_cfg(procname+"-ssa", blocks);
 #endif
+	// convert back from SSA
+	for (const unique_ptr<BB> &p: blocks) {
+		BB *bb = p.get();
+		auto it_phi = bb->quads.begin();
+		while (it_phi != bb->quads.end() && it_phi->op == Quad::PHI) {
+			Operand **args = it_phi->args;
+			for (int i=0; args[i]; i++)
+				bb->pred[i]->quads.emplace_back(Quad::MOV, it_phi->c, args[i]);
+			it_phi++;
+		}
+		bb->quads.erase(bb->quads.begin(), it_phi);
+	}
+	dump_cfg(procname+"-postssa", blocks);
 }

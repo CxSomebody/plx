@@ -16,7 +16,7 @@ vector<unique_ptr<BB>> partition(const vector<Quad> &quads)
 {
 	map<string, BB*> table;
 	vector<unique_ptr<BB>> blocks;
-	int id = 0;
+	int n = 0;
 	auto begin = quads.begin();
 	auto end = begin;
 	for (;;) {
@@ -28,7 +28,7 @@ vector<unique_ptr<BB>> partition(const vector<Quad> &quads)
 			end++;
 		if (end == begin)
 			break;
-		BB bb(id++);
+		BB bb(n++);
 		bb.quads.insert(bb.quads.end(), begin, end);
 		blocks.push_back(make_unique<BB>(move(bb)));
 		begin = end;
@@ -48,16 +48,28 @@ vector<unique_ptr<BB>> partition(const vector<Quad> &quads)
 		const unique_ptr<BB> &bb = *it;
 		assert(!bb->quads.empty());
 		const Quad &lastq = bb->quads.back();
-		if (lastq.is_jump_or_branch()) {
-			BB *t = table[static_cast<LabelOperand*>(lastq.c)->label];
-			bb->succ.push_back(t);
-			t->pred.push_back(bb.get());
-		}
 		if (!lastq.isjump() && next(it) != blocks.end()) {
 			BB *f = next(it)->get();
 			bb->succ.push_back(f);
 			f->pred.push_back(bb.get());
 		}
+		if (lastq.is_jump_or_branch()) {
+			BB *t = table[static_cast<LabelOperand*>(lastq.c)->label];
+			bb->succ.push_back(t);
+			t->pred.push_back(bb.get());
+		}
+	}
+
+	for (int i=0; i<n; i++) {
+		vector<Quad> &quads = blocks[i]->quads;
+		// remove labels
+		auto it_label = quads.begin();
+		while (it_label != quads.end() && it_label->op == Quad::LABEL)
+			it_label++;
+		quads.erase(quads.begin(), it_label);
+		// remove final unconditional jump if present
+		if (!quads.empty() && quads.back().isjump())
+			quads.pop_back();
 	}
 	return blocks;
 }
@@ -499,10 +511,13 @@ void dump_cfg(const string &procname, const vector<unique_ptr<BB>> &blocks)
 	// arcs
 	for (auto it = blocks.begin(); it != blocks.end(); it++) {
 		const BB *bb = it->get();
-		for (const BB *succ: bb->succ) {
+		int nsucc = bb->succ.size();
+		const char *noyes[2] = { "no", "yes" };
+		for (int i=0; i<nsucc; i++) {
+			BB *succ = bb->succ[i];
 			const vector<BB*> &pred(succ->pred);
 			int j = find(pred.begin(), pred.end(), bb)-pred.begin();
-			fprintf(fp, "\tB%d -> B%d [label=\"%d\"];\n", bb->id, succ->id, j);
+			fprintf(fp, "\tB%d -> B%d [label=\"%s(%d)\"];\n", bb->id, succ->id, nsucc == 2 ? noyes[i] : "", j);
 		}
 	}
 	fprintf(fp, "}\n");

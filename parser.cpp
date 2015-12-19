@@ -782,7 +782,17 @@ static unique_ptr<ReadStmt> read_stmt()
 		check('('); getsym();
 		vector<unique_ptr<Expr>> args(expr_list());
 		check(')'); getsym();
-		// TODO type check
+		// type check
+		int n = args.size();
+		for (int i=0; i<n; i++) {
+			Expr *arg = args[i].get();
+			if (!arg)
+				continue;
+			if (!arg->type->is_scalar())
+				error("scalar type expected for argument %d", i+1);
+			if (!arg->is_lvalue())
+				error("variable expected for argument %d", i+1);
+		}
 		return make_unique<ReadStmt>(move(args));
 	} CATCH_R(nullptr)
 }

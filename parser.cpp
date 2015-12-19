@@ -66,6 +66,11 @@ static void getsym()
 	savetok(lex(), &ntok);
 }
 
+Location loc()
+{
+	return Location(fpath, tok.line, tok.col);
+}
+
 static void error(const char *fmt...)
 {
 	parser_errors++;
@@ -185,8 +190,8 @@ unique_ptr<Expr> ident_expr(const string &name)
 
 static void checkprocsym(Symbol *s)
 {
-	if (s->kind != Symbol::PROC)
-		error("‘%s’ is not a proc symbol", tok.s.c_str());
+	if (s && s->kind != Symbol::PROC)
+		error("‘%s’ is not a procedure or function", tok.s.c_str());
 }
 
 unique_ptr<Block> parse()
@@ -614,8 +619,7 @@ static unique_ptr<CallStmt> call_stmt()
 	try {
 		check(IDENT);
 		Symbol *proc = lookup_checked(tok.s);
-		if (proc)
-			checkprocsym(proc);
+		checkprocsym(proc);
 		getsym();
 		vector<unique_ptr<Expr>> args;
 		if (tok.sym == '(') {
@@ -623,7 +627,7 @@ static unique_ptr<CallStmt> call_stmt()
 			args = expr_list();
 			check(')'); getsym();
 		}
-		return proc ? make_unique<CallStmt>(static_cast<ProcSymbol*>(proc), move(args)) : nullptr;
+		return make_unique<CallStmt>(static_cast<ProcSymbol*>(proc), move(args));
 	} CATCH_R(nullptr)
 }
 
@@ -904,16 +908,10 @@ static unique_ptr<Expr> factor()
 		switch (ntok.sym) {
 		case '(':
 			s = lookup_checked(tok.s);
-			if (s)
-				checkprocsym(s);
+			checkprocsym(s);
 			getsym();
 			getsym();
-			if (s) {
-				e = make_unique<ApplyExpr>(static_cast<ProcSymbol*>(s), expr_list());
-			} else {
-				expr_list();
-				e = nullptr;
-			}
+			e = make_unique<ApplyExpr>(static_cast<ProcSymbol*>(s), expr_list());
 			check(')'); getsym();
 			return e;
 		case '[':
@@ -926,12 +924,11 @@ static unique_ptr<Expr> factor()
 		}
 		s = lookup_checked(tok.s);
 		getsym();
-		if (s) {
-			if (s->kind == Symbol::PROC)
-				return make_unique<ApplyExpr>(static_cast<ProcSymbol*>(s), vector<unique_ptr<Expr>>());
-			return make_unique<SymExpr>(s);
-		}
-		return nullptr;
+		if (!s)
+			return nullptr;
+		if (s->kind == Symbol::PROC)
+			return make_unique<ApplyExpr>(static_cast<ProcSymbol*>(s), vector<unique_ptr<Expr>>());
+		return make_unique<SymExpr>(s);
 	case INT:
 		e = make_unique<LitExpr>(tok.i);
 		getsym();

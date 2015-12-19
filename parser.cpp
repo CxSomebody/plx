@@ -849,13 +849,11 @@ static vector<unique_ptr<Expr>> expr_list()
 	X _{')'};
 	try {
 		vector<unique_ptr<Expr>> ret;
-		if (tok.sym != ')') {
-			for (;;) {
-				ret.emplace_back(expr());
-				if (tok.sym != ',')
-					break;
-				getsym();
-			}
+		for (;;) {
+			ret.emplace_back(expr());
+			if (tok.sym != ',')
+				break;
+			getsym();
 		}
 		return ret;
 	} CATCH_R(vector<unique_ptr<Expr>>())

@@ -127,8 +127,11 @@ std::string Quad::tostr() const
 	case Quad::MULW:
 		ss << c->tostr() << ' ' << opstr[op] << ' ' << a->tostr();
 		break;
-	case Quad::DIV:
-		ss << "div " << c->tostr();
+	case Quad::DIVW:
+		ss << "divw " << c->tostr();
+		break;
+	case Quad::DIVB:
+		ss << "divb " << c->tostr();
 		break;
 	case Quad::NEG:
 		ss << "neg " << c->tostr();
@@ -174,6 +177,9 @@ std::string Quad::tostr() const
 		break;
 	case Quad::CDQ:
 		ss << "cdq";
+		break;
+	case Quad::CBW:
+		ss << "cbw";
 		break;
 	case Quad::MULB:
 		ss << "mulb " << c->tostr();
@@ -879,7 +885,8 @@ void TranslateEnv::rewrite()
 			if (q.c->ismem() && q.a->ismem())
 				q.a = totemp(q.a);
 			break;
-		case Quad::DIV:
+		case Quad::DIVW:
+		case Quad::DIVB:
 		case Quad::NEG:
 		case Quad::INC:
 		case Quad::DEC:
@@ -934,6 +941,7 @@ void TranslateEnv::rewrite()
 				q.c = totemp(q.c);
 			break;
 		case Quad::CDQ:
+		case Quad::CBW:
 		case Quad::LABEL:
 			// nullary
 			break;
@@ -988,10 +996,15 @@ void TranslateEnv::lower()
 			if (q.c->size == 4) {
 				quads.emplace_back(Quad::MOV, eax, q.a);
 				quads.emplace_back(Quad::CDQ);
-				quads.emplace_back(Quad::DIV, q.b);
+				quads.emplace_back(Quad::DIVW, q.b);
 				quads.emplace_back(Quad::MOV, q.c, eax);
+			} else if (q.c->size == 1) {
+				quads.emplace_back(Quad::MOV, al, q.a);
+				quads.emplace_back(Quad::CBW);
+				quads.emplace_back(Quad::DIVB, q.b);
+				quads.emplace_back(Quad::MOV, q.c, al);
 			} else {
-				TODO("DIV with size(c) != 4");
+				assert(0);
 			}
 			break;
 		case Quad::NEG2:

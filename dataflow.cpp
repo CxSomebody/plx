@@ -107,9 +107,12 @@ void compute_def(const Quad &q, dynbitset &ret)
 		}
 	};
 	switch (q.op) {
-	case Quad::DIV:
+	case Quad::DIVW:
 		def(eax);
 		def(edx);
+		break;
+	case Quad::DIVB:
+		def(eax);
 		break;
 	case Quad::ADD:
 	case Quad::SUB:
@@ -148,6 +151,9 @@ void compute_def(const Quad &q, dynbitset &ret)
 	case Quad::CDQ:
 		def(edx);
 		break;
+	case Quad::CBW:
+		def(eax);
+		break;
 	case Quad::MULB:
 		def(eax);
 		break;
@@ -182,7 +188,8 @@ int compute_def_temp(const Quad &q)
 				return id;
 		}
 		/* fallthrough */
-	case Quad::DIV:
+	case Quad::DIVW:
+	case Quad::DIVB:
 	case Quad::BEQ:
 	case Quad::BNE:
 	case Quad::BLT:
@@ -193,6 +200,7 @@ int compute_def_temp(const Quad &q)
 	case Quad::CALL:
 	case Quad::PUSH:
 	case Quad::CDQ:
+	case Quad::CBW:
 	case Quad::MULB:
 	case Quad::LABEL:
 	case Quad::SYNCM:
@@ -237,9 +245,13 @@ void for_each_use(const Quad &q, function<void(int)> f)
 			usemem(static_cast<MemOperand*>(q.c), f);
 		use_operand(q.a, f);
 		break;
-	case Quad::DIV:
+	case Quad::DIVW:
 		use_operand(eax, f);
 		use_operand(edx, f);
+		use_operand(q.c, f);
+		break;
+	case Quad::DIVB:
+		use_operand(eax, f);
 		use_operand(q.c, f);
 		break;
 	case Quad::BEQ:
@@ -268,6 +280,7 @@ void for_each_use(const Quad &q, function<void(int)> f)
 		use_operand(q.c, f);
 		break;
 	case Quad::CDQ:
+	case Quad::CBW:
 		use_operand(eax, f);
 		break;
 	case Quad::MULB:

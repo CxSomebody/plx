@@ -1,0 +1,22 @@
+var
+  a, b: integer;
+  c, d: char;
+  t: integer;
+begin
+  a := 3000;
+  b := 1000;
+  c := 30;
+  d := 10;
+  write(a+b);
+  write(a-b);
+  write(a*b);
+  write(a/b);
+  t := c+d;
+  write(t);
+  t := c-d;
+  write(t);
+  t := c*d;
+  write(t);
+  t := c/d;
+  write(t);
+end.

@@ -36,6 +36,9 @@ static const char *opins[] = {
 	"dec",
 	"movsx",
 	"cdq",
+	"cbw",
+	"imul",
+	"idiv",
 };
 
 void TranslateEnv::emit(const char *ins, Operand *dst, Operand *src)
@@ -185,15 +188,6 @@ void TranslateEnv::gencode()
 		case Quad::SEX:
 				emit(opins[q.op], q.c, q.a);
 			break;
-		case Quad::DIV:
-		case Quad::NEG:
-		case Quad::JMP:
-		case Quad::CALL:
-		case Quad::PUSH:
-		case Quad::INC:
-		case Quad::DEC:
-			emit(opins[q.op], q.c);
-			break;
 		case Quad::BEQ:
 		case Quad::BNE:
 		case Quad::BLT:
@@ -201,13 +195,21 @@ void TranslateEnv::gencode()
 		case Quad::BGT:
 		case Quad::BLE:
 			emit("cmp", q.a, q.b);
+			/* fallthrough */
+		case Quad::DIVW:
+		case Quad::DIVB:
+		case Quad::NEG:
+		case Quad::JMP:
+		case Quad::CALL:
+		case Quad::PUSH:
+		case Quad::INC:
+		case Quad::DEC:
+		case Quad::MULB:
 			emit(opins[q.op], q.c);
 			break;
 		case Quad::CDQ:
+		case Quad::CBW:
 			emit(opins[q.op]);
-			break;
-		case Quad::MULB:
-			emit("imul", q.c);
 			break;
 		case Quad::LABEL:
 			fprintf(outfp, "%s:\n", static_cast<LabelOperand*>(q.c)->label.c_str());
@@ -229,9 +231,7 @@ void TranslateEnv::gencode()
 
 string ImmOperand::tostr() const
 {
-	char tmp[12];
-	sprintf(tmp, "%d", val);
-	return string(tmp);
+	return to_string(val);
 }
 
 const char *regname4[8] = {

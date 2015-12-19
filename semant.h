@@ -188,15 +188,17 @@ struct Expr {
 	Type *type;
 	virtual void print() const = 0;
 	virtual Operand *translate(TranslateEnv &env) const = 0;
-	virtual ~Expr();
+	virtual ~Expr() {}
 protected:
-	Expr(Kind kind, Type *type);
+	Expr(Kind kind, Type *type):
+		kind(kind), type(type) {}
 };
 
 struct SymExpr: Expr
 {
 	Symbol *sym;
-	SymExpr(Symbol *sym);
+	SymExpr(Symbol *sym):
+		Expr(SYM, sym ? sym->type : nullptr), sym(sym) {}
 	void print() const override;
 	Operand *translate(TranslateEnv &env) const override;
 };
@@ -204,7 +206,8 @@ struct SymExpr: Expr
 struct LitExpr: Expr
 {
 	int lit;
-	LitExpr(int lit);
+	LitExpr(int lit):
+		Expr(LIT, int_type()), lit(lit) {}
 	void print() const override;
 	Operand *translate(TranslateEnv &env) const override;
 };
@@ -218,7 +221,9 @@ struct BinaryExpr: Expr
 		DIV,
 	} op;
 	std::unique_ptr<Expr> left, right;
-	BinaryExpr(Op op, std::unique_ptr<Expr> &&left, std::unique_ptr<Expr> &&right);
+	BinaryExpr(Op op, std::unique_ptr<Expr> &&left, std::unique_ptr<Expr> &&right):
+		Expr(BINARY, left && right ? binexprtype(left->type, right->type) : nullptr),
+		op(op), left(move(left)), right(move(right)) {}
 	void print() const override;
 	Operand *translate(TranslateEnv &env) const override;
 };
@@ -227,7 +232,8 @@ struct IndexExpr: Expr
 {
 	std::unique_ptr<Expr> array, index;
 	IndexExpr(std::unique_ptr<Expr> array, std::unique_ptr<Expr> index):
-		Expr(INDEX, elemtype(array->type)), array(std::move(array)), index(std::move(index)) {}
+		Expr(INDEX, array ? elemtype(array->type) : nullptr),
+		array(std::move(array)), index(std::move(index)) {}
 	void print() const override;
 	Operand *translate(TranslateEnv &env) const override;
 };
@@ -238,7 +244,8 @@ struct UnaryExpr: Expr
 		NEG,
 	} op;
 	std::unique_ptr<Expr> sub;
-	UnaryExpr(Op op, std::unique_ptr<Expr> &&sub);
+	UnaryExpr(Op op, std::unique_ptr<Expr> &&sub):
+		Expr(UNARY, sub ? sub->type : nullptr), op(op), sub(move(sub)) {}
 	void print() const override;
 	Operand *translate(TranslateEnv &env) const override;
 };
@@ -247,7 +254,8 @@ struct ApplyExpr: Expr
 {
 	ProcSymbol *func;
 	std::vector<std::unique_ptr<Expr>> args;
-	ApplyExpr(ProcSymbol *func, decltype(args) &&args);
+	ApplyExpr(ProcSymbol *func, decltype(args) &&args):
+		Expr(APPLY, func ? func->rettype : nullptr), func(func), args(move(args)) {}
 	void print() const override;
 	Operand *translate(TranslateEnv &env) const override;
 };

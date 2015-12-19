@@ -98,7 +98,9 @@ Operand *TranslateEnv::resolve(Operand *o)
 
 void TranslateEnv::gencode()
 {
+#ifdef DEBUG
 	fprintf(stderr, "gencode: %s\n", procname.c_str());
+#endif
 	temp_offset.resize(tempid);
 	int offset = -framesize;
 	int maxphysreg = -1;
@@ -106,11 +108,15 @@ void TranslateEnv::gencode()
 	int iter = 0;
 	do {
 		spill = false;
+#ifdef DEBUG
 		fprintf(stderr, "iter %d:\n", iter);
 		dump_quads();
+#endif
 		rewrite();
+#ifdef DEBUG
 		fprintf(stderr, "iter %d after rewrite:\n", iter);
 		dump_quads();
+#endif
 		temp_reg = color_graph(build_interference_graph());
 		// must update maxphysreg after each iteration
 		for (int i=0; i<tempid; i++) {
@@ -122,9 +128,13 @@ void TranslateEnv::gencode()
 			if (temp_reg[i] < 0) {
 				spill = true;
 				int scalar = temp_scalar[i];
+#ifdef DEBUG
 				fprintf(stderr, "spill: %d\n", i);
+#endif
 				if (scalar >= 0) {
+#ifdef DEBUG
 					fprintf(stderr, "scalar\n");
+#endif
 				} else {
 					int size = temps[i]->size;
 					int align = size;
@@ -140,8 +150,10 @@ void TranslateEnv::gencode()
 		}
 		iter++;
 	} while (spill);
+#ifdef DEBUG
 	fprintf(stderr, "final:\n");
 	dump_quads();
+#endif
 	offset &= ~3;
 	framesize = -offset;
 	fprintf(outfp, "$%s:\n", procname.c_str());

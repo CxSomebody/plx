@@ -59,7 +59,9 @@ vector<int> color_graph(Graph &&g)
 				break;
 			}
 		}
-		printf("color[%d] = %d\n", t, color[t]);
+#ifdef DEBUG
+		fprintf(stderr, "color[%d] = %d\n", t, color[t]);
+#endif
 	}
 	return color;
 };

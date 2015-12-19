@@ -224,3 +224,15 @@ void NegCond::print() const
 	sub->print();
 	putchar(')');
 }
+
+bool Expr::is_lvalue() const
+{
+	switch (kind) {
+	case SYM:
+		return static_cast<const SymExpr*>(this)->sym->kind == Symbol::VAR;
+	case INDEX:
+		return true;
+	default:
+		return false;
+	}
+}

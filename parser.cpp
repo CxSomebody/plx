@@ -1,3 +1,4 @@
+#include <cassert>
 #include <cstdarg>
 #include <cstdio>
 #include <initializer_list>
@@ -46,7 +47,7 @@ struct X {
 };
 
 // both syntactic and semantic
-int parser_errors;
+int parser_errors, parser_warnings;
 
 static void savetok(int s, Token *t)
 {
@@ -66,15 +67,21 @@ static void getsym()
 	savetok(lex(), &ntok);
 }
 
-Location loc()
-{
-	return Location(fpath, tok.line, tok.col);
-}
-
 static void error(const char *fmt...)
 {
 	parser_errors++;
-	fprintf(stderr, "%s:%d:%d: ", fpath, tok.line, tok.col);
+	fprintf(stderr, "%s:%d:%d: error: ", fpath, tok.line, tok.col);
+	va_list ap;
+	va_start(ap, fmt);
+	vfprintf(stderr, fmt, ap);
+	va_end(ap);
+	fputc('\n', stderr);
+}
+
+static void warning(const char *fmt...)
+{
+	parser_warnings++;
+	fprintf(stderr, "%s:%d:%d: warning: ", fpath, tok.line, tok.col);
 	va_list ap;
 	va_start(ap, fmt);
 	vfprintf(stderr, fmt, ap);
@@ -185,13 +192,55 @@ Symbol *lookup_checked(const string &name)
 unique_ptr<Expr> ident_expr(const string &name)
 {
 	Symbol *s = lookup_checked(name);
-	return s ? make_unique<SymExpr>(lookup(name)) : nullptr;
+	return s ? make_unique<SymExpr>(s) : nullptr;
 }
 
-static void checkprocsym(Symbol *s)
+static bool checkprocsym(Symbol *s)
 {
-	if (s && s->kind != Symbol::PROC)
+	if (s && s->kind != Symbol::PROC) {
 		error("‘%s’ is not a procedure or function", tok.s.c_str());
+		return false;
+	}
+	return true;
+}
+
+static void check_array(Expr *e)
+{
+	if (e && e->type->kind != Type::ARRAY)
+		error("array expected");
+}
+
+bool typematch(Type *dsttype, Type *srctype)
+{
+	assert(dsttype);
+	assert(srctype);
+	return dsttype->is_scalar() && srctype->is_scalar();
+}
+
+static void check_args(ProcSymbol *proc, const vector<unique_ptr<Expr>> &args)
+{
+	const vector<Param> &params = proc->params;
+	int n = params.size();
+	int nargs = args.size();
+	if (nargs != n) {
+		error("expected %d arguments, got %d", n, nargs);
+		return;
+	}
+	for (int i=0; i<n; i++) {
+		Expr *arg = args[i].get();
+		if (!arg)
+			continue;
+		const Param &param = params[i];
+		Type *atype = arg->type;
+		Type *ptype = param.type;
+		if (!typematch(ptype, atype))
+			error("cannot convert %s to %s for argument %d",
+			      atype->tostr().c_str(),
+			      ptype->tostr().c_str(),
+			      i+1);
+		if (param.byref && !arg->is_lvalue())
+			error("variable expected for argument %d", i+1);
+	}
 }
 
 unique_ptr<Block> parse()
@@ -609,6 +658,19 @@ static unique_ptr<AssignStmt> assign_stmt()
 			recover();
 		}
 		unique_ptr<Expr> val(expr());
+		if (var->type && val->type) {
+			if (!typematch(var->type, val->type)) {
+				error("cannot assign %s to %s",
+				      val->type->tostr().c_str(),
+				      var->type->tostr().c_str());
+			} else {
+				if (var->type->size() < val->type->size()) {
+					warning("truncating %s to %s",
+						val->type->tostr().c_str(),
+						var->type->tostr().c_str());
+				}
+			}
+		}
 		return make_unique<AssignStmt>(move(var), move(val));
 	} CATCH_R(nullptr)
 }
@@ -619,7 +681,8 @@ static unique_ptr<CallStmt> call_stmt()
 	try {
 		check(IDENT);
 		Symbol *proc = lookup_checked(tok.s);
-		checkprocsym(proc);
+		if (!checkprocsym(proc))
+			proc = nullptr;
 		getsym();
 		vector<unique_ptr<Expr>> args;
 		if (tok.sym == '(') {
@@ -627,6 +690,7 @@ static unique_ptr<CallStmt> call_stmt()
 			args = expr_list();
 			check(')'); getsym();
 		}
+		check_args(static_cast<ProcSymbol*>(proc), args);
 		return make_unique<CallStmt>(static_cast<ProcSymbol*>(proc), move(args));
 	} CATCH_R(nullptr)
 }
@@ -718,6 +782,7 @@ static unique_ptr<ReadStmt> read_stmt()
 		check('('); getsym();
 		vector<unique_ptr<Expr>> args(expr_list());
 		check(')'); getsym();
+		// TODO type check
 		return make_unique<ReadStmt>(move(args));
 	} CATCH_R(nullptr)
 }
@@ -750,14 +815,21 @@ static unique_ptr<Expr> lvalue()
 	X _{BECOMES, ',', ')'};
 	try {
 		check(IDENT);
-		unique_ptr<Expr> e(ident_expr(tok.s));
+		Symbol *s = lookup_checked(tok.s);
+		unique_ptr<Expr> e;
+		if (s) {
+			e = make_unique<SymExpr>(s->kind == Symbol::PROC ? lookup(s->name+'$') : s);
+		}
 		getsym();
 		if (tok.sym == '[') {
+			check_array(e.get());
 			getsym();
 			unique_ptr<Expr> index(expr());
 			check(']'); getsym();
 			e = make_unique<IndexExpr>(move(e), move(index));
 		}
+		if (e && !e->is_lvalue())
+			error("variable expected");
 		return e;
 	} CATCH_R(nullptr)
 }
@@ -907,16 +979,21 @@ static unique_ptr<Expr> factor()
 	case IDENT:
 		switch (ntok.sym) {
 		case '(':
-			s = lookup_checked(tok.s);
-			checkprocsym(s);
-			getsym();
-			getsym();
-			e = make_unique<ApplyExpr>(static_cast<ProcSymbol*>(s), expr_list());
-			check(')'); getsym();
-			return e;
+			{
+				s = lookup_checked(tok.s);
+				if (!checkprocsym(s))
+					s = nullptr;
+				getsym();
+				getsym();
+				vector<unique_ptr<Expr>> args = expr_list();
+				check(')'); getsym();
+				check_args(static_cast<ProcSymbol*>(s), args);
+				return make_unique<ApplyExpr>(static_cast<ProcSymbol*>(s), move(args));
+			}
 		case '[':
 			e = ident_expr(tok.s);
 			getsym();
+			check_array(e.get());
 			getsym();
 			e = make_unique<IndexExpr>(move(e), expr());
 			check(']'); getsym();

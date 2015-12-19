@@ -375,7 +375,9 @@ Graph TranslateEnv::build_interference_graph()
 		});
 	}
 	for (int id: part_temps) {
+#ifdef DEBUG
 		fprintf(stderr, "part temp: %d\n", id);
+#endif
 		ig.connect(id, ~4);
 		ig.connect(id, ~5);
 		ig.connect(id, ~6);

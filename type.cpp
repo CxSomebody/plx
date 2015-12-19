@@ -16,7 +16,7 @@ ArrayType::ArrayType(Type *elemtype, int nelem): Type(ARRAY), elemtype(elemtype)
 
 string IntType::tostr() const
 {
-	return "int";
+	return "integer";
 }
 
 int IntType::size() const { return 4; }
@@ -58,7 +58,7 @@ Type *binexprtype(Type *a, Type *b)
 
 Type *elemtype(Type *ty)
 {
-	if (ty->kind == Type::ARRAY)
+	if (ty && ty->kind == Type::ARRAY)
 		return static_cast<ArrayType*>(ty)->elemtype;
 	return nullptr;
 }

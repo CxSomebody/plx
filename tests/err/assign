@@ -1,5 +1,8 @@
+const
+  c = 10;
 var
-  a: integer;
+  a: array[10] of integer;
 begin
-  a = 1;
+  a := 100;
+  c := 100;
 end.

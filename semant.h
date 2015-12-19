@@ -169,13 +169,6 @@ struct Operand;
 struct LabelOperand;
 class TranslateEnv;
 
-struct Location {
-	const char *file;
-	int line, col;
-	Location(const char *file, int line, int col):
-		file(file), line(line), col(col) {}
-};
-
 struct Expr {
 	enum Kind {
 		SYM,
@@ -189,6 +182,7 @@ struct Expr {
 	virtual void print() const = 0;
 	virtual Operand *translate(TranslateEnv &env) const = 0;
 	virtual ~Expr() {}
+	bool is_lvalue() const;
 protected:
 	Expr(Kind kind, Type *type):
 		kind(kind), type(type) {}

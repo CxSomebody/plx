@@ -1,0 +1,12 @@
+begin test recursion.
+success.
+begin test array.
+success.
+begin test jump label.
+success.
+begin test var parameter.
+success.
+begin test char&int.
+success.
+begin test register allocation.
+hello,world

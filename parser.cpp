@@ -219,6 +219,7 @@ bool typematch(Type *dsttype, Type *srctype)
 
 static void check_args(ProcSymbol *proc, const vector<unique_ptr<Expr>> &args)
 {
+	assert(proc);
 	const vector<Param> &params = proc->params;
 	int n = params.size();
 	int nargs = args.size();
@@ -658,7 +659,7 @@ static unique_ptr<AssignStmt> assign_stmt()
 			recover();
 		}
 		unique_ptr<Expr> val(expr());
-		if (var->type && val->type) {
+		if (var && var->type && val && val->type) {
 			if (!typematch(var->type, val->type)) {
 				error("cannot assign %s to %s",
 				      val->type->tostr().c_str(),
@@ -690,7 +691,8 @@ static unique_ptr<CallStmt> call_stmt()
 			args = expr_list();
 			check(')'); getsym();
 		}
-		check_args(static_cast<ProcSymbol*>(proc), args);
+		if (proc)
+			check_args(static_cast<ProcSymbol*>(proc), args);
 		return make_unique<CallStmt>(static_cast<ProcSymbol*>(proc), move(args));
 	} CATCH_R(nullptr)
 }
@@ -995,7 +997,8 @@ static unique_ptr<Expr> factor()
 				getsym();
 				vector<unique_ptr<Expr>> args = expr_list();
 				check(')'); getsym();
-				check_args(static_cast<ProcSymbol*>(s), args);
+				if (s)
+					check_args(static_cast<ProcSymbol*>(s), args);
 				return make_unique<ApplyExpr>(static_cast<ProcSymbol*>(s), move(args));
 			}
 		case '[':
@@ -1011,8 +1014,12 @@ static unique_ptr<Expr> factor()
 		getsym();
 		if (!s)
 			return nullptr;
-		if (s->kind == Symbol::PROC)
-			return make_unique<ApplyExpr>(static_cast<ProcSymbol*>(s), vector<unique_ptr<Expr>>());
+		if (s->kind == Symbol::PROC) {
+			ProcSymbol *proc = static_cast<ProcSymbol*>(s);
+			vector<unique_ptr<Expr>> args; // empty
+			check_args(proc, args);
+			return make_unique<ApplyExpr>(proc, move(args));
+		}
 		return make_unique<SymExpr>(s);
 	case INT:
 		e = make_unique<LitExpr>(tok.i);

@@ -1,11 +1,29 @@
+#!/bin/bash
 set -e
-file=$1
-shift
-./plx -o $file.s "$@" tests/$file
-nasm -felf32 $file.s
-gcc -m32 $file.o
-if [ -f tests/$file.in ]; then
-	exec ./a.out < tests/$file.in
+echoerr() {
+	echo 1>&2 "$@"
+}
+run() {
+	file="$1"
+	shift
+	name=`basename "$file"`
+	echoerr "Running $name..."
+	./plx -o "$name.s" "$@" "$file"
+	nasm -felf32 "$name.s"
+	gcc -m32 "$name.o"
+	if [ -f "$file.in" ]; then
+		./a.out < "$file.in"
+	else
+		./a.out
+	fi
+}
+if [ "x$1" = x-a ]; then
+	shift
+	# run all tests for which a reference output file is given
+	for out in tests/*.out; do
+		run > out "${out%.out}" "$@"
+		cmp out "$out"
+	done
 else
-	exec ./a.out
+	run "tests/$1"
 fi

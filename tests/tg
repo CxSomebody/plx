@@ -79,7 +79,7 @@ procedure p3;
       write("failed.");
   end;
 procedure p4;
-  var step,a1,a2,a3,a4,a5,a6,a7,a8,a9:char;
+  var step,lf,a1,a2,a3,a4,a5,a6,a7,a8,a9:char;
   begin
     a1 := f1(1); a2 := 2; a3 := f1(2); a4 := 4; a5 := 5; a6 := f1(a3); a7 := 7; a8 := 8; a9 := 9;
     for step := 0 to 1 do
@@ -95,7 +95,8 @@ procedure p4;
         a9 := a1 + a2 + a3 + a4 + a5 + a6 - 5*10 + 1*13*1 + 1*1*1*1 + 24;
       end;
       a1 := a1 + 103; a2 := a2 + 91; a3 := a3 + 97; a4 := a4 + 83; a5 := a5 - 1; a6 := a6 + 33; a7 := a7 + 43; a8 := a8 - 60; a9 := a9 - 69;
-      write(a1);write(a2);write(a3);write(a3);write(a4);write(a5);write(a6);write(a4);write(a7);write(a8);write(a9);
+      lf := 10;
+      write(a1);write(a2);write(a3);write(a3);write(a4);write(a5);write(a6);write(a4);write(a7);write(a8);write(a9);write(lf)
   end;
 procedure p5;
   begin
@@ -124,10 +125,8 @@ begin
   else
     write("failed.");
 
-  write("begin test jump label. (should be 23)");
-  retval := f3;
-  write(retval);
-  if retval = 23 then
+  write("begin test jump label.");
+  if f3 = 23 then
     write("success.")
   else
     write("failed.");
@@ -143,8 +142,6 @@ begin
   write("begin test char&int.");
   p3;
 
-  write("begin test register allocation (should print hello,world).");
+  write("begin test register allocation.");
   p4;
-  //write("begin test read.");
-  //p5;
 end.

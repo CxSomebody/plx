@@ -225,6 +225,8 @@ void TranslateEnv::gencode()
 		emit("pop", esi);
 	if (maxphysreg >= 3)
 		emit("pop", ebx);
+	if (!up) /* main() should return 0 */
+		emit("xor", eax, eax);
 	emit("leave");
 	emit("ret");
 }

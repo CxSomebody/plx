@@ -53,6 +53,7 @@ begin
   read(a,b);
   ans := gcd(a,b);
   write("gcd(a,b)=", ans);
-  tostr(ans);
+  write("lcm(a,b):");
+  tostr(a/ans*b);
   printstr;
 end.

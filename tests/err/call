@@ -1,0 +1,17 @@
+const
+  c = 100;
+var
+  n: integer;
+  a: array[10] of integer;
+procedure p0; begin end;
+procedure p1(n: integer); begin end;
+procedure f1(n: integer); begin end;
+procedure p1v(var n: integer); begin end;
+begin
+  p0(n);
+  p1;
+  a := f1;
+  p1v(n+n);
+  p1v(c);
+  read(c, n, a, 0);
+end.

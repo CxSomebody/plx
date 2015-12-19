@@ -1,5 +1,8 @@
 var
   c: char;
 begin
-  c := 1000;
+  c := 25697;
+  write(c);
+  c := 10;
+  write(c)
 end.
